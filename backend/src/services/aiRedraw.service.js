@@ -1,9 +1,16 @@
 import fs from 'fs-extra';
 import { editImageWithGPTImage2 } from './litellm.service.js';
 
-const basePrompt = `Redraw the uploaded image as a clean flat vector-style illustration suitable for screen printing, sticker production, and automatic vector tracing.
+const basePrompt = `Faithfully redraw the uploaded image as a clean flat vector-style illustration suitable for screen printing, sticker production, and automatic vector tracing.
 
-Preserve the main shape, composition, and recognizable design from the uploaded image.
+This is a faithful redraw and cleanup task, not a redesign.
+Preserve the main shape, composition, proportions, layout, text, letters, symbols, and recognizable design from the uploaded image.
+Preserve all important visible colors from the uploaded image, including dark or black backgrounds, colored accents, text colors, and small color regions.
+Keep each original color in the same visual region as the source image.
+Do not recolor the artwork.
+Do not change a dark background to white.
+Do not remove colored accents.
+Do not omit readable text or brand-like lettering if present.
 Simplify small details while keeping the design recognizable.
 Use solid flat colors only.
 No gradients.
@@ -18,11 +25,24 @@ No complex background.
 Use clean edges, high contrast, smooth shapes, and clearly separated color regions.
 Make the result suitable for vector tracing and spot color separation.
 Keep colors limited, distinct, and easy to separate.
-Use a plain white or transparent background.
 The final image should look like a clean professional redraw ready for sticker printing or screen printing.`;
 
+function backgroundInstruction(settings) {
+  if (settings.whiteAsBackground) {
+    return 'If the uploaded image has a white or near-white empty background, it may be treated as background. Preserve any non-white background color, including black or dark backgrounds, as part of the artwork.';
+  }
+
+  return 'Treat white as a real printable artwork color when it appears in the design. Preserve black, dark, white, and colored regions from the uploaded image as visible flat colors.';
+}
+
 export function buildRedrawPrompt(settings) {
-  const lines = [basePrompt];
+  const lines = [basePrompt, backgroundInstruction(settings)];
+
+  if (settings.aiQuality === 'standard') {
+    lines.push(
+      'For Standard quality, prioritize accurate color matching, original composition, and faithful redraw over beautification or stylized interpretation.'
+    );
+  }
 
   if (settings.productionType === 'sticker') {
     lines.push(
@@ -38,7 +58,7 @@ export function buildRedrawPrompt(settings) {
 
   if (settings.maxColors) {
     lines.push(
-      `Limit the artwork to approximately ${settings.maxColors} solid colors, excluding transparent background if possible.`
+      `Use approximately ${settings.maxColors} solid colors as a target for simplifying close color variations. Do not drop distinct important source colors; include the real background color if it is visibly part of the uploaded design.`
     );
   }
 

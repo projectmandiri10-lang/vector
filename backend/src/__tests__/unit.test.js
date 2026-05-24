@@ -11,13 +11,29 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   const prompt = buildRedrawPrompt({
     productionType: 'sablon',
     maxColors: 4,
-    aiQuality: 'ultra'
+    aiQuality: 'ultra',
+    whiteAsBackground: false
   });
 
-  assert.match(prompt, /Redraw the uploaded image/);
+  assert.match(prompt, /Faithfully redraw the uploaded image/);
+  assert.match(prompt, /Preserve all important visible colors/);
+  assert.match(prompt, /Do not change a dark background to white/);
+  assert.match(prompt, /Treat white as a real printable artwork color/);
   assert.match(prompt, /Optimize for manual screen printing/);
-  assert.match(prompt, /approximately 4 solid colors/);
+  assert.match(prompt, /approximately 4 solid colors as a target/);
   assert.match(prompt, /extra strict shape cleanup/);
+});
+
+test('standard prompt prioritizes faithful color matching', () => {
+  const prompt = buildRedrawPrompt({
+    productionType: 'sablon',
+    maxColors: 4,
+    aiQuality: 'standard',
+    whiteAsBackground: true
+  });
+
+  assert.match(prompt, /prioritize accurate color matching/);
+  assert.match(prompt, /Preserve any non-white background color/);
 });
 
 test('color helpers detect near white background and nearest palette', () => {
