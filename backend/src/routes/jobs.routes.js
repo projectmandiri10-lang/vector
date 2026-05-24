@@ -87,9 +87,6 @@ export function validateSettings(body = {}) {
   const productionType = body.productionType === 'sablon' ? 'sablon' : 'sticker';
   const defaultSeparate = productionType === 'sablon';
   const maxColors = Math.min(6, Math.max(2, Number.parseInt(body.maxColors || '4', 10)));
-  const rawQuality = String(body.aiQuality || 'standard').toLowerCase();
-  const aiQuality = rawQuality === 'standar' ? 'standard' : rawQuality;
-  const allowedQuality = new Set(['standard', 'premium', 'ultra']);
   const separateColors = parseBoolean(body.separateColors, defaultSeparate);
   const paperSize = String(body.paperSize || 'A4').toUpperCase() === 'A3' ? 'A3' : 'A4';
   const paperOrientation = String(body.paperOrientation || 'portrait').toLowerCase() === 'landscape' ? 'landscape' : 'portrait';
@@ -101,7 +98,7 @@ export function validateSettings(body = {}) {
     separateColors,
     maxColors,
     whiteAsBackground: parseBoolean(body.whiteAsBackground, true),
-    aiQuality: allowedQuality.has(aiQuality) ? aiQuality : 'standard',
+    aiQuality: 'standard',
     actualWidthCm: normalizeActualWidthCm(body.actualWidthCm, 10),
     paperSize,
     paperOrientation,
@@ -147,6 +144,36 @@ function publicFiles(jobId, meta) {
   }
 
   return files;
+}
+
+function publicJobSummary(jobId, meta) {
+  return {
+    jobId,
+    status: meta.status,
+    progress: meta.progress,
+    message: meta.message,
+    settings: meta.settings,
+    createdAt: meta.createdAt,
+    updatedAt: meta.updatedAt,
+    error: meta.error,
+    files: publicFiles(jobId, meta)
+  };
+}
+
+async function listJobSummaries() {
+  const jobsRoot = path.dirname(getJobDir('00000000-0000-4000-8000-000000000000'));
+  if (!(await fileExists(jobsRoot))) return [];
+
+  const entries = await fs.readdir(jobsRoot);
+  const summaries = [];
+  for (const entry of entries) {
+    if (!/^[0-9a-f-]{36}$/i.test(entry)) continue;
+    const meta = jobs.get(entry) || (await readJobMeta(entry));
+    if (!meta) continue;
+    summaries.push(publicJobSummary(entry, meta));
+  }
+
+  return summaries.sort((a, b) => new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0));
 }
 
 async function processJob(jobId, uploadedBuffer) {
@@ -290,6 +317,14 @@ router.post('/', uploadLimiter, handleUpload, async (req, res, next) => {
     processJob(jobId, req.file.buffer);
 
     res.status(202).json({ jobId, status: job.status, message: job.message });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/', async (_req, res, next) => {
+  try {
+    res.json({ jobs: await listJobSummaries() });
   } catch (error) {
     next(error);
   }

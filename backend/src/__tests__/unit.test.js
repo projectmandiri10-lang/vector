@@ -11,7 +11,7 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   const prompt = buildRedrawPrompt({
     productionType: 'sablon',
     maxColors: 4,
-    aiQuality: 'ultra',
+    aiQuality: 'standard',
     whiteAsBackground: false
   });
 
@@ -21,7 +21,6 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   assert.match(prompt, /Treat white as a real printable artwork color/);
   assert.match(prompt, /Optimize for manual screen printing/);
   assert.match(prompt, /approximately 4 solid colors as a target/);
-  assert.match(prompt, /extra strict shape cleanup/);
 });
 
 test('standard prompt prioritizes faithful color matching', () => {
@@ -82,12 +81,14 @@ test('validateSettings normalizes print sizing options', () => {
   const settings = validateSettings({
     actualWidthCm: '155',
     paperSize: 'a3',
-    paperOrientation: 'landscape'
+    paperOrientation: 'landscape',
+    aiQuality: 'legacy-high'
   });
 
   assert.equal(settings.actualWidthCm, 100);
   assert.equal(settings.paperSize, 'A3');
   assert.equal(settings.paperOrientation, 'landscape');
+  assert.equal(settings.aiQuality, 'standard');
 });
 
 test('paper sizing converts A4/A3 orientation and rejects oversized artwork', () => {

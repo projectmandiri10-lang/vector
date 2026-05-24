@@ -141,6 +141,7 @@ Setelah job selesai, frontend menampilkan:
 - Preview PNG full color
 - Preview SVG full color
 - Daftar film warna jika pecah warna aktif
+- Arsip hasil berisi job lama yang sudah selesai atau gagal
 
 Tombol download:
 
@@ -152,6 +153,7 @@ Tombol download:
 - Hapus hasil
 
 `Hapus hasil` menghapus job lengkap dari server, termasuk input, hasil AI, SVG/PDF/ZIP, film, dan metadata. Job yang masih diproses tidak bisa dihapus sampai selesai atau gagal.
+Halaman arsip menampilkan preview kecil, tombol download SVG, tombol download film, ZIP jika tersedia, dan tombol delete.
 
 ## 8. Batasan MVP
 
@@ -169,13 +171,13 @@ MVP ini sengaja memakai `AI_IMAGE_MODEL=gpt-image-2` tanpa fallback ke model mur
 Kualitas AI:
 
 - `Standar`: quality `medium`
-- `Premium`: quality `high`
-- `Ultra`: quality `high` dengan prompt tambahan yang lebih ketat
+- Mode Premium dan Ultra dihilangkan agar biaya dan alur produksi tetap sederhana.
 
 ## 10. Endpoint Backend
 
 ```text
 POST /api/jobs
+GET /api/jobs
 GET /api/jobs/:jobId
 GET /api/jobs/:jobId/download/full-png
 GET /api/jobs/:jobId/download/full-svg

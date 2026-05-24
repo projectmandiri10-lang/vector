@@ -83,6 +83,10 @@ test('POST /api/jobs accepts upload and exposes full PNG result in mock mode', a
   assert.equal(pngResponse.status, 200);
   assert.match(pngResponse.headers['content-type'], /image\/png/);
 
+  const archiveResponse = await request(app).get('/api/jobs');
+  assert.equal(archiveResponse.status, 200);
+  assert.ok(archiveResponse.body.jobs.some((archiveJob) => archiveJob.jobId === createResponse.body.jobId));
+
   const deleteResponse = await request(app).delete(`/api/jobs/${createResponse.body.jobId}`);
   assert.equal(deleteResponse.status, 200);
   assert.equal(deleteResponse.body.ok, true);

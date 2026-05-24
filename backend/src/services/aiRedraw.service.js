@@ -62,17 +62,10 @@ export function buildRedrawPrompt(settings) {
     );
   }
 
-  if (settings.aiQuality === 'ultra') {
-    lines.push(
-      'Use extra strict shape cleanup: crisp closed regions, cleaner outlines, minimal artifacts, and stronger separation between adjacent colors.'
-    );
-  }
-
   return lines.join('\n\n');
 }
 
 export function qualityToImageOption(aiQuality) {
-  if (aiQuality === 'premium' || aiQuality === 'ultra') return 'high';
   return 'medium';
 }
 

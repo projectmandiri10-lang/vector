@@ -4,13 +4,14 @@ Tanggal kalkulasi: 24 Mei 2026
 
 ## Ringkasan
 
-Aplikasi ini memakai 1 kali proses AI utama:
+Aplikasi ini sekarang hanya memakai 1 mode AI:
 
 - Model: `gpt-image-2` melalui LiteLLM Proxy
-- Operasi: image edit/redraw dari gambar upload user ke PNG clean redraw
-- Output app: PNG full color, SVG, PDF, ZIP, dan film pecah warna dibuat lokal oleh backend
+- Kualitas: `Standar`
+- Quality request: `medium`
+- Operasi: 1 kali image edit/redraw dari gambar upload user ke PNG clean redraw
 
-Vectorization, pecah warna, registration mark, PDF, dan ZIP tidak menambah biaya AI karena diproses lokal di backend.
+Vectorization, pecah warna, registration mark, PDF, dan ZIP dibuat lokal oleh backend, jadi tidak menambah biaya AI.
 
 ## Harga Resmi GPT Image 2
 
@@ -33,7 +34,7 @@ Kurs estimasi operasional:
 
 - 1 USD = Rp17.700
 
-Gunakan angka ini sebagai pembulatan konservatif. Update ulang jika kurs berubah signifikan.
+Update ulang jika kurs berubah signifikan.
 
 ## Rumus Modal AI
 
@@ -48,7 +49,7 @@ Modal AI USD =
 Modal AI IDR = Modal AI USD * 17.700
 ```
 
-## Estimasi Token per Request App
+## Estimasi Token per Request Standar
 
 Karena biaya GPT Image 2 berbasis token, angka final bisa berubah mengikuti resolusi, kompleksitas input, dan detail output. Untuk MVP ini backend mengirim 1 gambar input dan menghasilkan output sekitar 1024x1024.
 
@@ -59,12 +60,8 @@ Asumsi estimasi operasional:
 | Prompt text redraw | 700 text token |
 | Gambar input user | 1.500 image token |
 | Output Standar / medium | 800 image output token |
-| Output Premium / high | 7.000 image output token |
-| Output Ultra / high | 7.000 image output token |
 
 ## Modal per 1 Gambar
-
-### Standar
 
 ```text
 Text input  = 700 / 1.000.000 * USD 5  = USD 0,0035
@@ -87,57 +84,16 @@ Dengan buffer 20%:
 Rp850 per gambar
 ```
 
-### Premium
-
-```text
-Text input  = 700 / 1.000.000 * USD 5  = USD 0,0035
-Image input = 1.500 / 1.000.000 * USD 8 = USD 0,0120
-Image output high = 7.000 / 1.000.000 * USD 30 = USD 0,2100
-
-Total = USD 0,2255
-Total IDR = USD 0,2255 * Rp17.700 = Rp3.991,35
-```
-
-Modal AI Premium dibulatkan:
-
-```text
-Rp4.000 per gambar
-```
-
-Dengan buffer 20%:
-
-```text
-Rp4.800 per gambar
-```
-
-### Ultra
-
-Ultra memakai quality `high` seperti Premium, tetapi prompt lebih ketat. Modal AI dasarnya sama dengan Premium jika hanya 1 kali request berhasil.
-
-```text
-Rp4.000 per gambar
-```
-
-Dengan buffer 20%:
-
-```text
-Rp4.800 per gambar
-```
-
 ## Simulasi Harga Jual Rp20.000
 
 | Kualitas | Modal AI estimasi | Modal + buffer 20% | Laba kotor setelah AI | Margin kotor setelah AI |
 | --- | ---: | ---: | ---: | ---: |
 | Standar | Rp700 | Rp850 | Rp19.150 | 95,75% |
-| Premium | Rp4.000 | Rp4.800 | Rp15.200 | 76,00% |
-| Ultra | Rp4.000 | Rp4.800 | Rp15.200 | 76,00% |
 
 ## Risiko Biaya
 
 - Jika request AI diulang karena hasil kurang bagus, modal AI naik sesuai jumlah retry.
-- Jika sekali retry penuh:
-  - Standar aman dihitung sekitar Rp1.700.
-  - Premium/Ultra aman dihitung sekitar Rp9.600.
+- Jika sekali retry penuh, Standar aman dihitung sekitar Rp1.700.
 - LiteLLM remote bisa memiliki markup atau billing policy sendiri. Kalkulasi ini memakai harga dasar OpenAI, belum termasuk markup LiteLLM pihak ketiga.
 - Hosting, bandwidth, storage, listrik, payment fee, dan biaya support belum dihitung.
 
@@ -145,8 +101,7 @@ Rp4.800 per gambar
 
 Untuk harga jual Rp20.000 per gambar:
 
-- Standar: pakai modal internal Rp1.000 per gambar.
-- Premium: pakai modal internal Rp5.000 per gambar.
-- Ultra: pakai modal internal Rp5.000 per gambar jika 1 request; pakai Rp10.000 jika ingin ruang untuk 1 retry.
+- Pakai modal internal Rp1.000 per gambar untuk 1 request.
+- Pakai modal internal Rp2.000 per gambar jika ingin ruang untuk 1 retry.
 
-Dengan margin bisnis tinggi dan prioritas kualitas, default `Premium` masih sehat untuk harga Rp20.000.
+Dengan margin bisnis tinggi dan prioritas kualitas, mode Standar masih sangat sehat untuk harga Rp20.000.

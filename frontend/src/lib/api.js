@@ -34,6 +34,15 @@ export async function getJob(jobId) {
   return data;
 }
 
+export async function listJobs() {
+  const response = await fetch(`${API_BASE_URL}/api/jobs`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'Gagal membaca arsip job.');
+  }
+  return data.jobs || [];
+}
+
 export async function deleteJob(jobId) {
   const response = await fetch(`${API_BASE_URL}/api/jobs/${jobId}`, {
     method: 'DELETE'

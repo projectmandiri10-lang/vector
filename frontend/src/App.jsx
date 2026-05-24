@@ -1,10 +1,11 @@
 import { Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import ArchivePanel from './components/ArchivePanel.jsx';
 import JobStatus from './components/JobStatus.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { createJob, deleteJob, getJob } from './lib/api.js';
+import { createJob, deleteJob, getJob, listJobs } from './lib/api.js';
 
 const initialSettings = {
   projectName: '',
@@ -13,7 +14,7 @@ const initialSettings = {
   separateColors: false,
   maxColors: 4,
   whiteAsBackground: true,
-  aiQuality: 'premium',
+  aiQuality: 'standard',
   actualWidthCm: 10,
   paperSize: 'A4',
   paperOrientation: 'portrait'
@@ -26,6 +27,9 @@ export default function App() {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [archiveJobs, setArchiveJobs] = useState([]);
+  const [isArchiveLoading, setIsArchiveLoading] = useState(false);
+  const [deletingJobId, setDeletingJobId] = useState('');
   const previewRef = useRef('');
 
   const previewUrl = useMemo(() => {
@@ -43,6 +47,21 @@ export default function App() {
     return () => {
       if (previewRef.current) URL.revokeObjectURL(previewRef.current);
     };
+  }, []);
+
+  async function loadArchive() {
+    setIsArchiveLoading(true);
+    try {
+      setArchiveJobs(await listJobs());
+    } catch (archiveError) {
+      setError(archiveError.message || 'Gagal membaca arsip job.');
+    } finally {
+      setIsArchiveLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadArchive();
   }, []);
 
   useEffect(() => {
@@ -78,6 +97,7 @@ export default function App() {
       setJob(created);
       const firstStatus = await getJob(created.jobId);
       setJob(firstStatus);
+      loadArchive();
     } catch (submitError) {
       setError(submitError.message || 'Gagal memproses gambar');
     } finally {
@@ -96,10 +116,37 @@ export default function App() {
       await deleteJob(job.jobId);
       setJob(null);
       setFile(null);
+      await loadArchive();
     } catch (deleteError) {
       setError(deleteError.message || 'Gagal menghapus hasil.');
     } finally {
       setIsDeleting(false);
+    }
+  }
+
+  async function handleOpenArchivedJob(jobId) {
+    try {
+      setJob(await getJob(jobId));
+      setError('');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (openError) {
+      setError(openError.message || 'Gagal membuka arsip.');
+    }
+  }
+
+  async function handleDeleteArchivedJob(jobId) {
+    const confirmed = window.confirm('Hapus job ini dari arsip dan server?');
+    if (!confirmed) return;
+
+    setDeletingJobId(jobId);
+    try {
+      await deleteJob(jobId);
+      if (job?.jobId === jobId) setJob(null);
+      await loadArchive();
+    } catch (deleteError) {
+      setError(deleteError.message || 'Gagal menghapus arsip.');
+    } finally {
+      setDeletingJobId('');
     }
   }
 
@@ -124,6 +171,14 @@ export default function App() {
           <UploadBox file={file} previewUrl={previewUrl} onFileChange={setFile} />
           <JobStatus job={job} error={error} />
           <ResultPreview job={job} onDelete={handleDeleteResult} isDeleting={isDeleting} />
+          <ArchivePanel
+            jobs={archiveJobs}
+            onRefresh={loadArchive}
+            onOpenJob={handleOpenArchivedJob}
+            onDeleteJob={handleDeleteArchivedJob}
+            isLoading={isArchiveLoading}
+            deletingJobId={deletingJobId}
+          />
         </div>
 
         <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">

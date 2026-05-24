@@ -1,11 +1,5 @@
 import { Check, Palette, SlidersHorizontal } from 'lucide-react';
 
-const qualities = [
-  { value: 'standard', label: 'Standar' },
-  { value: 'premium', label: 'Premium' },
-  { value: 'ultra', label: 'Ultra' }
-];
-
 function Toggle({ checked, onChange, label, disabled }) {
   return (
     <button
@@ -133,24 +127,10 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
           </div>
         </fieldset>
 
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-ink">Kualitas AI</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {qualities.map((quality) => (
-              <button
-                key={quality.value}
-                type="button"
-                disabled={disabled}
-                onClick={() => update('aiQuality', quality.value)}
-                className={`border px-2 py-2.5 text-sm font-semibold transition ${
-                  settings.aiQuality === quality.value ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink hover:border-spruce'
-                }`}
-              >
-                {quality.label}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+        <div>
+          <span className="mb-2 block text-sm font-medium text-ink">Kualitas AI</span>
+          <div className="border border-spruce bg-teal-50 px-3 py-2.5 text-sm font-semibold text-ink">Standar</div>
+        </div>
 
         {settings.separateColors && (
           <div className="border border-line bg-panel p-3">
