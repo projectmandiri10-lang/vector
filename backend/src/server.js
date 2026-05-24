@@ -4,7 +4,7 @@ import express from 'express';
 import helmet from 'helmet';
 import { pathToFileURL } from 'node:url';
 import jobsRouter from './routes/jobs.routes.js';
-import { cleanupOldJobs, ensureStorage } from './utils/file.js';
+import { cleanupOldJobs, ensureStorage, markInterruptedJobsFailed } from './utils/file.js';
 
 export const app = express();
 
@@ -44,6 +44,7 @@ const shouldListen =
 
 if (shouldListen) {
   await ensureStorage();
+  await markInterruptedJobsFailed();
   cleanupOldJobs().catch((error) => {
     console.warn('Gagal membersihkan job lama:', error.message);
   });

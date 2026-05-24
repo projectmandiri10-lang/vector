@@ -79,3 +79,33 @@ export async function cleanupOldJobs(maxAgeHours = 48) {
     }
   }
 }
+
+export async function markInterruptedJobsFailed() {
+  const jobsDir = path.join(storageRoot(), 'jobs');
+  if (!(await fileExists(jobsDir))) return;
+
+  const entries = await fs.readdir(jobsDir);
+  const runningStatuses = new Set(['uploaded', 'preprocessing', 'processing_ai', 'vectorizing', 'separating_colors', 'exporting']);
+
+  for (const entry of entries) {
+    if (!/^[0-9a-f-]{36}$/i.test(entry)) continue;
+    const metaPath = path.join(jobsDir, entry, 'job.json');
+    if (!(await fileExists(metaPath))) continue;
+
+    const meta = await fs.readJson(metaPath);
+    if (!runningStatuses.has(meta.status)) continue;
+
+    await fs.writeJson(
+      metaPath,
+      {
+        ...meta,
+        status: 'failed',
+        progress: 100,
+        message: 'Gagal memproses gambar.',
+        error: 'Proses sebelumnya terhenti karena server restart. Upload ulang gambar untuk memproses kembali.',
+        updatedAt: new Date().toISOString()
+      },
+      { spaces: 2 }
+    );
+  }
+}

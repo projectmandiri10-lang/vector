@@ -51,8 +51,9 @@ export default function App() {
       try {
         const nextJob = await getJob(job.jobId);
         setJob(nextJob);
+        setError('');
       } catch (pollError) {
-        setError(pollError.message);
+        setError('Koneksi backend terputus sementara. Status akan dicoba lagi otomatis.');
       }
     }, 1800);
 

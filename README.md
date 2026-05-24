@@ -44,6 +44,8 @@ npm install
 npm run dev
 ```
 
+`npm run dev` menjalankan backend tanpa file watcher agar proses AI/vector tidak terputus saat backend menulis file hasil ke storage. Jika perlu watcher untuk edit kode backend, gunakan `npm run dev:watch`.
+
 Backend bisa membaca `.env` dari root project atau `backend/.env`. Jika memakai kredensial LiteLLM di root project, isi minimalnya:
 
 ```env
