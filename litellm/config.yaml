@@ -1,0 +1,10 @@
+model_list:
+  - model_name: gpt-image-2
+    litellm_params:
+      model: gpt-image-2
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: image_generation
+
+general_settings:
+  master_key: sk-1234
