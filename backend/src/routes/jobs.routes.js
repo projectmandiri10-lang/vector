@@ -69,7 +69,7 @@ const uploadLimiter = rateLimit({
 const statusMessages = {
   uploaded: 'Gambar diterima.',
   preprocessing: 'Sedang menyiapkan gambar.',
-  processing_ai: 'Sedang membuat ulang gambar dengan GPT Image 2.',
+  processing_ai: 'Sedang menggambar ulang.',
   vectorizing: 'Sedang membuat vector.',
   separating_colors: 'Sedang pecah warna.',
   exporting: 'Sedang menyiapkan file download.',

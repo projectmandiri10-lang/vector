@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
 const labels = {
   uploaded: 'Gambar diterima',
   preprocessing: 'Sedang menyiapkan gambar',
-  processing_ai: 'Sedang membuat ulang gambar dengan GPT Image 2',
+  processing_ai: 'Sedang menggambar ulang',
   vectorizing: 'Sedang membuat vector',
   separating_colors: 'Sedang pecah warna',
   exporting: 'Sedang menyiapkan file download',
@@ -29,8 +29,10 @@ export default function JobStatus({ job, error }) {
         )}
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-ink">{error || labels[job?.status] || job?.message}</p>
-          {job?.message && <p className="mt-1 text-sm text-gray-600">{job.message}</p>}
-          {job?.error && <p className="mt-1 text-sm text-tomato">{job.error}</p>}
+          {job?.status && !error && labels[job.status] !== job?.message && (
+            <p className="mt-1 text-sm text-gray-600">{labels[job.status]}</p>
+          )}
+          {job?.error && <p className="mt-1 text-sm text-tomato">Silakan coba lagi atau hubungi admin.</p>}
           <div className="mt-3 h-2 overflow-hidden bg-panel">
             <div className={`h-full ${isFailed ? 'bg-tomato' : 'bg-spruce'}`} style={{ width: `${progress}%` }} />
           </div>

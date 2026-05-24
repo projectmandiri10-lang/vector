@@ -157,11 +157,8 @@ export default function App() {
       <div className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase text-spruce">AI Redraw Vector</p>
+            <p className="text-xs font-semibold uppercase text-spruce">Redraw Vector</p>
             <h1 className="text-2xl font-bold text-ink sm:text-3xl">Sablon dan Sticker</h1>
-          </div>
-          <div className="border border-line bg-panel px-3 py-2 text-sm text-ink">
-            Harga layanan Rp20.000 per gambar
           </div>
         </div>
       </div>

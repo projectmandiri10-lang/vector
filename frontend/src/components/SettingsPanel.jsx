@@ -128,7 +128,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
         </fieldset>
 
         <div>
-          <span className="mb-2 block text-sm font-medium text-ink">Kualitas AI</span>
+          <span className="mb-2 block text-sm font-medium text-ink">Mode proses</span>
           <div className="border border-spruce bg-teal-50 px-3 py-2.5 text-sm font-semibold text-ink">Standar</div>
         </div>
 
