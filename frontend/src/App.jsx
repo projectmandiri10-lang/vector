@@ -16,6 +16,7 @@ const initialSettings = {
   whiteAsBackground: true,
   aiQuality: 'standard',
   actualWidthCm: 10,
+  includeBackgroundInFilmSize: false,
   paperSize: 'A4',
   paperOrientation: 'portrait'
 };

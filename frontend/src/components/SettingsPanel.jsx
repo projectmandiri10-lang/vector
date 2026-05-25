@@ -152,6 +152,16 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
               </div>
             </label>
 
+            <label className="mt-3 flex cursor-pointer items-center gap-3 border border-line bg-white px-3 py-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.includeBackgroundInFilmSize}
+                onChange={(event) => update('includeBackgroundInFilmSize', event.target.checked)}
+                disabled={disabled}
+              />
+              Sertakan background dalam ukuran
+            </label>
+
             <div className="mt-3 grid grid-cols-2 gap-2">
               <label className="block">
                 <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran kertas</span>

@@ -15,19 +15,29 @@ export function colorDistance(a, b) {
   return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
 }
 
+export function colorChroma({ r, g, b }) {
+  return Math.max(r, g, b) - Math.min(r, g, b);
+}
+
+export function isLowChroma(color, tolerance = 18) {
+  return colorChroma(color) <= tolerance;
+}
+
 export function isNearWhite({ r, g, b }) {
   return r >= 242 && g >= 242 && b >= 242;
 }
 
 export function nearestColorIndex(pixel, palette) {
+  const candidatePalette = isLowChroma(pixel) ? palette.filter((color) => isLowChroma(color)) : palette;
+  const candidates = candidatePalette.length > 0 ? candidatePalette : palette;
   let bestIndex = 0;
   let bestDistance = Number.POSITIVE_INFINITY;
 
-  palette.forEach((color, index) => {
+  candidates.forEach((color) => {
     const distance = colorDistance(pixel, color);
     if (distance < bestDistance) {
       bestDistance = distance;
-      bestIndex = index;
+      bestIndex = palette.indexOf(color);
     }
   });
 

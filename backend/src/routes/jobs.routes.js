@@ -100,6 +100,7 @@ export function validateSettings(body = {}) {
     whiteAsBackground: parseBoolean(body.whiteAsBackground, true),
     aiQuality: 'standard',
     actualWidthCm: normalizeActualWidthCm(body.actualWidthCm, 10),
+    includeBackgroundInFilmSize: parseBoolean(body.includeBackgroundInFilmSize, false),
     paperSize,
     paperOrientation,
     priceIdr: 20000,

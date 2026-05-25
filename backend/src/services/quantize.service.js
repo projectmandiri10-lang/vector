@@ -21,6 +21,84 @@ async function writePng(png, filePath) {
   });
 }
 
+function isActiveMaskPixel(png, x, y) {
+  const idx = (png.width * y + x) << 2;
+  return png.data[idx + 3] >= 16 && png.data[idx] < 128 && png.data[idx + 1] < 128 && png.data[idx + 2] < 128;
+}
+
+function clearMaskPixel(png, pixelIndex) {
+  const idx = pixelIndex << 2;
+  png.data[idx] = 255;
+  png.data[idx + 1] = 255;
+  png.data[idx + 2] = 255;
+  png.data[idx + 3] = 255;
+}
+
+function shouldRemoveMaskComponent(component) {
+  if (component.count <= 24) return true;
+  if (component.count <= 80 && (component.width <= 4 || component.height <= 4)) return true;
+  return component.count <= 160 && (component.width <= 2 || component.height <= 2);
+}
+
+function cleanupMaskNoise(png) {
+  const visited = new Uint8Array(png.width * png.height);
+  const maxStoredPixels = 160;
+
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const start = png.width * y + x;
+      if (visited[start] || !isActiveMaskPixel(png, x, y)) continue;
+
+      const stack = [start];
+      const pixels = [];
+      let count = 0;
+      let minX = x;
+      let maxX = x;
+      let minY = y;
+      let maxY = y;
+      visited[start] = 1;
+
+      while (stack.length > 0) {
+        const current = stack.pop();
+        const currentX = current % png.width;
+        const currentY = Math.floor(current / png.width);
+        count += 1;
+        if (pixels.length < maxStoredPixels) pixels.push(current);
+        minX = Math.min(minX, currentX);
+        maxX = Math.max(maxX, currentX);
+        minY = Math.min(minY, currentY);
+        maxY = Math.max(maxY, currentY);
+
+        const neighbors = [
+          [currentX - 1, currentY],
+          [currentX + 1, currentY],
+          [currentX, currentY - 1],
+          [currentX, currentY + 1]
+        ];
+
+        for (const [nextX, nextY] of neighbors) {
+          if (nextX < 0 || nextX >= png.width || nextY < 0 || nextY >= png.height) continue;
+          const next = png.width * nextY + nextX;
+          if (visited[next] || !isActiveMaskPixel(png, nextX, nextY)) continue;
+          visited[next] = 1;
+          stack.push(next);
+        }
+      }
+
+      if (
+        pixels.length === count &&
+        shouldRemoveMaskComponent({
+          count,
+          width: maxX - minX + 1,
+          height: maxY - minY + 1
+        })
+      ) {
+        pixels.forEach((pixel) => clearMaskPixel(png, pixel));
+      }
+    }
+  }
+}
+
 function mergeSimilarColors(colors, maxColors) {
   const merged = [];
   for (const color of colors) {
@@ -132,6 +210,7 @@ export async function createMasksForPalette(imagePath, palette, outputDir, optio
   }
 
   for (const mask of masks) {
+    cleanupMaskNoise(mask.png);
     await writePng(mask.png, mask.filePath);
     delete mask.png;
   }

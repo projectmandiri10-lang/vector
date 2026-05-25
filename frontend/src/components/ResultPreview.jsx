@@ -36,8 +36,8 @@ export default function ResultPreview({ job, onDelete, isDeleting }) {
             </div>
             {settings.separateColors && (
               <p className="border-b border-line bg-panel px-3 py-2 text-xs text-gray-700">
-                Ukuran cetak: lebar {settings.actualWidthCm} cm, tinggi mengikuti rasio. Kertas {settings.paperSize}{' '}
-                {settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.
+                Ukuran cetak: lebar {settings.includeBackgroundInFilmSize ? 'termasuk background' : 'area artwork'} {settings.actualWidthCm} cm,
+                tinggi mengikuti rasio. Kertas {settings.paperSize} {settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.
               </p>
             )}
             <div className="checkerboard flex min-h-72 items-center justify-center p-3">
