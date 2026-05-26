@@ -6,7 +6,7 @@ test('ready trace costs Rp1.000', () => {
   assert.equal(calculateJobPrice({ inputMode: 'ready_trace' }), READY_TRACE_PRICE_IDR);
 });
 
-test('AI redraw costs Rp5.000 before separations', () => {
+test('image retouch costs Rp5.000 before separations', () => {
   assert.equal(calculateJobPrice({ inputMode: 'ai_redraw' }), AI_REDRAW_PRICE_IDR);
 });
 

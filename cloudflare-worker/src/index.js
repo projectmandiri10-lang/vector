@@ -1,4 +1,10 @@
-import { AI_REDRAW_PRICE_IDR, SUPERUSER_EMAIL, calculateJobPrice } from './pricing.js';
+import { AI_REDRAW_PRICE_IDR, SUPERUSER_EMAIL } from './pricing.js';
+
+const DEFAULT_PRICING = {
+  ready_trace: 1000,
+  ai_redraw: AI_REDRAW_PRICE_IDR,
+  separation_film: 1000
+};
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,6 +35,20 @@ function bearerToken(request) {
 function litellmImagesUrl(env) {
   const baseUrl = (env.LITELLM_BASE_URL || '').replace(/\/+$/, '').replace(/\/v1$/, '');
   return `${baseUrl}/v1/images/edits`;
+}
+
+function formatDate(date) {
+  return date.toISOString();
+}
+
+function calculateDynamicJobPrice({ inputMode = 'ready_trace', separationFilmCount = 0, aiAlreadyCharged = false } = {}, pricing = DEFAULT_PRICING) {
+  const basePrice =
+    inputMode === 'ai_redraw'
+      ? aiAlreadyCharged
+        ? 0
+        : pricing.ai_redraw
+      : pricing.ready_trace;
+  return basePrice + Math.max(0, Number(separationFilmCount) || 0) * pricing.separation_film;
 }
 
 function handleHealth() {
@@ -62,6 +82,39 @@ async function supabaseFetch(env, path, { method = 'GET', token, body, prefer } 
     throw new Error(data?.message || data?.error || `Supabase request failed: ${response.status}`);
   }
   return data;
+}
+
+async function getPricing(env) {
+  try {
+    const rows = await supabaseFetch(env, '/rest/v1/pricing_rules?select=key,amount_idr,active,description&order=key.asc', {});
+    return rows.reduce(
+      (pricing, row) => ({
+        ...pricing,
+        [row.key]: row.active === false ? pricing[row.key] : Number(row.amount_idr) || pricing[row.key]
+      }),
+      { ...DEFAULT_PRICING }
+    );
+  } catch (_err) {
+    return { ...DEFAULT_PRICING };
+  }
+}
+
+async function listProfilesWithBalance(env) {
+  const rows = await supabaseFetch(env, '/rest/v1/profiles?select=id,email,role,is_unlimited,is_active,deleted_at,created_at&order=created_at.desc', {});
+  return Promise.all(
+    rows.map(async (profile) => ({
+      ...profile,
+      balance: profile.is_unlimited ? null : await creditBalance(env, profile.id)
+    }))
+  );
+}
+
+function withUserEmails(rows, users) {
+  const emailById = new Map(users.map((user) => [user.id, user.email]));
+  return rows.map((row) => ({
+    ...row,
+    user_email: emailById.get(row.user_id) || ''
+  }));
 }
 
 async function getUser(env, request) {
@@ -144,7 +197,8 @@ async function handleBalance(env, request) {
 async function handleQuote(env, request) {
   const { profile } = await requireUser(env, request);
   const body = await readJson(request);
-  const priceIdr = calculateJobPrice(body);
+  const pricing = await getPricing(env);
+  const priceIdr = calculateDynamicJobPrice(body, pricing);
   const balance = profile.is_unlimited ? null : await creditBalance(env, profile.id);
   return json({ priceIdr, balance, isUnlimited: profile.is_unlimited, canRun: profile.is_unlimited || balance >= priceIdr });
 }
@@ -152,11 +206,12 @@ async function handleQuote(env, request) {
 async function handleCommitJob(env, request) {
   const { user, profile } = await requireUser(env, request);
   const body = await readJson(request);
-  const priceIdr = calculateJobPrice({
+  const pricing = await getPricing(env);
+  const priceIdr = calculateDynamicJobPrice({
     inputMode: body.inputMode,
     separationFilmCount: body.separationFilmCount,
     aiAlreadyCharged: body.inputMode === 'ai_redraw'
-  });
+  }, pricing);
   await ensureCredit(env, profile, priceIdr);
 
   const jobRows = await supabaseFetch(env, '/rest/v1/jobs?select=*', {
@@ -168,7 +223,7 @@ async function handleCommitJob(env, request) {
       input_mode: body.inputMode,
       production_type: body.productionType,
       status: 'done',
-      price_idr: (body.inputMode === 'ai_redraw' ? AI_REDRAW_PRICE_IDR : 0) + priceIdr,
+      price_idr: (body.inputMode === 'ai_redraw' ? pricing.ai_redraw : 0) + priceIdr,
       separation_film_count: Number(body.separationFilmCount) || 0,
       settings: body.settings || {},
       manifest: body.manifest || {},
@@ -193,7 +248,8 @@ async function handleCommitJob(env, request) {
 
 async function handleAiRedraw(env, request) {
   const { user, profile } = await requireUser(env, request);
-  await ensureCredit(env, profile, AI_REDRAW_PRICE_IDR);
+  const pricing = await getPricing(env);
+  await ensureCredit(env, profile, pricing.ai_redraw);
   const form = await request.formData();
   const image = form.get('image');
   const settings = JSON.parse(form.get('settings') || '{}');
@@ -203,7 +259,7 @@ async function handleAiRedraw(env, request) {
   if (!profile.is_unlimited) {
     ledger = await insertLedger(env, {
       userId: user.id,
-      amountIdr: -AI_REDRAW_PRICE_IDR,
+      amountIdr: -pricing.ai_redraw,
       kind: 'debit',
       reason: 'ai_redraw',
       metadata: { inputMode: settings.inputMode, productionType: settings.productionType }
@@ -224,9 +280,9 @@ async function handleAiRedraw(env, request) {
     body: aiForm
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || 'AI redraw gagal.');
+  if (!response.ok) throw new Error(data?.error?.message || 'Gambar ulang gagal.');
   const b64 = data?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('AI tidak mengembalikan gambar.');
+  if (!b64) throw new Error('Layanan gambar ulang tidak mengembalikan gambar.');
   const bytes = Uint8Array.from(atob(b64), (char) => char.charCodeAt(0));
   return new Response(bytes, {
     headers: {
@@ -251,14 +307,7 @@ function buildAiPrompt(settings) {
 async function handleAdminUsers(env, request) {
   await requireAdmin(env, request);
   if (request.method === 'GET') {
-    const rows = await supabaseFetch(env, '/rest/v1/profiles?select=id,email,role,is_unlimited,is_active,deleted_at,created_at&order=created_at.desc', {});
-    const users = await Promise.all(
-      rows.map(async (profile) => ({
-        ...profile,
-        balance: profile.is_unlimited ? null : await creditBalance(env, profile.id)
-      }))
-    );
-    return json({ users });
+    return json({ users: await listProfilesWithBalance(env) });
   }
 
   const body = await readJson(request);
@@ -272,6 +321,136 @@ async function handleAdminUsers(env, request) {
     body: allowed
   });
   return json({ user: rows?.[0] });
+}
+
+async function handleCreateManualPayment(env, request) {
+  const { user } = await requireUser(env, request);
+  const body = await readJson(request);
+  const amountIdr = Number.parseInt(body.amountIdr, 10);
+  if (!Number.isInteger(amountIdr) || amountIdr <= 0) throw new Error('Nominal pembayaran tidak valid.');
+  const rows = await supabaseFetch(env, '/rest/v1/manual_payments?select=*', {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: {
+      user_id: user.id,
+      marketplace: 'shopee',
+      order_ref: body.orderRef || '',
+      amount_idr: amountIdr,
+      notes: body.notes || '',
+      status: 'pending'
+    }
+  });
+  return json({ payment: rows?.[0] });
+}
+
+async function handleAppConfig(env) {
+  const rows = await supabaseFetch(env, '/rest/v1/app_settings?select=key,value,is_public&is_public=eq.true&order=key.asc', {});
+  return json({ settings: Object.fromEntries(rows.map((row) => [row.key, row.value])) });
+}
+
+async function handleAdminOverview(env, request) {
+  await requireAdmin(env, request);
+  const [users, jobs, payments, ledger] = await Promise.all([
+    supabaseFetch(env, '/rest/v1/profiles?select=id,is_active,is_unlimited,deleted_at', {}),
+    supabaseFetch(env, '/rest/v1/jobs?select=id,price_idr,production_type,input_mode,created_at&order=created_at.desc&limit=500', {}),
+    supabaseFetch(env, '/rest/v1/manual_payments?select=id,status,amount_idr,created_at&order=created_at.desc&limit=500', {}),
+    supabaseFetch(env, '/rest/v1/credit_ledger?select=amount_idr,kind,reason,created_at&order=created_at.desc&limit=500', {})
+  ]);
+  const now = Date.now();
+  const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
+  const recentJobs = jobs.filter((job) => new Date(job.created_at).getTime() >= sevenDaysAgo);
+  return json({
+    overview: {
+      totalUsers: users.length,
+      activeUsers: users.filter((user) => user.is_active && !user.deleted_at).length,
+      unlimitedUsers: users.filter((user) => user.is_unlimited).length,
+      totalJobs: jobs.length,
+      jobsLast7Days: recentJobs.length,
+      totalJobValueIdr: jobs.reduce((sum, job) => sum + (Number(job.price_idr) || 0), 0),
+      pendingPayments: payments.filter((payment) => payment.status === 'pending').length,
+      approvedPayments: payments.filter((payment) => payment.status === 'approved').length,
+      approvedPaymentIdr: payments.filter((payment) => payment.status === 'approved').reduce((sum, payment) => sum + (Number(payment.amount_idr) || 0), 0),
+      creditAddedIdr: ledger.filter((entry) => entry.amount_idr > 0).reduce((sum, entry) => sum + Number(entry.amount_idr), 0),
+      creditUsedIdr: Math.abs(ledger.filter((entry) => entry.amount_idr < 0).reduce((sum, entry) => sum + Number(entry.amount_idr), 0))
+    }
+  });
+}
+
+async function handleAdminJobs(env, request) {
+  await requireAdmin(env, request);
+  const users = await supabaseFetch(env, '/rest/v1/profiles?select=id,email', {});
+  const jobs = await supabaseFetch(env, '/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at&order=created_at.desc&limit=100', {});
+  return json({ jobs: withUserEmails(jobs, users) });
+}
+
+async function handleAdminPayments(env, request) {
+  await requireAdmin(env, request);
+  const users = await supabaseFetch(env, '/rest/v1/profiles?select=id,email', {});
+  const payments = await supabaseFetch(env, '/rest/v1/manual_payments?select=id,user_id,marketplace,order_ref,amount_idr,status,notes,rejected_reason,approved_at,created_at,updated_at&order=created_at.desc&limit=100', {});
+  return json({ payments: withUserEmails(payments, users) });
+}
+
+async function handleRejectPayment(env, request, paymentId) {
+  const admin = await requireAdmin(env, request);
+  const body = await readJson(request);
+  const updated = await supabaseFetch(env, `/rest/v1/manual_payments?id=eq.${encodeURIComponent(paymentId)}&select=*`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: {
+      status: 'rejected',
+      rejected_reason: body.reason || '',
+      approved_by: admin.user.id,
+      approved_at: null
+    }
+  });
+  return json({ payment: updated?.[0] });
+}
+
+async function handleAdminPricingRules(env, request) {
+  await requireAdmin(env, request);
+  if (request.method === 'GET') {
+    const rules = await supabaseFetch(env, '/rest/v1/pricing_rules?select=key,amount_idr,active,description,updated_at&order=key.asc', {});
+    return json({ rules });
+  }
+
+  const body = await readJson(request);
+  const amountIdr = Number.parseInt(body.amountIdr, 10);
+  if (!body.key || !Number.isInteger(amountIdr) || amountIdr < 0) throw new Error('Aturan harga tidak valid.');
+  const rows = await supabaseFetch(env, '/rest/v1/pricing_rules?select=*', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      key: body.key,
+      amount_idr: amountIdr,
+      active: body.active !== false,
+      description: body.description || '',
+      updated_at: formatDate(new Date())
+    }
+  });
+  return json({ rule: rows?.[0] });
+}
+
+async function handleAdminSettings(env, request) {
+  await requireAdmin(env, request);
+  if (request.method === 'GET') {
+    const rows = await supabaseFetch(env, '/rest/v1/app_settings?select=key,value,is_public,description,updated_at&order=key.asc', {});
+    return json({ settings: rows });
+  }
+
+  const body = await readJson(request);
+  if (!body.key) throw new Error('Key setting wajib diisi.');
+  const rows = await supabaseFetch(env, '/rest/v1/app_settings?select=*', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      key: body.key,
+      value: body.value || {},
+      is_public: body.isPublic !== false,
+      description: body.description || '',
+      updated_at: formatDate(new Date())
+    }
+  });
+  return json({ setting: rows?.[0] });
 }
 
 async function handleAdminCredits(env, request) {
@@ -318,14 +497,23 @@ export default {
     const url = new URL(request.url);
     try {
       if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') return handleHealth();
+      if (url.pathname === '/api/app-config' && request.method === 'GET') return handleAppConfig(env);
+      if (url.pathname === '/api/manual-payments' && request.method === 'POST') return handleCreateManualPayment(env, request);
       if (url.pathname === '/api/me/balance' && request.method === 'GET') return handleBalance(env, request);
       if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return handleQuote(env, request);
       if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return handleCommitJob(env, request);
       if (url.pathname === '/api/ai-redraw' && request.method === 'POST') return handleAiRedraw(env, request);
       if (url.pathname === '/api/admin/users') return handleAdminUsers(env, request);
       if (url.pathname === '/api/admin/credits' && request.method === 'POST') return handleAdminCredits(env, request);
+      if (url.pathname === '/api/admin/overview' && request.method === 'GET') return handleAdminOverview(env, request);
+      if (url.pathname === '/api/admin/jobs' && request.method === 'GET') return handleAdminJobs(env, request);
+      if (url.pathname === '/api/admin/manual-payments' && request.method === 'GET') return handleAdminPayments(env, request);
+      if (url.pathname === '/api/admin/pricing-rules') return handleAdminPricingRules(env, request);
+      if (url.pathname === '/api/admin/settings') return handleAdminSettings(env, request);
       const approveMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/approve$/);
       if (approveMatch && request.method === 'POST') return handleApprovePayment(env, request, approveMatch[1]);
+      const rejectMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/reject$/);
+      if (rejectMatch && request.method === 'POST') return handleRejectPayment(env, request, rejectMatch[1]);
       return error('Endpoint tidak ditemukan.', 404);
     } catch (err) {
       return error(err.message || 'Server error.', err.message?.includes('ditolak') ? 403 : 400);

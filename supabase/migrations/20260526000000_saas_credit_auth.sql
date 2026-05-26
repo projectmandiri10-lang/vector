@@ -63,7 +63,7 @@ create table if not exists public.pricing_rules (
 insert into public.pricing_rules (key, amount_idr, description)
 values
   ('ready_trace', 1000, 'Gambar sudah rapi dan langsung trace'),
-  ('ai_redraw', 5000, 'Generate/redraw AI'),
+  ('ai_redraw', 5000, 'Gambar ulang otomatis'),
   ('separation_film', 1000, 'Setiap satu warna film separasi sablon')
 on conflict (key) do update
 set amount_idr = excluded.amount_idr,

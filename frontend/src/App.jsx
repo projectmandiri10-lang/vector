@@ -232,7 +232,7 @@ export default function App() {
 
       {session && view === 'billing' && (
         <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
-          <BillingPanel />
+          <BillingPanel session={session} />
           <AccountPanel session={session} balance={balance} onRefreshBalance={refreshBalance} onSignOut={signOut} />
         </div>
       )}

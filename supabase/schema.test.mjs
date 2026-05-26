@@ -31,3 +31,11 @@ test('migration enables RLS and credit balance function', () => {
   assert.match(migration, /profiles_select_own_or_admin/);
   assert.match(migration, /profiles_update_admin_only/);
 });
+
+test('superadmin app management migration adds settings and payment admin support', () => {
+  const appManagementMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526002000_superadmin_app_management.sql'), 'utf8');
+  assert.match(appManagementMigration, /create table if not exists public\.app_settings/);
+  assert.match(appManagementMigration, /shopee_payment/);
+  assert.match(appManagementMigration, /pricing_rules_admin_write/);
+  assert.match(appManagementMigration, /manual_payments_status_created_idx/);
+});

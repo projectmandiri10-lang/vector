@@ -91,10 +91,66 @@ export async function addAdminCredit(payload, accessToken) {
   });
 }
 
+export async function getAppConfig() {
+  return apiFetch('/api/app-config');
+}
+
+export async function createManualPayment(payload, accessToken) {
+  return apiFetch('/api/manual-payments', {
+    method: 'POST',
+    accessToken,
+    body: payload
+  });
+}
+
+export async function getAdminOverview(accessToken) {
+  return apiFetch('/api/admin/overview', { accessToken });
+}
+
+export async function listAdminJobs(accessToken) {
+  return apiFetch('/api/admin/jobs', { accessToken });
+}
+
+export async function listAdminManualPayments(accessToken) {
+  return apiFetch('/api/admin/manual-payments', { accessToken });
+}
+
 export async function approveManualPayment(paymentId, accessToken) {
   return apiFetch(`/api/admin/manual-payments/${paymentId}/approve`, {
     method: 'POST',
     accessToken
+  });
+}
+
+export async function rejectManualPayment(paymentId, payload, accessToken) {
+  return apiFetch(`/api/admin/manual-payments/${paymentId}/reject`, {
+    method: 'POST',
+    accessToken,
+    body: payload
+  });
+}
+
+export async function listAdminPricingRules(accessToken) {
+  return apiFetch('/api/admin/pricing-rules', { accessToken });
+}
+
+export async function updateAdminPricingRule(payload, accessToken) {
+  return apiFetch('/api/admin/pricing-rules', {
+    method: 'POST',
+    accessToken,
+    body: payload
+  });
+}
+
+export async function listAdminSettings(accessToken) {
+  return apiFetch('/api/admin/settings', { accessToken });
+}
+
+export async function updateAdminSetting(payload, accessToken) {
+  return apiFetch('/api/admin/settings', {
+    method: 'POST',
+    accessToken,
+    body: payload
   });
 }
 
