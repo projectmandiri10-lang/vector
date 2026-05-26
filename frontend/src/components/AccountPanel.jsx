@@ -10,7 +10,7 @@ export default function AccountPanel({ session, balance, onRefreshBalance, onSig
           <CreditCard className="h-5 w-5 shrink-0 text-spruce" aria-hidden="true" />
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-ink">{session?.user?.email}</h2>
-            <p className="text-xs text-gray-600">{profile?.role === 'superuser' ? 'Superuser' : 'User'}</p>
+            <p className="text-xs text-gray-600">{profile?.role === 'superuser' ? 'Superadmin' : 'User'}</p>
           </div>
         </div>
         <button

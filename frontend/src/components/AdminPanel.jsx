@@ -61,7 +61,7 @@ export default function AdminPanel({ session, enabled }) {
       <div className="mb-4 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Shield className="h-5 w-5 text-spruce" aria-hidden="true" />
-          <h2 className="text-base font-semibold text-ink">Admin user & credit</h2>
+          <h2 className="text-base font-semibold text-ink">Superadmin user & credit</h2>
         </div>
         <button
           type="button"
@@ -98,7 +98,7 @@ export default function AdminPanel({ session, enabled }) {
                     className="border border-line bg-white px-2 py-1"
                   >
                     <option value="user">user</option>
-                    <option value="superuser">superuser</option>
+                    <option value="superuser">superadmin</option>
                   </select>
                 </td>
                 <td className="py-2 pr-3">{user.is_unlimited ? 'Unlimited' : formatRupiah(user.balance || 0)}</td>

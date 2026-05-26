@@ -4,6 +4,7 @@ import path from 'node:path';
 import { test } from 'node:test';
 
 const migration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526000000_saas_credit_auth.sql'), 'utf8');
+const superadminMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526001000_ensure_superadmin_whitelist.sql'), 'utf8');
 
 test('migration creates SaaS credit/auth tables', () => {
   for (const table of ['profiles', 'credit_ledger', 'jobs', 'manual_payments', 'pricing_rules']) {
@@ -15,6 +16,13 @@ test('migration whitelists superuser email as unlimited', () => {
   assert.match(migration, /jho\.j80@gmail\.com/);
   assert.match(migration, /then 'superuser'/);
   assert.match(migration, /is_unlimited/);
+});
+
+test('superadmin backfill keeps whitelist unlimited', () => {
+  assert.match(superadminMigration, /jho\.j80@gmail\.com/);
+  assert.match(superadminMigration, /role = 'superuser'/);
+  assert.match(superadminMigration, /is_unlimited = true/);
+  assert.match(superadminMigration, /is_active = true/);
 });
 
 test('migration enables RLS and credit balance function', () => {
