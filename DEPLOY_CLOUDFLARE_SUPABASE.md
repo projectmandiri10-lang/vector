@@ -157,6 +157,31 @@ Saat `npx wrangler login` berjalan:
 
 Jika ini pertama kali memakai Workers, Cloudflare bisa meminta Anda memilih atau membuat subdomain `workers.dev`. Pilih nama pendek yang mudah dikenali, misalnya nama brand/aplikasi. Nama ini akan menjadi bagian URL Worker.
 
+Jika Anda memakai layar Git integration Worker yang meminta build/deploy field, isi seperti ini:
+
+```text
+Worker/project name: vectorizer-saas-api
+Production branch: main
+Path / Root directory: cloudflare-worker
+Build command: kosongkan
+Deploy command: npx wrangler deploy
+Non-production branch deploy command: npx wrangler versions upload
+API token: Create new token / auto-generated Cloudflare token
+API token name: vectorizer-worker-builds
+Variable name: kosongkan dulu
+Variable value: kosongkan dulu
+```
+
+Jika Cloudflare tidak mengizinkan `Build command` kosong, isi:
+
+```text
+npm ci
+```
+
+Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, atau token LiteLLM. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/LiteLLM diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
+
+Nama Worker harus sama dengan `name` di `cloudflare-worker/wrangler.toml`, yaitu `vectorizer-saas-api`.
+
 ### 4.2 Set Worker Secrets
 
 Masih di folder `cloudflare-worker`, set secrets satu per satu:
