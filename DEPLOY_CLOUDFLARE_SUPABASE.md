@@ -297,6 +297,14 @@ Cloudflare akan menjalankan install dependency, build Vite, lalu memberikan URL 
 https://vectorizer.pages.dev
 ```
 
+Deployment saat ini:
+
+```text
+https://5d95e1ef.designmudah.pages.dev
+```
+
+Jika Cloudflare juga memberi domain project yang lebih pendek seperti `https://designmudah.pages.dev`, gunakan domain pendek/stabil itu untuk `Site URL`, `Redirect URLs`, dan `VITE_GOOGLE_OAUTH_REDIRECT_TO`. URL yang diawali hash seperti `5d95e1ef...` biasanya URL deployment preview.
+
 ### 5.3 Update Redirect Setelah Pages Jadi
 
 Setelah URL Pages muncul:
