@@ -1,25 +1,46 @@
 import { Wand2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import ArchivePanel from './components/ArchivePanel.jsx';
+import AccountPanel from './components/AccountPanel.jsx';
+import AdminPanel from './components/AdminPanel.jsx';
+import AuthPanel from './components/AuthPanel.jsx';
+import BillingPanel from './components/BillingPanel.jsx';
 import JobStatus from './components/JobStatus.jsx';
+import LandingPage from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { createJob, deleteJob, getJob, listJobs } from './lib/api.js';
+import { commitJob, getBalance, quoteJob, requestAiRedraw } from './lib/api.js';
+import { processImageLocally } from './lib/localProcessor.js';
+import { calculateJobPrice, formatRupiah } from './lib/pricing.js';
+import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 
 const initialSettings = {
   projectName: '',
   productionType: 'sticker',
+  inputMode: 'ai_redraw',
   makeVector: true,
   separateColors: false,
+  colorLimitMode: 'auto',
   maxColors: 4,
   whiteAsBackground: true,
   aiQuality: 'standard',
   actualWidthCm: 10,
   includeBackgroundInFilmSize: false,
+  stickerCutlineEnabled: true,
+  stickerCutlineOffsetMm: 2,
+  createUnderbaseFilm: true,
   paperSize: 'A4',
   paperOrientation: 'portrait'
 };
+
+function statusJob(status, message, progress = 0) {
+  return {
+    jobId: 'local-progress',
+    status,
+    progress,
+    message
+  };
+}
 
 export default function App() {
   const [file, setFile] = useState(null);
@@ -27,10 +48,9 @@ export default function App() {
   const [job, setJob] = useState(null);
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [archiveJobs, setArchiveJobs] = useState([]);
-  const [isArchiveLoading, setIsArchiveLoading] = useState(false);
-  const [deletingJobId, setDeletingJobId] = useState('');
+  const [session, setSession] = useState(null);
+  const [balance, setBalance] = useState(null);
+  const [view, setView] = useState('app');
   const previewRef = useRef('');
 
   const previewUrl = useMemo(() => {
@@ -50,37 +70,53 @@ export default function App() {
     };
   }, []);
 
-  async function loadArchive() {
-    setIsArchiveLoading(true);
+  useEffect(() => {
+    if (!isSupabaseConfigured) return undefined;
+    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      if (nextSession) setView('app');
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  async function refreshBalance(activeSession = session) {
+    if (!activeSession?.access_token) return;
     try {
-      setArchiveJobs(await listJobs());
-    } catch (archiveError) {
-      setError(archiveError.message || 'Gagal membaca arsip job.');
-    } finally {
-      setIsArchiveLoading(false);
+      setBalance(await getBalance(activeSession.access_token));
+    } catch (balanceError) {
+      setError(balanceError.message || 'Gagal membaca saldo.');
     }
   }
 
   useEffect(() => {
-    loadArchive();
-  }, []);
+    refreshBalance(session);
+  }, [session?.access_token]);
 
-  useEffect(() => {
-    if (!job?.jobId || ['done', 'failed'].includes(job.status)) return undefined;
-    const timer = window.setInterval(async () => {
-      try {
-        const nextJob = await getJob(job.jobId);
-        setJob(nextJob);
-        setError('');
-      } catch (pollError) {
-        setError('Koneksi backend terputus sementara. Status akan dicoba lagi otomatis.');
-      }
-    }, 1800);
+  async function signOut() {
+    if (supabase) await supabase.auth.signOut();
+    setSession(null);
+    setBalance(null);
+    setJob(null);
+    setView('app');
+  }
 
-    return () => window.clearInterval(timer);
-  }, [job?.jobId, job?.status]);
-
-  const canSubmit = file && !isSubmitting && file.size <= 10 * 1024 * 1024;
+  async function ensureCanRun(estimatedFilmCount = 0) {
+    if (!session?.access_token) throw new Error('Login dulu untuk memakai credit.');
+    const quote = await quoteJob(
+      {
+        inputMode: settings.inputMode,
+        productionType: settings.productionType,
+        separationFilmCount: estimatedFilmCount,
+        aiAlreadyCharged: false
+      },
+      session.access_token
+    );
+    if (!quote.isUnlimited && quote.balance < quote.priceIdr) {
+      throw new Error(`Saldo kurang. Perkiraan biaya ${formatRupiah(quote.priceIdr)}, saldo ${formatRupiah(quote.balance)}.`);
+    }
+    return quote;
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -91,67 +127,61 @@ export default function App() {
 
     setError('');
     setIsSubmitting(true);
-    setJob(null);
+    setJob(statusJob('preprocessing', 'Menyiapkan file lokal.', 10));
 
     try {
-      const created = await createJob(file, settings);
-      setJob(created);
-      const firstStatus = await getJob(created.jobId);
-      setJob(firstStatus);
-      loadArchive();
+      await ensureCanRun(settings.separateColors ? 1 : 0);
+      let processingFile = file;
+      let aiLedgerId = '';
+
+      if (settings.inputMode === 'ai_redraw') {
+        setJob(statusJob('processing_ai', 'Mengirim gambar ke AI tanpa penyimpanan permanen server.', 25));
+        const aiResult = await requestAiRedraw(file, settings, session.access_token);
+        processingFile = aiResult.file;
+        aiLedgerId = aiResult.aiLedgerId;
+      }
+
+      setJob(statusJob('vectorizing', 'Membuat vector, cutline, film, PDF, dan ZIP di browser.', 60));
+      const localResult = await processImageLocally(processingFile, settings);
+      const finalPrice = calculateJobPrice({
+        inputMode: settings.inputMode,
+        separationFilmCount: localResult.separationFilmCount,
+        aiAlreadyCharged: settings.inputMode === 'ai_redraw'
+      });
+
+      setJob(statusJob('exporting', 'Mencatat metadata job dan mendebit credit.', 88));
+      const committed = await commitJob(
+        {
+          inputMode: settings.inputMode,
+          productionType: settings.productionType,
+          projectName: settings.projectName || 'Project Vector',
+          separationFilmCount: localResult.separationFilmCount,
+          settings,
+          manifest: localResult.manifest,
+          aiLedgerId,
+          priceIdr: finalPrice
+        },
+        session.access_token
+      );
+
+      setJob({
+        ...localResult,
+        jobId: committed.job?.id || localResult.jobId,
+        priceIdr: (settings.inputMode === 'ai_redraw' ? 5000 : 0) + finalPrice,
+        remoteJob: committed.job
+      });
+      await refreshBalance();
     } catch (submitError) {
-      setError(submitError.message || 'Gagal memproses gambar');
+      setError(submitError.message || 'Gagal memproses gambar.');
+      setJob(statusJob('failed', 'Gagal memproses gambar.', 100));
     } finally {
       setIsSubmitting(false);
     }
   }
 
-  async function handleDeleteResult() {
-    if (!job?.jobId) return;
-    const confirmed = window.confirm('Hapus semua file hasil job ini dari server?');
-    if (!confirmed) return;
-
-    setIsDeleting(true);
-    setError('');
-    try {
-      await deleteJob(job.jobId);
-      setJob(null);
-      setFile(null);
-      await loadArchive();
-    } catch (deleteError) {
-      setError(deleteError.message || 'Gagal menghapus hasil.');
-    } finally {
-      setIsDeleting(false);
-    }
-  }
-
-  async function handleOpenArchivedJob(jobId) {
-    try {
-      setJob(await getJob(jobId));
-      setError('');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (openError) {
-      setError(openError.message || 'Gagal membuka arsip.');
-    }
-  }
-
-  async function handleDeleteArchivedJob(jobId) {
-    const confirmed = window.confirm('Hapus job ini dari arsip dan server?');
-    if (!confirmed) return;
-
-    setDeletingJobId(jobId);
-    try {
-      await deleteJob(jobId);
-      if (job?.jobId === jobId) setJob(null);
-      await loadArchive();
-    } catch (deleteError) {
-      setError(deleteError.message || 'Gagal menghapus arsip.');
-    } finally {
-      setDeletingJobId('');
-    }
-  }
-
   const isBusy = isSubmitting || (job && !['done', 'failed'].includes(job.status));
+  const canSubmit = file && !isBusy && file.size <= 10 * 1024 * 1024 && session;
+  const isSuperuser = balance?.profile?.role === 'superuser';
 
   return (
     <main className="min-h-screen bg-panel">
@@ -161,36 +191,84 @@ export default function App() {
             <p className="text-xs font-semibold uppercase text-spruce">Redraw Vector</p>
             <h1 className="text-2xl font-bold text-ink sm:text-3xl">Sablon dan Sticker</h1>
           </div>
+          {session && (
+            <nav className="flex flex-wrap gap-2">
+              {['app', 'billing', 'admin'].map((item) =>
+                item === 'admin' && !isSuperuser ? null : (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setView(item)}
+                    className={`border px-3 py-2 text-sm font-semibold ${view === item ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink'}`}
+                  >
+                    {item === 'app' ? 'App' : item === 'billing' ? 'Billing' : 'Admin'}
+                  </button>
+                )
+              )}
+            </nav>
+          )}
         </div>
       </div>
 
-      <form className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px]" onSubmit={handleSubmit}>
-        <div className="space-y-4">
-          <UploadBox file={file} previewUrl={previewUrl} onFileChange={setFile} />
-          <JobStatus job={job} error={error} />
-          <ResultPreview job={job} onDelete={handleDeleteResult} isDeleting={isDeleting} />
-          <ArchivePanel
-            jobs={archiveJobs}
-            onRefresh={loadArchive}
-            onOpenJob={handleOpenArchivedJob}
-            onDeleteJob={handleDeleteArchivedJob}
-            isLoading={isArchiveLoading}
-            deletingJobId={deletingJobId}
-          />
-        </div>
+      {!session && (
+        <>
+          <LandingPage onStart={() => document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' })} />
+          <div id="auth" className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+            <div className="border border-line bg-white p-4 sm:p-5">
+              <h2 className="mb-2 text-lg font-bold text-ink">Alur singkat</h2>
+              <div className="grid gap-3 text-sm leading-6 text-gray-700">
+                <p>1. Login atau register.</p>
+                <p>2. Upload gambar siap trace mulai Rp1.000, atau gunakan AI redraw Rp5.000.</p>
+                <p>3. Download hasil langsung dari browser. Server hanya menyimpan metadata dan credit.</p>
+              </div>
+            </div>
+            <AuthPanel onSignedIn={setSession} />
+          </div>
+        </>
+      )}
 
-        <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
-          <SettingsPanel settings={settings} onChange={setSettings} disabled={isBusy} />
-          <button
-            type="submit"
-            disabled={!canSubmit}
-            className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-3 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300 disabled:text-gray-600"
-          >
-            <Wand2 className="h-5 w-5" aria-hidden="true" />
-            <span>{isBusy ? 'Sedang memproses' : 'Proses gambar'}</span>
-          </button>
-        </aside>
-      </form>
+      {session && view === 'billing' && (
+        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <BillingPanel />
+          <AccountPanel session={session} balance={balance} onRefreshBalance={refreshBalance} onSignOut={signOut} />
+        </div>
+      )}
+
+      {session && view === 'admin' && (
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
+          <AdminPanel session={session} enabled={isSuperuser} />
+        </div>
+      )}
+
+      {session && view === 'app' && (
+        <form className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]" onSubmit={handleSubmit}>
+          <div className="space-y-4">
+            <AccountPanel session={session} balance={balance} onRefreshBalance={refreshBalance} onSignOut={signOut} />
+            <UploadBox
+              file={file}
+              previewUrl={previewUrl}
+              inputMode={settings.inputMode}
+              onInputModeChange={(inputMode) => setSettings((current) => ({ ...current, inputMode }))}
+              onFileChange={setFile}
+              disabled={isBusy}
+            />
+            <JobStatus job={job} error={error} />
+            <ResultPreview job={job} onDelete={() => setJob(null)} isDeleting={false} />
+          </div>
+
+          <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
+            <SettingsPanel settings={settings} onChange={setSettings} disabled={isBusy} />
+            <button
+              type="submit"
+              disabled={!canSubmit}
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-3 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300 disabled:text-gray-600"
+            >
+              <Wand2 className="h-5 w-5" aria-hidden="true" />
+              <span>{isBusy ? 'Sedang memproses' : 'Proses dan debit credit'}</span>
+            </button>
+          </aside>
+        </form>
+      )}
     </main>
   );
 }

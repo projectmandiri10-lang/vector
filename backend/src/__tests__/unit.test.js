@@ -6,8 +6,9 @@ import fs from 'fs-extra';
 import { PNG } from 'pngjs';
 import { validateSettings } from '../routes/jobs.routes.js';
 import { buildRedrawPrompt } from '../services/aiRedraw.service.js';
-import { createMasksForPalette } from '../services/quantize.service.js';
-import { buildSeparationSvg, createFilmPlan } from '../services/separation.service.js';
+import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
+import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
+import { createStickerCutline } from '../services/stickerCutline.service.js';
 import { isLowChroma, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
 import { buildPrintLayout, getPaperSizeMm } from '../utils/paper.js';
 import { createRegistrationMarks } from '../utils/registrationMarks.js';
@@ -133,6 +134,42 @@ test('createMasksForPalette removes tiny color specks and keeps real color regio
   }
 });
 
+test('quantizeImage defaults to automatic colors and manual mode limits palette size', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-quantize-test-'));
+  try {
+    const sourcePath = path.join(tempDir, 'source.png');
+    const png = new PNG({ width: 50, height: 10, colorType: 6 });
+    const colors = [
+      [0, 0, 0],
+      [230, 40, 80],
+      [0, 160, 90],
+      [40, 80, 230],
+      [240, 210, 40]
+    ];
+
+    for (let y = 0; y < png.height; y += 1) {
+      for (let x = 0; x < png.width; x += 1) {
+        const [r, g, b] = colors[Math.floor(x / 10)];
+        const idx = (png.width * y + x) << 2;
+        png.data[idx] = r;
+        png.data[idx + 1] = g;
+        png.data[idx + 2] = b;
+        png.data[idx + 3] = 255;
+      }
+    }
+
+    await fs.writeFile(sourcePath, PNG.sync.write(png));
+
+    const automatic = await quantizeImage(sourcePath, { colorLimitMode: 'auto', whiteAsBackground: false });
+    const manual = await quantizeImage(sourcePath, { colorLimitMode: 'manual', maxColors: 3, whiteAsBackground: false });
+
+    assert.equal(automatic.palette.length, 5);
+    assert.equal(manual.palette.length, 3);
+  } finally {
+    await fs.remove(tempDir);
+  }
+});
+
 test('registration marks creates four identical-style targets', () => {
   const marks = createRegistrationMarks({ x: 0, y: 0, width: 200, height: 100 }, 40);
   assert.equal((marks.match(/<circle/g) || []).length, 4);
@@ -219,6 +256,92 @@ test('film plan excludes full canvas background by default and keeps legacy layo
   );
 });
 
+test('createSeparations can add an underbase film aligned to cropped artwork', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-underbase-test-'));
+  try {
+    const separations = await createSeparations({
+      outputDir: tempDir,
+      width: 200,
+      height: 100,
+      pathsByColor: [
+        {
+          index: 1,
+          hex: '#000000',
+          paths: ['M0 0 L200 0 L200 100 L0 100 Z']
+        },
+        {
+          index: 2,
+          hex: '#FFFFFF',
+          paths: ['M50 20 L150 20 L150 80 L50 80 Z']
+        }
+      ],
+      settings: {
+        actualWidthCm: 10,
+        paperSize: 'A4',
+        paperOrientation: 'portrait',
+        createUnderbaseFilm: true
+      }
+    });
+
+    assert.equal(separations[0].kind, 'underbase');
+    assert.equal(separations[0].label, 'FILM DASAR - HITAM 100%');
+    const svg = await fs.readFile(path.join(tempDir, 'film-underbase.svg'), 'utf8');
+    assert.match(svg, /FILM DASAR - HITAM 100%/);
+    assert.match(svg, /translate\(-50\.000 -20\.000\)/);
+  } finally {
+    await fs.remove(tempDir);
+  }
+});
+
+test('createStickerCutline traces a non-background silhouette with millimeter offset', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-cutline-test-'));
+  try {
+    const maskPath = path.join(tempDir, 'color-01.png');
+    const png = new PNG({ width: 40, height: 20, colorType: 6 });
+    png.data.fill(255);
+    for (let y = 5; y < 15; y += 1) {
+      for (let x = 5; x < 35; x += 1) {
+        const idx = (png.width * y + x) << 2;
+        png.data[idx] = 0;
+        png.data[idx + 1] = 0;
+        png.data[idx + 2] = 0;
+        png.data[idx + 3] = 255;
+      }
+    }
+    await fs.writeFile(maskPath, PNG.sync.write(png));
+
+    const result = await createStickerCutline({
+      outputDir: tempDir,
+      width: 40,
+      height: 20,
+      masks: [{ index: 1, filePath: maskPath }],
+      pathsByColor: [
+        {
+          index: 1,
+          hex: '#FFFFFF',
+          paths: ['M0 0 L40 0 L40 20 L0 20 Z']
+        }
+      ],
+      settings: {
+        productionType: 'sticker',
+        stickerCutlineEnabled: true,
+        stickerCutlineOffsetMm: 2,
+        actualWidthCm: 4,
+        paperSize: 'A4',
+        paperOrientation: 'portrait'
+      }
+    });
+
+    assert.equal(result.radiusPx, 2);
+    const svg = await fs.readFile(path.join(tempDir, 'sticker-cutline.svg'), 'utf8');
+    assert.match(svg, /id="CutContour"/);
+    assert.match(svg, /stroke="#FF00FF"/);
+    assert.match(svg, /Sticker cutline 2 mm/);
+  } finally {
+    await fs.remove(tempDir);
+  }
+});
+
 test('separation svg crops layout to artwork bounds', () => {
   const svg = buildSeparationSvg({
     width: 200,
@@ -249,9 +372,28 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(settings.paperOrientation, 'landscape');
   assert.equal(settings.aiQuality, 'standard');
   assert.equal(settings.includeBackgroundInFilmSize, false);
+  assert.equal(settings.inputMode, 'ai_redraw');
+  assert.equal(settings.colorLimitMode, 'auto');
+  assert.equal(settings.stickerCutlineEnabled, true);
+  assert.equal(settings.stickerCutlineOffsetMm, 2);
+  assert.equal(settings.createUnderbaseFilm, false);
 
   const includeBackground = validateSettings({ includeBackgroundInFilmSize: 'true' });
   assert.equal(includeBackground.includeBackgroundInFilmSize, true);
+
+  const readyTrace = validateSettings({
+    inputMode: 'ready_trace',
+    colorLimitMode: 'manual',
+    maxColors: '3',
+    stickerCutlineOffsetMm: '1.5'
+  });
+  assert.equal(readyTrace.inputMode, 'ready_trace');
+  assert.equal(readyTrace.colorLimitMode, 'manual');
+  assert.equal(readyTrace.maxColors, 3);
+  assert.equal(readyTrace.stickerCutlineOffsetMm, 1.5);
+
+  const sablon = validateSettings({ productionType: 'sablon' });
+  assert.equal(sablon.createUnderbaseFilm, true);
 });
 
 test('paper sizing converts A4/A3 orientation and rejects oversized artwork', () => {

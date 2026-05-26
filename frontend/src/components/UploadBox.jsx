@@ -2,7 +2,20 @@ import { ImagePlus, UploadCloud, X } from 'lucide-react';
 
 const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
-export default function UploadBox({ file, previewUrl, onFileChange }) {
+const modeOptions = [
+  {
+    value: 'ai_redraw',
+    title: 'Gambar perlu dirapikan AI',
+    description: 'Untuk foto buram, scan, atau logo yang perlu digambar ulang sebelum trace.'
+  },
+  {
+    value: 'ready_trace',
+    title: 'Gambar sudah siap trace (tanpa AI)',
+    description: 'Untuk PNG/JPG/WebP yang sudah bersih dan ingin langsung diproses sticker atau sablon.'
+  }
+];
+
+export default function UploadBox({ file, previewUrl, inputMode, onInputModeChange, onFileChange, disabled }) {
   function handleChange(event) {
     const nextFile = event.target.files?.[0];
     if (!nextFile) return;
@@ -19,11 +32,33 @@ export default function UploadBox({ file, previewUrl, onFileChange }) {
         <h2 className="text-base font-semibold text-ink">Upload gambar</h2>
       </div>
 
+      <div className="mb-3 grid gap-2 md:grid-cols-2">
+        {modeOptions.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            disabled={disabled}
+            onClick={() => onInputModeChange(option.value)}
+            className={`border px-3 py-3 text-left transition ${
+              inputMode === option.value ? 'border-spruce bg-teal-50 text-ink' : 'border-line bg-white text-gray-700 hover:border-spruce'
+            } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
+            aria-pressed={inputMode === option.value}
+          >
+            <span className="block text-sm font-semibold">{option.title}</span>
+            <span className="mt-1 block text-xs leading-5 text-gray-600">{option.description}</span>
+          </button>
+        ))}
+      </div>
+
       <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center border border-dashed border-line bg-panel px-4 py-8 text-center transition hover:border-spruce hover:bg-white">
         <UploadCloud className="mb-3 h-9 w-9 text-spruce" aria-hidden="true" />
         <span className="text-sm font-semibold text-ink">Pilih gambar JPG, PNG, atau WebP</span>
-        <span className="mt-1 text-xs text-gray-600">Maksimal 10 MB, cocok untuk logo, ikon, kartun, sticker, dan desain sablon sederhana.</span>
-        <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} />
+        <span className="mt-1 text-xs text-gray-600">
+          {inputMode === 'ready_trace'
+            ? 'Maksimal 10 MB. AI tidak menggambar ulang; file langsung masuk proses trace.'
+            : 'Maksimal 10 MB. AI akan merapikan gambar sebelum proses trace.'}
+        </span>
+        <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} disabled={disabled} />
       </label>
 
       {file && (

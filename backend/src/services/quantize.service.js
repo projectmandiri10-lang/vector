@@ -119,6 +119,12 @@ function mergeSimilarColors(colors, maxColors) {
   return merged.sort((a, b) => b.count - a.count).slice(0, maxColors);
 }
 
+function normalizeMaxColors(value, fallback = 6) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(6, Math.max(2, parsed));
+}
+
 export async function quantizeImage(imagePath, options = {}) {
   const png = await readPng(imagePath);
   const histogram = new Map();
@@ -154,7 +160,7 @@ export async function quantizeImage(imagePath, options = {}) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  const maxColors = Math.min(6, Math.max(2, options.maxColors || 4));
+  const maxColors = options.colorLimitMode === 'manual' ? normalizeMaxColors(options.maxColors, 4) : 6;
   const palette = mergeSimilarColors(candidates, maxColors).map((color, index) => ({
     index: index + 1,
     hex: rgbToHex(color),

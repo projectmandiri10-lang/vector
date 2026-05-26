@@ -1,4 +1,4 @@
-import { Archive, Download, FileImage, FileText, Layers, Palette, Trash2 } from 'lucide-react';
+import { Archive, Download, FileImage, FileText, Layers, Palette, Scissors, Trash2 } from 'lucide-react';
 import { absoluteUrl } from '../lib/api.js';
 
 function DownloadButton({ href, children, icon: Icon }) {
@@ -34,9 +34,9 @@ export default function ResultPreview({ job, onDelete, isDeleting }) {
               <FileImage className="h-4 w-4 text-spruce" aria-hidden="true" />
               <h3 className="text-sm font-semibold text-ink">Preview PNG full color</h3>
             </div>
-            {settings.separateColors && (
+            {(settings.separateColors || settings.stickerCutlineEnabled) && (
               <p className="border-b border-line bg-panel px-3 py-2 text-xs text-gray-700">
-                Ukuran cetak: lebar {settings.includeBackgroundInFilmSize ? 'termasuk background' : 'area artwork'} {settings.actualWidthCm} cm,
+                Ukuran cetak: lebar {settings.separateColors && settings.includeBackgroundInFilmSize ? 'termasuk background' : 'area artwork'} {settings.actualWidthCm} cm,
                 tinggi mengikuti rasio. Kertas {settings.paperSize} {settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.
               </p>
             )}
@@ -69,6 +69,12 @@ export default function ResultPreview({ job, onDelete, isDeleting }) {
         <DownloadButton href={files.fullPdf} icon={FileText}>
           Download PDF full color
         </DownloadButton>
+        <DownloadButton href={files.stickerCutlineSvg} icon={Scissors}>
+          Download SVG sticker cutline
+        </DownloadButton>
+        <DownloadButton href={files.stickerCutlinePdf} icon={Scissors}>
+          Download PDF sticker cutline
+        </DownloadButton>
         <DownloadButton href={files.zip} icon={Archive}>
           Download ZIP semua file
         </DownloadButton>
@@ -90,7 +96,7 @@ export default function ResultPreview({ job, onDelete, isDeleting }) {
         <div className="mt-6">
           <div className="mb-3 flex items-center gap-2">
             <Palette className="h-5 w-5 text-spruce" aria-hidden="true" />
-            <h3 className="text-sm font-semibold text-ink">Daftar film warna</h3>
+            <h3 className="text-sm font-semibold text-ink">Daftar film sablon</h3>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {files.separations.map((film) => (
@@ -100,7 +106,9 @@ export default function ResultPreview({ job, onDelete, isDeleting }) {
                     <span className="h-7 w-7 border border-line" style={{ backgroundColor: film.hex }} />
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-ink">{film.label}</p>
-                      <p className="text-xs text-gray-600">Film hitam 100% dengan registration mark</p>
+                      <p className="text-xs text-gray-600">
+                        {film.kind === 'underbase' ? 'Film dasar hitam 100% untuk bahan gelap' : 'Film hitam 100% dengan registration mark'}
+                      </p>
                     </div>
                   </div>
                 </div>

@@ -33,10 +33,13 @@ export async function createResultZip(jobDir, zipPath) {
     fileIfExists(archive, path.join(jobDir, 'input.png'), 'input.png');
     fileIfExists(archive, path.join(jobDir, 'clean-input.png'), 'clean-input.png');
     fileIfExists(archive, path.join(jobDir, 'ai-redraw.png'), 'ai-redraw.png');
+    fileIfExists(archive, path.join(jobDir, 'trace-source.png'), 'trace-source.png');
     fileIfExists(archive, path.join(jobDir, 'preview-full-color.png'), 'preview-full-color.png');
     fileIfExists(archive, path.join(jobDir, 'palette.json'), 'palette.json');
     fileIfExists(archive, path.join(jobDir, 'full-vector.svg'), 'full-vector.svg');
     fileIfExists(archive, path.join(jobDir, 'full-vector.pdf'), 'full-vector.pdf');
+    fileIfExists(archive, path.join(jobDir, 'sticker-cutline.svg'), 'sticker-cutline.svg');
+    fileIfExists(archive, path.join(jobDir, 'sticker-cutline.pdf'), 'sticker-cutline.pdf');
     dirIfExists(archive, path.join(jobDir, 'masks'), 'masks');
     dirIfExists(archive, path.join(jobDir, 'separations'), 'separations');
   });

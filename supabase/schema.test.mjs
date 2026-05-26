@@ -1,0 +1,25 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
+import { test } from 'node:test';
+
+const migration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526000000_saas_credit_auth.sql'), 'utf8');
+
+test('migration creates SaaS credit/auth tables', () => {
+  for (const table of ['profiles', 'credit_ledger', 'jobs', 'manual_payments', 'pricing_rules']) {
+    assert.match(migration, new RegExp(`create table if not exists public\\.${table}`));
+  }
+});
+
+test('migration whitelists superuser email as unlimited', () => {
+  assert.match(migration, /jho\.j80@gmail\.com/);
+  assert.match(migration, /then 'superuser'/);
+  assert.match(migration, /is_unlimited/);
+});
+
+test('migration enables RLS and credit balance function', () => {
+  assert.match(migration, /alter table public\.profiles enable row level security/);
+  assert.match(migration, /create or replace function public\.credit_balance/);
+  assert.match(migration, /profiles_select_own_or_admin/);
+  assert.match(migration, /profiles_update_admin_only/);
+});

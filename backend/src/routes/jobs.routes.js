@@ -9,6 +9,7 @@ import { exportSvgToPdf, exportSvgToPng } from '../services/export.service.js';
 import { preprocessUploadedImage } from '../services/preprocess.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { createSeparations } from '../services/separation.service.js';
+import { createStickerCutline } from '../services/stickerCutline.service.js';
 import { vectorizeMasks } from '../services/vectorize.service.js';
 import { createResultZip, createSeparationZip } from '../services/zip.service.js';
 import { normalizeActualWidthCm } from '../utils/paper.js';
@@ -83,24 +84,38 @@ function parseBoolean(value, fallback = false) {
   return ['true', '1', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
+function normalizeOffsetMm(value, fallback = 2) {
+  const parsed = Number.parseFloat(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(20, Math.max(0.1, parsed));
+}
+
 export function validateSettings(body = {}) {
   const productionType = body.productionType === 'sablon' ? 'sablon' : 'sticker';
   const defaultSeparate = productionType === 'sablon';
   const maxColors = Math.min(6, Math.max(2, Number.parseInt(body.maxColors || '4', 10)));
+  const explicitColorLimitMode = body.colorLimitMode === 'manual' || body.colorLimitMode === 'auto';
+  const colorLimitMode = explicitColorLimitMode ? body.colorLimitMode : body.maxColors ? 'manual' : 'auto';
   const separateColors = parseBoolean(body.separateColors, defaultSeparate);
   const paperSize = String(body.paperSize || 'A4').toUpperCase() === 'A3' ? 'A3' : 'A4';
   const paperOrientation = String(body.paperOrientation || 'portrait').toLowerCase() === 'landscape' ? 'landscape' : 'portrait';
+  const inputMode = body.inputMode === 'ready_trace' ? 'ready_trace' : 'ai_redraw';
 
   return {
     projectName: String(body.projectName || 'Project Vector').trim().slice(0, 80) || 'Project Vector',
     productionType,
+    inputMode,
     makeVector: parseBoolean(body.makeVector, true) || separateColors,
     separateColors,
+    colorLimitMode,
     maxColors,
     whiteAsBackground: parseBoolean(body.whiteAsBackground, true),
     aiQuality: 'standard',
     actualWidthCm: normalizeActualWidthCm(body.actualWidthCm, 10),
     includeBackgroundInFilmSize: parseBoolean(body.includeBackgroundInFilmSize, false),
+    stickerCutlineEnabled: productionType === 'sticker' && parseBoolean(body.stickerCutlineEnabled, true),
+    stickerCutlineOffsetMm: normalizeOffsetMm(body.stickerCutlineOffsetMm, 2),
+    createUnderbaseFilm: productionType === 'sablon' && parseBoolean(body.createUnderbaseFilm, true),
     paperSize,
     paperOrientation,
     priceIdr: 20000,
@@ -130,17 +145,29 @@ function publicFiles(jobId, meta) {
   maybe('fullPng', 'preview-full-color.png', `/api/jobs/${jobId}/download/full-png`);
   maybe('fullSvg', 'full-vector.svg', `/api/jobs/${jobId}/download/full-svg`);
   maybe('fullPdf', 'full-vector.pdf', `/api/jobs/${jobId}/download/full-pdf`);
+  maybe('stickerCutlineSvg', 'sticker-cutline.svg', `/api/jobs/${jobId}/download/sticker-cutline-svg`);
+  maybe('stickerCutlinePdf', 'sticker-cutline.pdf', `/api/jobs/${jobId}/download/sticker-cutline-pdf`);
   maybe('zip', 'result.zip', `/api/jobs/${jobId}/download/zip`);
   maybe('separationZip', 'separation-films.zip', `/api/jobs/${jobId}/download/separation-zip`);
 
   if (Array.isArray(meta?.separations)) {
     files.separations = meta.separations.map((film) => ({
       index: film.index,
+      kind: film.kind || 'color',
       hex: film.hex,
       label: film.label,
-      svg: `/api/jobs/${jobId}/download/separation-svg/${film.index}`,
-      pdf: `/api/jobs/${jobId}/download/separation-pdf/${film.index}`,
-      preview: `/api/jobs/${jobId}/download/separation-preview/${film.index}`
+      svg:
+        film.kind === 'underbase'
+          ? `/api/jobs/${jobId}/download/underbase-svg`
+          : `/api/jobs/${jobId}/download/separation-svg/${film.index}`,
+      pdf:
+        film.kind === 'underbase'
+          ? `/api/jobs/${jobId}/download/underbase-pdf`
+          : `/api/jobs/${jobId}/download/separation-pdf/${film.index}`,
+      preview:
+        film.kind === 'underbase'
+          ? `/api/jobs/${jobId}/download/underbase-preview`
+          : `/api/jobs/${jobId}/download/separation-preview/${film.index}`
     }));
   }
 
@@ -189,19 +216,29 @@ async function processJob(jobId, uploadedBuffer) {
     });
     const input = await preprocessUploadedImage(uploadedBuffer, jobDir);
 
-    await updateJob(jobId, {
-      status: 'processing_ai',
-      progress: 30,
-      message: statusMessages.processing_ai
-    });
-    const aiOutputPath = safeJobPath(jobId, 'ai-redraw.png');
-    const prompt = buildRedrawPrompt(meta.settings);
-    await redrawWithAI(input.cleanInputPath, aiOutputPath, meta.settings);
-    await fs.copy(aiOutputPath, safeJobPath(jobId, 'preview-full-color.png'));
+    let sourceImagePath = input.cleanInputPath;
+    let prompt = null;
+    if (meta.settings.inputMode === 'ready_trace') {
+      sourceImagePath = safeJobPath(jobId, 'trace-source.png');
+      await fs.copy(input.cleanInputPath, sourceImagePath);
+      await fs.copy(sourceImagePath, safeJobPath(jobId, 'preview-full-color.png'));
+    } else {
+      await updateJob(jobId, {
+        status: 'processing_ai',
+        progress: 30,
+        message: statusMessages.processing_ai
+      });
+      const aiOutputPath = safeJobPath(jobId, 'ai-redraw.png');
+      prompt = buildRedrawPrompt(meta.settings);
+      await redrawWithAI(input.cleanInputPath, aiOutputPath, meta.settings);
+      sourceImagePath = aiOutputPath;
+      await fs.copy(aiOutputPath, safeJobPath(jobId, 'preview-full-color.png'));
+    }
 
     let palette = [];
     let pathsByColor = [];
     let separations = [];
+    let stickerCutline = null;
     let vectorWidth = input.width;
     let vectorHeight = input.height;
 
@@ -213,7 +250,8 @@ async function processJob(jobId, uploadedBuffer) {
         prompt
       });
 
-      const quantized = await quantizeImage(aiOutputPath, {
+      const quantized = await quantizeImage(sourceImagePath, {
+        colorLimitMode: meta.settings.colorLimitMode,
         maxColors: meta.settings.maxColors,
         whiteAsBackground: meta.settings.whiteAsBackground
       });
@@ -222,7 +260,7 @@ async function processJob(jobId, uploadedBuffer) {
       palette = quantized.palette;
       await fs.writeJson(safeJobPath(jobId, 'palette.json'), palette, { spaces: 2 });
 
-      const masks = await createMasksForPalette(aiOutputPath, palette, safeJobPath(jobId, 'masks'), {
+      const masks = await createMasksForPalette(sourceImagePath, palette, safeJobPath(jobId, 'masks'), {
         whiteAsBackground: meta.settings.whiteAsBackground
       });
 
@@ -232,6 +270,15 @@ async function processJob(jobId, uploadedBuffer) {
         outputPath: safeJobPath(jobId, 'full-vector.svg')
       });
       pathsByColor = vectorResult.pathsByColor;
+
+      stickerCutline = await createStickerCutline({
+        masks,
+        pathsByColor,
+        width: quantized.width,
+        height: quantized.height,
+        outputDir: jobDir,
+        settings: meta.settings
+      });
     }
 
     if (meta.settings.separateColors && pathsByColor.length > 0) {
@@ -255,11 +302,16 @@ async function processJob(jobId, uploadedBuffer) {
       progress: 88,
       message: statusMessages.exporting,
       palette,
-      separations
+      separations,
+      stickerCutline
     });
 
     if (await fileExists(safeJobPath(jobId, 'full-vector.svg'))) {
       await exportSvgToPdf(safeJobPath(jobId, 'full-vector.svg'), safeJobPath(jobId, 'full-vector.pdf'));
+    }
+
+    if (stickerCutline) {
+      await exportSvgToPdf(stickerCutline.svgPath, stickerCutline.pdfPath);
     }
 
     for (const film of separations) {
@@ -278,7 +330,8 @@ async function processJob(jobId, uploadedBuffer) {
       message: statusMessages.done,
       files: publicFiles(jobId, { separations }),
       palette,
-      separations
+      separations,
+      stickerCutline
     });
   } catch (error) {
     await updateJob(jobId, {
@@ -419,6 +472,8 @@ function filmIndex(req) {
 router.get('/:jobId/download/full-png', sendJobFile(() => 'preview-full-color.png', () => 'preview-full-color.png'));
 router.get('/:jobId/download/full-svg', sendJobFile(() => 'full-vector.svg', () => 'full-vector.svg'));
 router.get('/:jobId/download/full-pdf', sendJobFile(() => 'full-vector.pdf', () => 'full-vector.pdf'));
+router.get('/:jobId/download/sticker-cutline-svg', sendJobFile(() => 'sticker-cutline.svg', () => 'sticker-cutline.svg'));
+router.get('/:jobId/download/sticker-cutline-pdf', sendJobFile(() => 'sticker-cutline.pdf', () => 'sticker-cutline.pdf'));
 router.get('/:jobId/download/zip', sendJobFile(() => 'result.zip', () => 'result.zip'));
 router.get(
   '/:jobId/download/separation-zip',
@@ -436,5 +491,8 @@ router.get(
   '/:jobId/download/separation-preview/:index',
   sendInlineJobFile((req) => `separations/film-color-${filmIndex(req)}-preview.png`, 'png')
 );
+router.get('/:jobId/download/underbase-svg', sendInlineJobFile(() => 'separations/film-underbase.svg', 'svg'));
+router.get('/:jobId/download/underbase-pdf', sendJobFile(() => 'separations/film-underbase.pdf', () => 'film-underbase.pdf'));
+router.get('/:jobId/download/underbase-preview', sendInlineJobFile(() => 'separations/film-underbase-preview.png', 'png'));
 
 export default router;

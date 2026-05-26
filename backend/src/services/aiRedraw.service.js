@@ -56,7 +56,13 @@ export function buildRedrawPrompt(settings) {
     );
   }
 
-  if (settings.maxColors) {
+  if (settings.colorLimitMode === 'auto') {
+    lines.push(
+      'Automatically keep the important visible solid colors from the source image. Do not force the artwork into a fixed color count unless colors are visually redundant.'
+    );
+  }
+
+  if (settings.colorLimitMode !== 'auto' && settings.maxColors) {
     lines.push(
       `Use approximately ${settings.maxColors} solid colors as a target for simplifying close color variations. Do not drop distinct important source colors; include the real background color if it is visibly part of the uploaded design.`
     );

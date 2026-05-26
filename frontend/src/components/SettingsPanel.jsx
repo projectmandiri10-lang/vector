@@ -84,16 +84,27 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
           <Toggle checked={settings.separateColors} onChange={setSeparateColors} label="Pecah warna untuk sablon" disabled={disabled} />
         </div>
 
-        <label className="block">
+        <div>
           <span className="mb-2 flex items-center gap-2 text-sm font-medium text-ink">
             <Palette className="h-4 w-4 text-spruce" aria-hidden="true" />
-            Maksimal warna
+            Jumlah warna
           </span>
+          <div className="grid gap-2">
+            <Toggle
+              checked={settings.colorLimitMode === 'manual'}
+              onChange={(value) => update('colorLimitMode', value ? 'manual' : 'auto')}
+              label="Batasi jumlah warna"
+              disabled={disabled}
+            />
+            {settings.colorLimitMode !== 'manual' && (
+              <div className="border border-spruce bg-teal-50 px-3 py-2.5 text-sm font-semibold text-ink">Otomatis</div>
+            )}
+          </div>
           <select
             value={settings.maxColors}
             onChange={(event) => update('maxColors', Number(event.target.value))}
-            disabled={disabled}
-            className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+            disabled={disabled || settings.colorLimitMode !== 'manual'}
+            className="mt-2 w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce disabled:bg-gray-100 disabled:text-gray-500"
           >
             {[2, 3, 4, 5, 6].map((count) => (
               <option key={count} value={count}>
@@ -101,7 +112,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
               </option>
             ))}
           </select>
-        </label>
+        </div>
 
         <fieldset>
           <legend className="mb-2 text-sm font-medium text-ink">Background</legend>
@@ -132,6 +143,84 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
           <div className="border border-spruce bg-teal-50 px-3 py-2.5 text-sm font-semibold text-ink">Standar</div>
         </div>
 
+        {settings.productionType === 'sticker' && (
+          <div className="border border-line bg-panel p-3">
+            <p className="mb-3 text-sm font-semibold text-ink">Output sticker</p>
+            <Toggle
+              checked={settings.stickerCutlineEnabled}
+              onChange={(value) => update('stickerCutlineEnabled', value)}
+              label="Buat garis potong sticker"
+              disabled={disabled}
+            />
+
+            {settings.stickerCutlineEnabled && (
+              <div className="mt-3 grid gap-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Lebar artwork aktual</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="1"
+                      max="100"
+                      step="0.1"
+                      value={settings.actualWidthCm}
+                      onChange={(event) => update('actualWidthCm', event.target.value)}
+                      disabled={disabled}
+                      className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                    />
+                    <span className="text-sm font-medium text-gray-700">cm</span>
+                  </div>
+                </label>
+
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Jarak garis potong</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0.1"
+                      max="20"
+                      step="0.1"
+                      value={settings.stickerCutlineOffsetMm}
+                      onChange={(event) => update('stickerCutlineOffsetMm', event.target.value)}
+                      disabled={disabled}
+                      className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                    />
+                    <span className="text-sm font-medium text-gray-700">mm</span>
+                  </div>
+                </label>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran kertas</span>
+                    <select
+                      value={settings.paperSize}
+                      onChange={(event) => update('paperSize', event.target.value)}
+                      disabled={disabled}
+                      className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                    >
+                      <option value="A4">A4</option>
+                      <option value="A3">A3</option>
+                    </select>
+                  </label>
+
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-medium text-ink">Orientasi kertas</span>
+                    <select
+                      value={settings.paperOrientation}
+                      onChange={(event) => update('paperOrientation', event.target.value)}
+                      disabled={disabled}
+                      className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                    >
+                      <option value="portrait">Portrait</option>
+                      <option value="landscape">Landscape</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {settings.separateColors && (
           <div className="border border-line bg-panel p-3">
             <p className="mb-3 text-sm font-semibold text-ink">Ukuran film sablon</p>
@@ -160,6 +249,16 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
                 disabled={disabled}
               />
               Sertakan background dalam ukuran
+            </label>
+
+            <label className="mt-3 flex cursor-pointer items-center gap-3 border border-line bg-white px-3 py-2.5 text-sm">
+              <input
+                type="checkbox"
+                checked={settings.createUnderbaseFilm}
+                onChange={(event) => update('createUnderbaseFilm', event.target.checked)}
+                disabled={disabled}
+              />
+              Buat film dasar untuk bahan gelap
             </label>
 
             <div className="mt-3 grid grid-cols-2 gap-2">

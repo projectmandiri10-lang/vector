@@ -1,0 +1,12 @@
+name = "vectorizer-saas-api"
+main = "src/index.js"
+compatibility_date = "2026-05-26"
+
+[vars]
+AI_IMAGE_MODEL = "gpt-image-2"
+
+# Set secrets before deploy:
+# wrangler secret put SUPABASE_URL
+# wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+# wrangler secret put LITELLM_BASE_URL
+# wrangler secret put LITELLM_SECRET_KEY

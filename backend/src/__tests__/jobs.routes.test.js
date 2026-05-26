@@ -52,6 +52,7 @@ test('POST /api/jobs accepts upload and exposes full PNG result in mock mode', a
     .post('/api/jobs')
     .field('projectName', 'Test Logo')
     .field('productionType', 'sticker')
+    .field('inputMode', 'ready_trace')
     .field('makeVector', 'false')
     .field('separateColors', 'false')
     .field('maxColors', '3')
@@ -78,6 +79,8 @@ test('POST /api/jobs accepts upload and exposes full PNG result in mock mode', a
   assert.equal(job.settings.paymentStatus, 'skipped_mvp');
   assert.ok(job.files.fullPng);
   assert.ok(job.files.zip);
+  assert.equal(await fs.pathExists(safeJobPath(createResponse.body.jobId, 'ai-redraw.png')), false);
+  assert.equal(await fs.pathExists(safeJobPath(createResponse.body.jobId, 'trace-source.png')), true);
 
   const pngResponse = await request(app).get(`/api/jobs/${createResponse.body.jobId}/download/full-png`);
   assert.equal(pngResponse.status, 200);

@@ -33,6 +33,10 @@ function extractPaths(svg) {
   return paths;
 }
 
+export async function traceMaskToPaths(filePath) {
+  return extractPaths(await traceMask(filePath));
+}
+
 function optimizeSvg(svg) {
   return optimize(svg, {
     multipass: true,
@@ -72,8 +76,7 @@ export async function vectorizeMasks(masks, options) {
   const pathsByColor = [];
 
   for (const mask of masks) {
-    const traced = await traceMask(mask.filePath);
-    const paths = extractPaths(traced);
+    const paths = await traceMaskToPaths(mask.filePath);
     if (paths.length > 0) {
       pathsByColor.push({
         index: mask.index,

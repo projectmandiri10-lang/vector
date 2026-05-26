@@ -4,7 +4,7 @@ import { buildPrintLayout } from '../utils/paper.js';
 import { createArtworkRegistrationMarks } from '../utils/registrationMarks.js';
 import { escapeXml } from '../utils/svg.js';
 
-function pathBounds(d) {
+export function pathBounds(d) {
   const numbers = String(d).match(/-?\d*\.?\d+(?:e[-+]?\d+)?/gi)?.map(Number) || [];
   if (numbers.length < 2) return null;
 
@@ -34,7 +34,7 @@ function pathBounds(d) {
   };
 }
 
-function mergeBounds(bounds) {
+export function mergeBounds(bounds) {
   const validBounds = bounds.filter(Boolean);
   if (validBounds.length === 0) return null;
 
@@ -57,7 +57,7 @@ function colorBounds(color) {
   return mergeBounds(color.paths.map((d) => pathBounds(d)));
 }
 
-function fullCanvasBounds(width, height) {
+export function fullCanvasBounds(width, height) {
   return {
     x: 0,
     y: 0,
@@ -119,7 +119,7 @@ export function buildSeparationSvg({ color, width, height, bounds, settings = {}
     width: layout.artworkWidthMm,
     height: layout.artworkHeightMm
   });
-  const label = `FILM ${String(color.index).padStart(2, '0')} - ${color.hex}`;
+  const label = color.label || `FILM ${String(color.index).padStart(2, '0')} - ${color.hex}`;
   const paths = color.paths
     .map((d) => `<path d="${escapeXml(d)}" fill="#000000" fill-rule="evenodd"/>`)
     .join('\n');
@@ -139,6 +139,31 @@ export async function createSeparations({ pathsByColor, width, height, outputDir
   await fs.ensureDir(outputDir);
   const separations = [];
   const filmPlan = createFilmPlan({ pathsByColor, width, height, settings });
+
+  if (settings.createUnderbaseFilm === true && filmPlan.colors.length > 0) {
+    const label = 'FILM DASAR - HITAM 100%';
+    const svgPath = path.join(outputDir, 'film-underbase.svg');
+    const pdfPath = path.join(outputDir, 'film-underbase.pdf');
+    const previewPath = path.join(outputDir, 'film-underbase-preview.png');
+    const underbaseColor = {
+      index: 'underbase',
+      kind: 'underbase',
+      hex: '#000000',
+      label,
+      paths: filmPlan.colors.flatMap((color) => color.paths)
+    };
+
+    await fs.writeFile(svgPath, buildSeparationSvg({ color: underbaseColor, width, height, bounds: filmPlan.bounds, settings }), 'utf8');
+    separations.push({
+      index: 'underbase',
+      kind: 'underbase',
+      hex: '#000000',
+      label,
+      svgPath,
+      pdfPath,
+      previewPath
+    });
+  }
 
   for (const color of filmPlan.colors) {
     const index = String(color.index).padStart(2, '0');

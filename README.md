@@ -2,6 +2,19 @@
 
 Aplikasi MVP untuk upload gambar sederhana, redraw dengan GPT Image 2 melalui LiteLLM Proxy, lalu membuat PNG, SVG vector, PDF, ZIP, dan file film pecah warna untuk sablon.
 
+## Mode SaaS Cloudflare + Supabase
+
+Repo ini juga sudah berisi jalur SaaS baru:
+
+- Frontend React/Vite untuk Cloudflare Pages.
+- Cloudflare Worker di `cloudflare-worker/` untuk credit, admin, AI proxy, dan metadata job.
+- Supabase migration di `supabase/migrations/` untuk auth profile, credit ledger, job metadata, pricing, dan pembayaran manual Shopee.
+- Processing trace siap produksi berjalan di browser agar file hasil tetap di PC user dan tidak membebani storage server.
+
+Panduan deploy lengkap ada di `DEPLOY_CLOUDFLARE_SUPABASE.md`.
+
+Backend Express di folder `backend/` tetap tersedia sebagai legacy/dev workflow lokal yang memakai filesystem server.
+
 ## 1. Install LiteLLM
 
 Gunakan LiteLLM versi terbaru.
