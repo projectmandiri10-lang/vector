@@ -33,7 +33,7 @@ Bagian ini untuk kondisi Anda belum pernah menyentuh Cloudflare.
 Urutan deploy yang dipakai:
 
 1. Deploy Worker API dulu.
-2. Simpan URL Worker, misalnya `https://vectorizer-saas-api.NAMA-ANDA.workers.dev`.
+2. Simpan URL Worker, misalnya `https://design-mudah.NAMA-ANDA.workers.dev`.
 3. Deploy frontend ke Pages.
 4. Masukkan URL Worker ke env Pages sebagai `VITE_API_BASE_URL`.
 5. Setelah Pages punya URL, update redirect URL di Supabase dan Google OAuth.
@@ -160,7 +160,7 @@ Jika ini pertama kali memakai Workers, Cloudflare bisa meminta Anda memilih atau
 Jika Anda memakai layar Git integration Worker yang meminta build/deploy field, isi seperti ini:
 
 ```text
-Worker/project name: vectorizer-saas-api
+Worker/project name: design-mudah
 Production branch: main
 Path / Root directory: cloudflare-worker
 Build command: kosongkan
@@ -180,7 +180,7 @@ npm ci
 
 Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, atau token LiteLLM. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/LiteLLM diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
 
-Nama Worker harus sama dengan `name` di `cloudflare-worker/wrangler.toml`, yaitu `vectorizer-saas-api`.
+Nama Worker harus sama dengan `name` di `cloudflare-worker/wrangler.toml`, yaitu `design-mudah`.
 
 ### 4.2 Set Worker Secrets
 
@@ -213,13 +213,13 @@ npm run deploy
 Simpan URL Worker, contoh:
 
 ```text
-https://vectorizer-saas-api.USERNAME.workers.dev
+https://design-mudah.USERNAME.workers.dev
 ```
 
 Test cepat:
 
 ```powershell
-curl https://vectorizer-saas-api.USERNAME.workers.dev/api/me/balance
+curl https://design-mudah.USERNAME.workers.dev/api/me/balance
 ```
 
 Jika hasilnya error `Login dibutuhkan.`, itu normal. Artinya Worker hidup dan endpoint API sudah merespons.
@@ -283,7 +283,7 @@ dist
 ```text
 VITE_SUPABASE_URL=https://PROJECT-REF.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... atau anon key
-VITE_API_BASE_URL=https://vectorizer-saas-api.USERNAME.workers.dev
+VITE_API_BASE_URL=https://design-mudah.USERNAME.workers.dev
 VITE_GOOGLE_OAUTH_REDIRECT_TO=https://DOMAIN-CLOUDFLARE-ANDA.pages.dev
 ```
 
