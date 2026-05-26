@@ -31,6 +31,20 @@ function litellmImagesUrl(env) {
   return `${baseUrl}/v1/images/edits`;
 }
 
+function handleHealth() {
+  return json({
+    ok: true,
+    service: 'design-mudah',
+    message: 'Worker API aktif. Gunakan endpoint /api/... dari aplikasi frontend.',
+    endpoints: [
+      'GET /api/me/balance',
+      'POST /api/jobs/quote',
+      'POST /api/jobs/commit',
+      'POST /api/ai-redraw'
+    ]
+  });
+}
+
 async function supabaseFetch(env, path, { method = 'GET', token, body, prefer } = {}) {
   const response = await fetch(`${env.SUPABASE_URL}${path}`, {
     method,
@@ -303,6 +317,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
     try {
+      if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') return handleHealth();
       if (url.pathname === '/api/me/balance' && request.method === 'GET') return handleBalance(env, request);
       if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return handleQuote(env, request);
       if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return handleCommitJob(env, request);
