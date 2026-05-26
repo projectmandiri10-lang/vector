@@ -61,12 +61,12 @@ export async function requestAiRedraw(file, settings, accessToken) {
   });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'AI redraw gagal.');
+    throw new Error(data.error || 'Gambar ulang gagal.');
   }
   const aiLedgerId = response.headers.get('x-ai-ledger-id') || '';
   const blob = await response.blob();
   return {
-    file: new File([blob], 'ai-redraw.png', { type: blob.type || 'image/png' }),
+    file: new File([blob], 'gambar-ulang.png', { type: blob.type || 'image/png' }),
     aiLedgerId
   };
 }

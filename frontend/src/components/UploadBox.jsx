@@ -1,16 +1,17 @@
 import { ImagePlus, UploadCloud, X } from 'lucide-react';
+import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from '../lib/modes.js';
 
 const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
 const modeOptions = [
   {
-    value: 'ai_redraw',
-    title: 'Gambar perlu dirapikan AI',
-    description: 'Untuk foto buram, scan, atau logo yang perlu digambar ulang sebelum trace.'
+    value: INPUT_MODE_RETOUCH,
+    title: 'Gambar perlu digambar ulang',
+    description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.'
   },
   {
-    value: 'ready_trace',
-    title: 'Gambar sudah siap trace (tanpa AI)',
+    value: INPUT_MODE_READY,
+    title: 'Gambar sudah siap proses',
     description: 'Untuk PNG/JPG/WebP yang sudah bersih dan ingin langsung diproses sticker atau sablon.'
   }
 ];
@@ -54,9 +55,9 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
         <UploadCloud className="mb-3 h-9 w-9 text-spruce" aria-hidden="true" />
         <span className="text-sm font-semibold text-ink">Pilih gambar JPG, PNG, atau WebP</span>
         <span className="mt-1 text-xs text-gray-600">
-          {inputMode === 'ready_trace'
-            ? 'Maksimal 10 MB. AI tidak menggambar ulang; file langsung masuk proses trace.'
-            : 'Maksimal 10 MB. AI akan merapikan gambar sebelum proses trace.'}
+          {inputMode === INPUT_MODE_READY
+            ? 'Maksimal 10 MB. File langsung diproses tanpa gambar ulang.'
+            : 'Maksimal 10 MB. Gambar akan dirapikan sebelum diproses.'}
         </span>
         <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} disabled={disabled} />
       </label>
@@ -87,7 +88,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
 
       {!isValidType && <p className="mt-3 text-sm text-tomato">File hanya boleh JPG, PNG, atau WebP.</p>}
       {!isValidSize && <p className="mt-3 text-sm text-tomato">Ukuran file maksimal 10 MB.</p>}
-      <p className="mt-3 text-xs text-gray-600">Untuk foto rumit, hasil pecah warna mungkin tidak sempurna.</p>
+      <p className="mt-3 text-xs text-gray-600">Untuk foto rumit, hasil pecah warna mungkin perlu dicek kembali.</p>
     </section>
   );
 }

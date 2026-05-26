@@ -11,15 +11,16 @@ import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
 import { commitJob, getBalance, quoteJob, requestAiRedraw } from './lib/api.js';
 import { processImageLocally } from './lib/localProcessor.js';
+import { INPUT_MODE_RETOUCH } from './lib/modes.js';
 import { calculateJobPrice, formatRupiah } from './lib/pricing.js';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 
 const initialSettings = {
   projectName: '',
-  productionType: 'sticker',
-  inputMode: 'ai_redraw',
+  productionType: 'sablon',
+  inputMode: INPUT_MODE_RETOUCH,
   makeVector: true,
-  separateColors: false,
+  separateColors: true,
   colorLimitMode: 'auto',
   maxColors: 4,
   whiteAsBackground: true,
@@ -134,8 +135,8 @@ export default function App() {
       let processingFile = file;
       let aiLedgerId = '';
 
-      if (settings.inputMode === 'ai_redraw') {
-        setJob(statusJob('processing_ai', 'Mengirim gambar ke AI tanpa penyimpanan permanen server.', 25));
+      if (settings.inputMode === INPUT_MODE_RETOUCH) {
+        setJob(statusJob('processing_image', 'Menggambar ulang gambar tanpa penyimpanan permanen server.', 25));
         const aiResult = await requestAiRedraw(file, settings, session.access_token);
         processingFile = aiResult.file;
         aiLedgerId = aiResult.aiLedgerId;
@@ -146,7 +147,7 @@ export default function App() {
       const finalPrice = calculateJobPrice({
         inputMode: settings.inputMode,
         separationFilmCount: localResult.separationFilmCount,
-        aiAlreadyCharged: settings.inputMode === 'ai_redraw'
+        aiAlreadyCharged: settings.inputMode === INPUT_MODE_RETOUCH
       });
 
       setJob(statusJob('exporting', 'Mencatat metadata job dan mendebit credit.', 88));
@@ -167,7 +168,7 @@ export default function App() {
       setJob({
         ...localResult,
         jobId: committed.job?.id || localResult.jobId,
-        priceIdr: (settings.inputMode === 'ai_redraw' ? 5000 : 0) + finalPrice,
+        priceIdr: (settings.inputMode === INPUT_MODE_RETOUCH ? 5000 : 0) + finalPrice,
         remoteJob: committed.job
       });
       await refreshBalance();
@@ -188,7 +189,7 @@ export default function App() {
       <div className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase text-spruce">Redraw Vector</p>
+            <p className="text-xs font-semibold uppercase text-spruce">Design Mudah</p>
             <h1 className="text-2xl font-bold text-ink sm:text-3xl">Sablon dan Sticker</h1>
           </div>
           {session && (
@@ -212,17 +213,19 @@ export default function App() {
 
       {!session && (
         <>
-          <LandingPage onStart={() => document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' })} />
-          <div id="auth" className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <LandingPage
+            onStart={() => document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' })}
+            authPanel={<AuthPanel onSignedIn={setSession} />}
+          />
+          <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
             <div className="border border-line bg-white p-4 sm:p-5">
               <h2 className="mb-2 text-lg font-bold text-ink">Alur singkat</h2>
               <div className="grid gap-3 text-sm leading-6 text-gray-700">
                 <p>1. Login atau register.</p>
-                <p>2. Upload gambar siap trace mulai Rp1.000, atau gunakan AI redraw Rp5.000.</p>
+                <p>2. Upload gambar siap proses mulai Rp1.000, atau gunakan gambar ulang Rp5.000.</p>
                 <p>3. Download hasil langsung dari browser. Server hanya menyimpan metadata dan credit.</p>
               </div>
             </div>
-            <AuthPanel onSignedIn={setSession} />
           </div>
         </>
       )}

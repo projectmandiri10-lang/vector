@@ -49,21 +49,10 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
       </div>
 
       <div className="space-y-5">
-        <label className="block">
-          <span className="mb-1.5 block text-sm font-medium text-ink">Nama project</span>
-          <input
-            value={settings.projectName}
-            onChange={(event) => update('projectName', event.target.value)}
-            disabled={disabled}
-            className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
-            placeholder="Contoh: Logo Kedai Kopi"
-          />
-        </label>
-
         <div>
           <span className="mb-2 block text-sm font-medium text-ink">Jenis produksi</span>
           <div className="grid grid-cols-2 gap-2">
-            {['sticker', 'sablon'].map((type) => (
+            {['sablon', 'sticker'].map((type) => (
               <button
                 key={type}
                 type="button"
@@ -137,11 +126,6 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
             </label>
           </div>
         </fieldset>
-
-        <div>
-          <span className="mb-2 block text-sm font-medium text-ink">Mode proses</span>
-          <div className="border border-spruce bg-teal-50 px-3 py-2.5 text-sm font-semibold text-ink">Standar</div>
-        </div>
 
         {settings.productionType === 'sticker' && (
           <div className="border border-line bg-panel p-3">
