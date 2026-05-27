@@ -92,9 +92,11 @@ export default function AdminPanel({ session, enabled }) {
         Object.fromEntries((pricingData.rules || []).map((rule) => [rule.key, { amountIdr: rule.amount_idr, description: rule.description || '', active: rule.active !== false }]))
       );
       const shopee = (settingsData.settings || []).find((setting) => setting.key === 'shopee_payment')?.value || {};
+      const defaultShopeeNote =
+        'Checkout nominal credit di Shopee, lalu kirim email akun Design Mudah melalui chat Shopee. Admin top up manual 5-15 menit pada jam kerja.';
       setShopeeDraft({
         url: shopee.url || 'https://shopee.co.id/',
-        note: shopee.note || '',
+        note: shopee.note || defaultShopeeNote,
         contact: shopee.contact || ''
       });
     } catch (error) {

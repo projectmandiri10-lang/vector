@@ -40,7 +40,7 @@ export default function AccountPanel({ session, balance, balanceError, onRefresh
         </div>
         <div className="border border-line bg-panel p-3">
           <p className="text-xs font-semibold uppercase text-gray-600">Top up manual</p>
-          <p className="mt-1 text-sm leading-6 text-gray-700">Bayar via Shopee Marketplace, lalu admin approve dan credit masuk.</p>
+          <p className="mt-1 text-sm leading-6 text-gray-700">Checkout di Shopee, lalu kirim email akun ini via chat Shopee. Admin top up manual 5-15 menit jam kerja.</p>
         </div>
       </div>
 
