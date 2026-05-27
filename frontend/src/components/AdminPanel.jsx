@@ -1,8 +1,10 @@
-import { BarChart3, BriefcaseBusiness, Check, CreditCard, RefreshCw, Save, Shield, SlidersHorizontal, Trash2, X } from 'lucide-react';
+import { BarChart3, BriefcaseBusiness, Check, CreditCard, RefreshCw, Save, Shield, SlidersHorizontal, Trash2, UserPlus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   addAdminCredit,
   approveManualPayment,
+  createAdminUser,
+  deleteAdminUser,
   getAdminOverview,
   listAdminJobs,
   listAdminManualPayments,
@@ -52,6 +54,15 @@ export default function AdminPanel({ session, enabled }) {
   const [pricingDraft, setPricingDraft] = useState({});
   const [shopeeDraft, setShopeeDraft] = useState({ url: '', note: '', contact: '' });
   const [rejectReasonByPayment, setRejectReasonByPayment] = useState({});
+  const [newUser, setNewUser] = useState({
+    fullName: '',
+    email: '',
+    password: '',
+    role: 'user',
+    isUnlimited: false,
+    isActive: true,
+    initialCreditIdr: ''
+  });
   const [message, setMessage] = useState('');
   const [isBusy, setIsBusy] = useState(false);
 
@@ -142,6 +153,56 @@ export default function AdminPanel({ session, enabled }) {
       await loadAdminData();
     } catch (error) {
       setMessage(toUserApiError(error, 'Gagal memperbarui user.').message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function createUser(event) {
+    event.preventDefault();
+    setIsBusy(true);
+    setMessage('');
+    try {
+      await createAdminUser(
+        {
+          fullName: newUser.fullName,
+          email: newUser.email,
+          password: newUser.password,
+          role: newUser.role,
+          isUnlimited: newUser.isUnlimited,
+          isActive: newUser.isActive,
+          initialCreditIdr: newUser.initialCreditIdr
+        },
+        accessToken
+      );
+      setNewUser({
+        fullName: '',
+        email: '',
+        password: '',
+        role: 'user',
+        isUnlimited: false,
+        isActive: true,
+        initialCreditIdr: ''
+      });
+      await loadAdminData();
+      setMessage('User baru berhasil dibuat.');
+    } catch (error) {
+      setMessage(toUserApiError(error, 'Gagal membuat user baru.').message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function removeUser(user) {
+    if (!window.confirm(`Hapus permanen user ${user.email}? Semua data terkait user ini ikut terhapus.`)) return;
+    setIsBusy(true);
+    setMessage('');
+    try {
+      await deleteAdminUser(user.id, accessToken);
+      await loadAdminData();
+      setMessage('User berhasil dihapus permanen.');
+    } catch (error) {
+      setMessage(toUserApiError(error, 'Gagal menghapus user.').message);
     } finally {
       setIsBusy(false);
     }
@@ -268,63 +329,186 @@ export default function AdminPanel({ session, enabled }) {
       )}
 
       {activeTab === 'users' && (
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] border-collapse text-left text-sm">
-            <thead>
-              <tr className="border-b border-line text-xs uppercase text-gray-600">
-                <th className="py-2 pr-3">Email</th>
-                <th className="py-2 pr-3">Role</th>
-                <th className="py-2 pr-3">Credit</th>
-                <th className="py-2 pr-3">Top up</th>
-                <th className="py-2 pr-3">Status</th>
-                <th className="py-2 pr-3">Aksi</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.map((user) => (
-                <tr key={user.id} className="border-b border-line">
-                  <td className="py-2 pr-3 font-medium text-ink">{user.email}</td>
-                  <td className="py-2 pr-3">
-                    <select value={user.role} onChange={(event) => setUserPatch(user.id, { role: event.target.value })} className="border border-line bg-white px-2 py-1">
-                      <option value="user">user</option>
-                      <option value="superuser">superadmin</option>
-                    </select>
-                  </td>
-                  <td className="py-2 pr-3">{user.is_unlimited ? 'Unlimited' : formatRupiah(user.balance || 0)}</td>
-                  <td className="py-2 pr-3">
-                    <div className="flex gap-2">
-                      <input
-                        type="number"
-                        value={amountByUser[user.id] || ''}
-                        onChange={(event) => setAmountByUser((current) => ({ ...current, [user.id]: event.target.value }))}
-                        className="w-28 border border-line px-2 py-1"
-                        placeholder="10000"
-                      />
-                      <button type="button" onClick={() => addCredit(user.id)} className="border border-spruce px-2 py-1 font-semibold text-spruce">
-                        Tambah
-                      </button>
-                    </div>
-                  </td>
-                  <td className="py-2 pr-3">
-                    <label className="inline-flex items-center gap-2">
-                      <input type="checkbox" checked={user.is_active} onChange={(event) => setUserPatch(user.id, { is_active: event.target.checked })} />
-                      Aktif
-                    </label>
-                  </td>
-                  <td className="py-2 pr-3">
-                    <button
-                      type="button"
-                      onClick={() => setUserPatch(user.id, { is_active: false, deleted_at: new Date().toISOString() })}
-                      className="inline-flex h-8 w-8 items-center justify-center border border-tomato text-tomato"
-                      title="Nonaktifkan user"
-                    >
-                      <Trash2 className="h-4 w-4" aria-hidden="true" />
-                    </button>
-                  </td>
+        <div className="space-y-4">
+          <form className="grid gap-3 border border-line bg-panel p-4 md:grid-cols-2 xl:grid-cols-[1fr_1fr_220px_160px_auto_auto]" onSubmit={createUser}>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Nama user</span>
+              <input
+                value={newUser.fullName}
+                onChange={(event) => setNewUser((current) => ({ ...current, fullName: event.target.value }))}
+                className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                placeholder="Nama lengkap"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Email</span>
+              <input
+                type="email"
+                value={newUser.email}
+                onChange={(event) => setNewUser((current) => ({ ...current, email: event.target.value }))}
+                className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                placeholder="user@email.com"
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Password awal</span>
+              <input
+                type="text"
+                value={newUser.password}
+                onChange={(event) => setNewUser((current) => ({ ...current, password: event.target.value }))}
+                className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                placeholder="Minimal 6 karakter"
+                minLength={6}
+                required
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Role</span>
+              <select
+                value={newUser.role}
+                onChange={(event) => setNewUser((current) => ({ ...current, role: event.target.value }))}
+                className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+              >
+                <option value="user">User</option>
+                <option value="superuser">Superadmin</option>
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-medium text-ink">Credit awal</span>
+              <input
+                type="number"
+                min="0"
+                step="1000"
+                value={newUser.initialCreditIdr}
+                onChange={(event) => setNewUser((current) => ({ ...current, initialCreditIdr: event.target.value }))}
+                className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                placeholder="0"
+              />
+            </label>
+            <div className="flex flex-col gap-2">
+              <label className="inline-flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={newUser.isUnlimited}
+                  onChange={(event) => setNewUser((current) => ({ ...current, isUnlimited: event.target.checked }))}
+                />
+                Credit unlimited
+              </label>
+              <label className="inline-flex items-center gap-2 text-sm text-ink">
+                <input
+                  type="checkbox"
+                  checked={newUser.isActive}
+                  onChange={(event) => setNewUser((current) => ({ ...current, isActive: event.target.checked }))}
+                />
+                Langsung aktif
+              </label>
+            </div>
+            <div className="md:col-span-2 xl:col-span-6">
+              <button type="submit" disabled={isBusy} className="inline-flex min-h-10 items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-2 text-sm font-bold text-white disabled:opacity-60">
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
+                Buat user baru
+              </button>
+            </div>
+          </form>
+
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1040px] border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-line text-xs uppercase text-gray-600">
+                  <th className="py-2 pr-3">User</th>
+                  <th className="py-2 pr-3">Role</th>
+                  <th className="py-2 pr-3">Credit</th>
+                  <th className="py-2 pr-3">Top up</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Unlimited</th>
+                  <th className="py-2 pr-3">Aksi</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {users.map((user) => (
+                  <tr key={user.id} className="border-b border-line">
+                    <td className="py-2 pr-3">
+                      <div className="min-w-0">
+                        <input
+                          defaultValue={user.full_name || ''}
+                          onBlur={(event) => {
+                            const nextValue = event.target.value.trim();
+                            if (nextValue !== (user.full_name || '')) {
+                              setUserPatch(user.id, { full_name: nextValue || null });
+                            }
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter') event.currentTarget.blur();
+                          }}
+                          className="w-full border border-line bg-white px-2 py-1 font-medium text-ink outline-none focus:border-spruce"
+                          placeholder="Nama user"
+                        />
+                        <p className="truncate text-xs text-gray-600">{user.email}</p>
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <select value={user.role} onChange={(event) => setUserPatch(user.id, { role: event.target.value })} className="border border-line bg-white px-2 py-1">
+                        <option value="user">user</option>
+                        <option value="superuser">superadmin</option>
+                      </select>
+                    </td>
+                    <td className="py-2 pr-3">{user.is_unlimited ? 'Unlimited' : formatRupiah(user.balance || 0)}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex gap-2">
+                        <input
+                          type="number"
+                          value={amountByUser[user.id] || ''}
+                          onChange={(event) => setAmountByUser((current) => ({ ...current, [user.id]: event.target.value }))}
+                          className="w-28 border border-line px-2 py-1"
+                          placeholder="10000"
+                        />
+                        <button type="button" onClick={() => addCredit(user.id)} className="border border-spruce px-2 py-1 font-semibold text-spruce">
+                          Tambah
+                        </button>
+                      </div>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <label className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={user.is_active}
+                          onChange={(event) => setUserPatch(user.id, { is_active: event.target.checked, deleted_at: event.target.checked ? null : new Date().toISOString() })}
+                        />
+                        Aktif
+                      </label>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <label className="inline-flex items-center gap-2">
+                        <input type="checkbox" checked={user.is_unlimited} onChange={(event) => setUserPatch(user.id, { is_unlimited: event.target.checked })} />
+                        Unlimited
+                      </label>
+                    </td>
+                    <td className="py-2 pr-3">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setUserPatch(user.id, { is_active: false, deleted_at: new Date().toISOString() })}
+                          className="border border-line bg-white px-2 py-1 text-xs font-semibold text-ink"
+                        >
+                          Nonaktifkan
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeUser(user)}
+                          className="inline-flex items-center justify-center gap-1 border border-tomato px-2 py-1 text-xs font-semibold text-tomato"
+                          title="Hapus permanen user"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Hapus
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

@@ -134,7 +134,7 @@ async function getPricing(env) {
 }
 
 async function listProfilesWithBalance(env) {
-  const rows = await supabaseFetch(env, '/rest/v1/profiles?select=id,email,role,is_unlimited,is_active,deleted_at,created_at&order=created_at.desc', {});
+  const rows = await supabaseFetch(env, '/rest/v1/profiles?select=id,email,full_name,role,is_unlimited,is_active,deleted_at,created_at&order=created_at.desc', {});
   return Promise.all(
     rows.map(async (profile) => ({
       ...profile,
@@ -149,6 +149,51 @@ function withUserEmails(rows, users) {
     ...row,
     user_email: emailById.get(row.user_id) || ''
   }));
+}
+
+function normalizeEmail(value) {
+  return String(value || '').trim().toLowerCase();
+}
+
+function isProtectedSuperuser(profile) {
+  return normalizeEmail(profile?.email) === SUPERUSER_EMAIL;
+}
+
+function sanitizeUserPatch(patch = {}, existingProfile) {
+  const allowed = {};
+  for (const key of ['full_name', 'role', 'is_unlimited', 'is_active', 'deleted_at']) {
+    if (Object.prototype.hasOwnProperty.call(patch, key)) allowed[key] = patch[key];
+  }
+  if (isProtectedSuperuser(existingProfile)) {
+    delete allowed.role;
+    delete allowed.is_unlimited;
+    delete allowed.is_active;
+    delete allowed.deleted_at;
+  }
+  return allowed;
+}
+
+async function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function supabaseAuthAdminFetch(env, path, { method = 'GET', body } = {}) {
+  const serviceRoleKey = requireEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY');
+  const response = await fetch(`${supabaseBaseUrl(env)}/auth/v1${path}`, {
+    method,
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      ...(body ? { 'Content-Type': 'application/json' } : {})
+    },
+    body: body ? JSON.stringify(body) : undefined
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new Error(data?.msg || data?.message || data?.error?.message || `Supabase auth admin request failed: ${response.status}`);
+  }
+  return data;
 }
 
 async function getUser(env, request) {
@@ -169,12 +214,30 @@ async function getUser(env, request) {
 async function getProfile(env, userId) {
   const rows = await supabaseFetch(
     env,
-    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,role,is_unlimited,is_active`,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,full_name,role,is_unlimited,is_active,deleted_at,created_at`,
     {}
   );
   const profile = rows?.[0];
   if (!profile || profile.is_active === false) throw new Error('Akun tidak aktif.');
   return profile;
+}
+
+async function getProfileRaw(env, userId) {
+  const rows = await supabaseFetch(
+    env,
+    `/rest/v1/profiles?id=eq.${encodeURIComponent(userId)}&select=id,email,full_name,role,is_unlimited,is_active,deleted_at,created_at`,
+    {}
+  );
+  return rows?.[0] || null;
+}
+
+async function waitForProfile(env, userId, attempts = 5) {
+  for (let index = 0; index < attempts; index += 1) {
+    const profile = await getProfileRaw(env, userId);
+    if (profile) return profile;
+    if (index < attempts - 1) await sleep(200);
+  }
+  throw new Error('Profile user baru belum muncul di database.');
 }
 
 async function requireUser(env, request) {
@@ -359,22 +422,109 @@ function buildAiPrompt(settings) {
 }
 
 async function handleAdminUsers(env, request) {
-  await requireAdmin(env, request);
+  const admin = await requireAdmin(env, request);
   if (request.method === 'GET') {
     return json({ users: await listProfilesWithBalance(env) });
   }
 
   const body = await readJson(request);
-  const allowed = {};
-  for (const key of ['role', 'is_unlimited', 'is_active', 'deleted_at']) {
-    if (Object.prototype.hasOwnProperty.call(body.patch || {}, key)) allowed[key] = body.patch[key];
+  if (body.action === 'create') {
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || '');
+    const fullName = String(body.fullName || '').trim();
+    const initialCreditIdr = Math.max(0, Number.parseInt(body.initialCreditIdr, 10) || 0);
+
+    if (!email || !email.includes('@')) throw new Error('Email user baru tidak valid.');
+    if (password.length < 6) throw new Error('Password minimal 6 karakter.');
+
+    const created = await supabaseAuthAdminFetch(env, '/admin/users', {
+      method: 'POST',
+      body: {
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName || email.split('@')[0]
+        }
+      }
+    });
+
+    const profile = await waitForProfile(env, created.user?.id);
+    const patch = sanitizeUserPatch(
+      {
+        full_name: fullName || profile.full_name,
+        role: body.role || 'user',
+        is_unlimited: body.isUnlimited === true,
+        is_active: body.isActive !== false,
+        deleted_at: body.isActive === false ? new Date().toISOString() : null
+      },
+      profile
+    );
+
+    let updatedProfile = profile;
+    if (Object.keys(patch).length > 0) {
+      const rows = await supabaseFetch(env, `/rest/v1/profiles?id=eq.${encodeURIComponent(profile.id)}&select=*`, {
+        method: 'PATCH',
+        prefer: 'return=representation',
+        body: patch
+      });
+      updatedProfile = rows?.[0] || profile;
+    }
+
+    if (initialCreditIdr > 0 && !updatedProfile.is_unlimited) {
+      await insertLedger(env, {
+        userId: updatedProfile.id,
+        amountIdr: initialCreditIdr,
+        kind: 'credit',
+        reason: 'admin_user_creation_credit',
+        createdBy: admin.user.id,
+        metadata: { source: 'admin_create_user' }
+      });
+    }
+
+    return json({
+      user: {
+        ...updatedProfile,
+        balance: updatedProfile.is_unlimited ? null : await creditBalance(env, updatedProfile.id)
+      }
+    });
   }
+
+  if (!body.userId) throw new Error('User ID wajib diisi.');
+  const existingProfile = await getProfileRaw(env, body.userId);
+  if (!existingProfile) throw new Error('User tidak ditemukan.');
+
+  if (body.action === 'delete') {
+    if (body.userId === admin.user.id) throw new Error('Akun yang sedang dipakai tidak bisa dihapus.');
+    if (isProtectedSuperuser(existingProfile)) throw new Error('Akun whitelist utama tidak bisa dihapus.');
+    await supabaseAuthAdminFetch(env, `/admin/users/${encodeURIComponent(body.userId)}`, {
+      method: 'DELETE'
+    });
+    return json({ deleted: true, userId: body.userId });
+  }
+
+  const allowed = sanitizeUserPatch(body.patch || {}, existingProfile);
+  if (!Object.keys(allowed).length) {
+    return json({
+      user: {
+        ...existingProfile,
+        balance: existingProfile.is_unlimited ? null : await creditBalance(env, existingProfile.id)
+      }
+    });
+  }
+
   const rows = await supabaseFetch(env, `/rest/v1/profiles?id=eq.${encodeURIComponent(body.userId)}&select=*`, {
     method: 'PATCH',
     prefer: 'return=representation',
     body: allowed
   });
-  return json({ user: rows?.[0] });
+  const user = rows?.[0];
+  return json({
+    user: {
+      ...user,
+      balance: user?.is_unlimited ? null : await creditBalance(env, user.id)
+    }
+  });
 }
 
 async function handleCreateManualPayment(env, request) {

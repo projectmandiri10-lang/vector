@@ -109,6 +109,28 @@ export async function updateAdminUser(payload, accessToken) {
   });
 }
 
+export async function createAdminUser(payload, accessToken) {
+  return apiFetch('/api/admin/users', {
+    method: 'POST',
+    accessToken,
+    body: {
+      action: 'create',
+      ...payload
+    }
+  });
+}
+
+export async function deleteAdminUser(userId, accessToken) {
+  return apiFetch('/api/admin/users', {
+    method: 'POST',
+    accessToken,
+    body: {
+      action: 'delete',
+      userId
+    }
+  });
+}
+
 export async function addAdminCredit(payload, accessToken) {
   return apiFetch('/api/admin/credits', {
     method: 'POST',
