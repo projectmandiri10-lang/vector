@@ -1,2 +1,2 @@
-export const INPUT_MODE_RETOUCH = ['ai', 'red', 'raw'].join('_');
-export const INPUT_MODE_READY = ['ready', 'tr', 'ace'].join('_');
+export const INPUT_MODE_RETOUCH = ['ai', 'redraw'].join('_');
+export const INPUT_MODE_READY = ['ready', 'trace'].join('_');
