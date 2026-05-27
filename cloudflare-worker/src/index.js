@@ -67,6 +67,16 @@ function calculateDynamicJobPrice({ inputMode = 'ready_trace', separationFilmCou
   return basePrice + Math.max(0, Number(separationFilmCount) || 0) * pricing.separation_film;
 }
 
+function imageModelCandidates(env) {
+  const configured = env.LITELLM_IMAGE_MODEL || env.AI_IMAGE_MODEL || 'gpt-image-2';
+  const candidates = [configured];
+
+  if (configured === 'gpt-image-2') candidates.push('openai/gpt-image-2');
+  if (configured === 'openai/gpt-image-2') candidates.push('gpt-image-2');
+
+  return [...new Set(candidates)];
+}
+
 function handleHealth(env) {
   return json({
     ok: true,
@@ -76,7 +86,8 @@ function handleHealth(env) {
       supabaseUrl: hasEnvValue(env, 'SUPABASE_URL'),
       supabaseServiceRoleKey: hasEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY'),
       litellmBaseUrl: hasEnvValue(env, 'LITELLM_BASE_URL'),
-      litellmSecretKey: hasEnvValue(env, 'LITELLM_SECRET_KEY')
+      litellmSecretKey: hasEnvValue(env, 'LITELLM_SECRET_KEY'),
+      imageModels: imageModelCandidates(env)
     },
     endpoints: [
       'GET /api/me/balance',
@@ -290,31 +301,50 @@ async function handleAiRedraw(env, request) {
     });
   }
 
-  const aiForm = new FormData();
-  aiForm.append('image', image, image.name || 'input.png');
-  aiForm.append('prompt', buildAiPrompt(settings));
-  aiForm.append('model', env.AI_IMAGE_MODEL || 'gpt-image-2');
-  aiForm.append('size', '1024x1024');
-
-  const response = await fetch(litellmImagesUrl(env), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${requireEnvValue(env, 'LITELLM_SECRET_KEY')}`
-    },
-    body: aiForm
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data?.error?.message || 'Gambar ulang gagal.');
-  const b64 = data?.data?.[0]?.b64_json;
-  if (!b64) throw new Error('Layanan gambar ulang tidak mengembalikan gambar.');
+  const { b64, ledgerId } = await requestRetouchedImage(env, image, settings, ledger?.id || '');
   const bytes = Uint8Array.from(atob(b64), (char) => char.charCodeAt(0));
   return new Response(bytes, {
     headers: {
       ...corsHeaders,
       'Content-Type': 'image/png',
-      'X-AI-Ledger-Id': ledger?.id || ''
+      'X-AI-Ledger-Id': ledgerId
     }
   });
+}
+
+async function requestRetouchedImage(env, image, settings, ledgerId) {
+  const errors = [];
+
+  for (const model of imageModelCandidates(env)) {
+    const aiForm = new FormData();
+    aiForm.append('image', image, image.name || 'input.png');
+    aiForm.append('prompt', buildAiPrompt(settings));
+    aiForm.append('model', model);
+    aiForm.append('size', '1024x1024');
+
+    const response = await fetch(litellmImagesUrl(env), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${requireEnvValue(env, 'LITELLM_SECRET_KEY')}`
+      },
+      body: aiForm
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      errors.push(`${model}: ${data?.error?.message || 'Gambar ulang gagal.'}`);
+      continue;
+    }
+
+    const b64 = data?.data?.[0]?.b64_json;
+    if (!b64) {
+      errors.push(`${model}: Layanan gambar ulang tidak mengembalikan gambar.`);
+      continue;
+    }
+
+    return { b64, ledgerId };
+  }
+
+  throw new Error(`Gambar ulang gagal. ${errors.join(' | ')}`);
 }
 
 function buildAiPrompt(settings) {
