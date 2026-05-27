@@ -60,7 +60,7 @@ function handleHealth() {
       'GET /api/me/balance',
       'POST /api/jobs/quote',
       'POST /api/jobs/commit',
-      'POST /api/ai-redraw'
+      'POST /api/image-retouch'
     ]
   });
 }
@@ -502,7 +502,7 @@ export default {
       if (url.pathname === '/api/me/balance' && request.method === 'GET') return handleBalance(env, request);
       if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return handleQuote(env, request);
       if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return handleCommitJob(env, request);
-      if (url.pathname === '/api/ai-redraw' && request.method === 'POST') return handleAiRedraw(env, request);
+      if ((url.pathname === '/api/image-retouch' || url.pathname === '/api/ai-redraw') && request.method === 'POST') return handleAiRedraw(env, request);
       if (url.pathname === '/api/admin/users') return handleAdminUsers(env, request);
       if (url.pathname === '/api/admin/credits' && request.method === 'POST') return handleAdminCredits(env, request);
       if (url.pathname === '/api/admin/overview' && request.method === 'GET') return handleAdminOverview(env, request);

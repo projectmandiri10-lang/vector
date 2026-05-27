@@ -50,11 +50,11 @@ export async function commitJob(payload, accessToken) {
   });
 }
 
-export async function requestAiRedraw(file, settings, accessToken) {
+export async function requestImageRetouch(file, settings, accessToken) {
   const formData = new FormData();
   formData.append('image', file);
   formData.append('settings', JSON.stringify(settings));
-  const response = await fetch(`${API_BASE_URL}/api/ai-redraw`, {
+  const response = await fetch(`${API_BASE_URL}/api/image-retouch`, {
     method: 'POST',
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     body: formData
@@ -63,11 +63,11 @@ export async function requestAiRedraw(file, settings, accessToken) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || 'Gambar ulang gagal.');
   }
-  const aiLedgerId = response.headers.get('x-ai-ledger-id') || '';
+  const retouchLedgerId = response.headers.get('x-ai-ledger-id') || '';
   const blob = await response.blob();
   return {
     file: new File([blob], 'gambar-ulang.png', { type: blob.type || 'image/png' }),
-    aiLedgerId
+    retouchLedgerId
   };
 }
 

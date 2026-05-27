@@ -1,14 +1,16 @@
+import { INPUT_MODE_RETOUCH } from './modes.js';
+
 export const CREDIT_PER_IDR = 1;
 export const READY_TRACE_PRICE_IDR = 1000;
-export const AI_REDRAW_PRICE_IDR = 5000;
+export const IMAGE_RETOUCH_PRICE_IDR = 5000;
 export const SEPARATION_FILM_PRICE_IDR = 1000;
 
-export function calculateJobPrice({ inputMode = 'ready_trace', separationFilmCount = 0, aiAlreadyCharged = false } = {}) {
+export function calculateJobPrice({ inputMode = 'ready_trace', separationFilmCount = 0, retouchAlreadyCharged = false } = {}) {
   const basePrice =
-    inputMode === 'ai_redraw'
-      ? aiAlreadyCharged
+    inputMode === INPUT_MODE_RETOUCH
+      ? retouchAlreadyCharged
         ? 0
-        : AI_REDRAW_PRICE_IDR
+        : IMAGE_RETOUCH_PRICE_IDR
       : READY_TRACE_PRICE_IDR;
   return basePrice + Math.max(0, Number(separationFilmCount) || 0) * SEPARATION_FILM_PRICE_IDR;
 }

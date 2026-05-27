@@ -1,3 +1,4 @@
+import { INPUT_MODE_RETOUCH } from './modes.js';
 import { calculateJobPrice } from './pricing.js';
 
 const MAX_CANVAS_EDGE = 720;
@@ -449,7 +450,7 @@ export async function processImageLocally(file, settings) {
   const priceIdr = calculateJobPrice({
     inputMode: settings.inputMode,
     separationFilmCount,
-    aiAlreadyCharged: settings.inputMode === 'ai_redraw'
+    retouchAlreadyCharged: settings.inputMode === INPUT_MODE_RETOUCH
   });
 
   return {

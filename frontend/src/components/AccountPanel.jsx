@@ -1,7 +1,7 @@
 import { CreditCard, LogOut, ShoppingBag } from 'lucide-react';
 import { formatRupiah } from '../lib/pricing.js';
 
-export default function AccountPanel({ session, balance, onRefreshBalance, onSignOut }) {
+export default function AccountPanel({ session, balance, balanceError, onRefreshBalance, onSignOut }) {
   const profile = balance?.profile;
   return (
     <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
@@ -22,6 +22,8 @@ export default function AccountPanel({ session, balance, onRefreshBalance, onSig
           <LogOut className="h-4 w-4" aria-hidden="true" />
         </button>
       </div>
+
+      {balanceError && <p className="mb-3 border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">{balanceError}</p>}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="border border-line bg-panel p-3">

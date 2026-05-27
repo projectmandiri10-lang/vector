@@ -9,10 +9,10 @@ import LandingPage from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { commitJob, getBalance, quoteJob, requestAiRedraw } from './lib/api.js';
+import { commitJob, getBalance, quoteJob, requestImageRetouch } from './lib/api.js';
 import { processImageLocally } from './lib/localProcessor.js';
 import { INPUT_MODE_RETOUCH } from './lib/modes.js';
-import { calculateJobPrice, formatRupiah } from './lib/pricing.js';
+import { IMAGE_RETOUCH_PRICE_IDR, calculateJobPrice, formatRupiah } from './lib/pricing.js';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 
 const initialSettings = {
@@ -48,6 +48,7 @@ export default function App() {
   const [settings, setSettings] = useState(initialSettings);
   const [job, setJob] = useState(null);
   const [error, setError] = useState('');
+  const [balanceError, setBalanceError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [session, setSession] = useState(null);
   const [balance, setBalance] = useState(null);
@@ -84,9 +85,10 @@ export default function App() {
   async function refreshBalance(activeSession = session) {
     if (!activeSession?.access_token) return;
     try {
+      setBalanceError('');
       setBalance(await getBalance(activeSession.access_token));
     } catch (balanceError) {
-      setError(balanceError.message || 'Gagal membaca saldo.');
+      setBalanceError('Saldo belum terbaca. Coba refresh saldo atau periksa koneksi API.');
     }
   }
 
@@ -109,7 +111,7 @@ export default function App() {
         inputMode: settings.inputMode,
         productionType: settings.productionType,
         separationFilmCount: estimatedFilmCount,
-        aiAlreadyCharged: false
+        retouchAlreadyCharged: false
       },
       session.access_token
     );
@@ -133,13 +135,13 @@ export default function App() {
     try {
       await ensureCanRun(settings.separateColors ? 1 : 0);
       let processingFile = file;
-      let aiLedgerId = '';
+      let retouchLedgerId = '';
 
       if (settings.inputMode === INPUT_MODE_RETOUCH) {
         setJob(statusJob('processing_image', 'Menggambar ulang gambar tanpa penyimpanan permanen server.', 25));
-        const aiResult = await requestAiRedraw(file, settings, session.access_token);
-        processingFile = aiResult.file;
-        aiLedgerId = aiResult.aiLedgerId;
+        const retouchResult = await requestImageRetouch(file, settings, session.access_token);
+        processingFile = retouchResult.file;
+        retouchLedgerId = retouchResult.retouchLedgerId;
       }
 
       setJob(statusJob('vectorizing', 'Membuat vector, cutline, film, PDF, dan ZIP di browser.', 60));
@@ -147,7 +149,7 @@ export default function App() {
       const finalPrice = calculateJobPrice({
         inputMode: settings.inputMode,
         separationFilmCount: localResult.separationFilmCount,
-        aiAlreadyCharged: settings.inputMode === INPUT_MODE_RETOUCH
+        retouchAlreadyCharged: settings.inputMode === INPUT_MODE_RETOUCH
       });
 
       setJob(statusJob('exporting', 'Mencatat metadata job dan mendebit credit.', 88));
@@ -159,7 +161,7 @@ export default function App() {
           separationFilmCount: localResult.separationFilmCount,
           settings,
           manifest: localResult.manifest,
-          aiLedgerId,
+          aiLedgerId: retouchLedgerId,
           priceIdr: finalPrice
         },
         session.access_token
@@ -168,7 +170,7 @@ export default function App() {
       setJob({
         ...localResult,
         jobId: committed.job?.id || localResult.jobId,
-        priceIdr: (settings.inputMode === INPUT_MODE_RETOUCH ? 5000 : 0) + finalPrice,
+        priceIdr: (settings.inputMode === INPUT_MODE_RETOUCH ? IMAGE_RETOUCH_PRICE_IDR : 0) + finalPrice,
         remoteJob: committed.job
       });
       await refreshBalance();
@@ -233,7 +235,7 @@ export default function App() {
       {session && view === 'billing' && (
         <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
           <BillingPanel session={session} />
-          <AccountPanel session={session} balance={balance} onRefreshBalance={refreshBalance} onSignOut={signOut} />
+          <AccountPanel session={session} balance={balance} balanceError={balanceError} onRefreshBalance={refreshBalance} onSignOut={signOut} />
         </div>
       )}
 
@@ -246,7 +248,7 @@ export default function App() {
       {session && view === 'app' && (
         <form className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]" onSubmit={handleSubmit}>
           <div className="space-y-4">
-            <AccountPanel session={session} balance={balance} onRefreshBalance={refreshBalance} onSignOut={signOut} />
+            <AccountPanel session={session} balance={balance} balanceError={balanceError} onRefreshBalance={refreshBalance} onSignOut={signOut} />
             <UploadBox
               file={file}
               previewUrl={previewUrl}
