@@ -12,6 +12,22 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'Authorization,Content-Type'
 };
 
+function requireEnvValue(env, key) {
+  const value = env[key];
+  if (!value) {
+    throw new Error(`Worker belum dikonfigurasi: ${key} kosong.`);
+  }
+  return value;
+}
+
+function supabaseBaseUrl(env) {
+  return requireEnvValue(env, 'SUPABASE_URL').replace(/\/+$/, '');
+}
+
+function hasEnvValue(env, key) {
+  return Boolean(env[key]);
+}
+
 function json(data, status = 200, headers = {}) {
   return new Response(JSON.stringify(data), {
     status,
@@ -33,7 +49,7 @@ function bearerToken(request) {
 }
 
 function litellmImagesUrl(env) {
-  const baseUrl = (env.LITELLM_BASE_URL || '').replace(/\/+$/, '').replace(/\/v1$/, '');
+  const baseUrl = requireEnvValue(env, 'LITELLM_BASE_URL').replace(/\/+$/, '').replace(/\/v1$/, '');
   return `${baseUrl}/v1/images/edits`;
 }
 
@@ -51,11 +67,17 @@ function calculateDynamicJobPrice({ inputMode = 'ready_trace', separationFilmCou
   return basePrice + Math.max(0, Number(separationFilmCount) || 0) * pricing.separation_film;
 }
 
-function handleHealth() {
+function handleHealth(env) {
   return json({
     ok: true,
     service: 'design-mudah',
     message: 'Worker API aktif. Gunakan endpoint /api/... dari aplikasi frontend.',
+    config: {
+      supabaseUrl: hasEnvValue(env, 'SUPABASE_URL'),
+      supabaseServiceRoleKey: hasEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY'),
+      litellmBaseUrl: hasEnvValue(env, 'LITELLM_BASE_URL'),
+      litellmSecretKey: hasEnvValue(env, 'LITELLM_SECRET_KEY')
+    },
     endpoints: [
       'GET /api/me/balance',
       'POST /api/jobs/quote',
@@ -66,11 +88,12 @@ function handleHealth() {
 }
 
 async function supabaseFetch(env, path, { method = 'GET', token, body, prefer } = {}) {
-  const response = await fetch(`${env.SUPABASE_URL}${path}`, {
+  const serviceRoleKey = requireEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY');
+  const response = await fetch(`${supabaseBaseUrl(env)}${path}`, {
     method,
     headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
-      Authorization: `Bearer ${token || env.SUPABASE_SERVICE_ROLE_KEY}`,
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${token || serviceRoleKey}`,
       ...(body ? { 'Content-Type': 'application/json' } : {}),
       ...(prefer ? { Prefer: prefer } : {})
     },
@@ -120,9 +143,10 @@ function withUserEmails(rows, users) {
 async function getUser(env, request) {
   const token = bearerToken(request);
   if (!token) throw new Error('Login dibutuhkan.');
-  const response = await fetch(`${env.SUPABASE_URL}/auth/v1/user`, {
+  const serviceRoleKey = requireEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY');
+  const response = await fetch(`${supabaseBaseUrl(env)}/auth/v1/user`, {
     headers: {
-      apikey: env.SUPABASE_SERVICE_ROLE_KEY,
+      apikey: serviceRoleKey,
       Authorization: `Bearer ${token}`
     }
   });
@@ -275,7 +299,7 @@ async function handleAiRedraw(env, request) {
   const response = await fetch(litellmImagesUrl(env), {
     method: 'POST',
     headers: {
-      Authorization: `Bearer ${env.LITELLM_SECRET_KEY}`
+      Authorization: `Bearer ${requireEnvValue(env, 'LITELLM_SECRET_KEY')}`
     },
     body: aiForm
   });
@@ -496,7 +520,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
     const url = new URL(request.url);
     try {
-      if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') return handleHealth();
+      if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') return handleHealth(env);
       if (url.pathname === '/api/app-config' && request.method === 'GET') return await handleAppConfig(env);
       if (url.pathname === '/api/manual-payments' && request.method === 'POST') return await handleCreateManualPayment(env, request);
       if (url.pathname === '/api/me/balance' && request.method === 'GET') return await handleBalance(env, request);
