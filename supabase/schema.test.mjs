@@ -5,6 +5,7 @@ import { test } from 'node:test';
 
 const migration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526000000_saas_credit_auth.sql'), 'utf8');
 const superadminMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526001000_ensure_superadmin_whitelist.sql'), 'utf8');
+const exampleJobsMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260528091500_example_jobs_bucket.sql'), 'utf8');
 
 test('migration creates SaaS credit/auth tables', () => {
   for (const table of ['profiles', 'credit_ledger', 'jobs', 'manual_payments', 'pricing_rules']) {
@@ -38,4 +39,12 @@ test('superadmin app management migration adds settings and payment admin suppor
   assert.match(appManagementMigration, /shopee_payment/);
   assert.match(appManagementMigration, /pricing_rules_admin_write/);
   assert.match(appManagementMigration, /manual_payments_status_created_idx/);
+});
+
+test('example jobs migration provisions storage bucket and public setting seed', () => {
+  assert.match(exampleJobsMigration, /storage\.buckets/);
+  assert.match(exampleJobsMigration, /example-jobs/);
+  assert.match(exampleJobsMigration, /example_jobs/);
+  assert.match(exampleJobsMigration, /"sticker":null/);
+  assert.match(exampleJobsMigration, /"sablon":null/);
 });

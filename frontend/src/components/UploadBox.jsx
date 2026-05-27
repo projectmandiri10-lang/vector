@@ -1,5 +1,6 @@
 import { ImagePlus, UploadCloud, X } from 'lucide-react';
 import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from '../lib/modes.js';
+import { formatRupiah, IMAGE_RETOUCH_PRICE_IDR, READY_PROCESS_PRICE_IDR } from '../lib/pricing.js';
 
 const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
@@ -7,12 +8,14 @@ const modeOptions = [
   {
     value: INPUT_MODE_RETOUCH,
     title: 'Gambar perlu digambar ulang',
-    description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.'
+    description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.',
+    priceIdr: IMAGE_RETOUCH_PRICE_IDR
   },
   {
     value: INPUT_MODE_READY,
     title: 'Gambar sudah siap proses',
-    description: 'Untuk PNG/JPG/WebP yang sudah bersih dan ingin langsung diproses sticker atau sablon.'
+    description: 'Untuk PNG/JPG/WebP yang sudah bersih dan ingin langsung diproses sticker atau sablon.',
+    priceIdr: READY_PROCESS_PRICE_IDR
   }
 ];
 
@@ -46,6 +49,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
             aria-pressed={inputMode === option.value}
           >
             <span className="block text-sm font-semibold">{option.title}</span>
+            <span className="mt-1 block text-base font-black text-spruce">{formatRupiah(option.priceIdr)}/gambar</span>
             <span className="mt-1 block text-xs leading-5 text-gray-600">{option.description}</span>
           </button>
         ))}

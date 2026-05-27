@@ -159,6 +159,13 @@ export async function listAdminJobs(accessToken) {
   return apiFetch('/api/admin/jobs', { accessToken });
 }
 
+export async function setAdminJobExample(jobId, accessToken) {
+  return apiFetch(`/api/admin/jobs/${jobId}/set-example`, {
+    method: 'POST',
+    accessToken
+  });
+}
+
 export async function listAdminManualPayments(accessToken) {
   return apiFetch('/api/admin/manual-payments', { accessToken });
 }

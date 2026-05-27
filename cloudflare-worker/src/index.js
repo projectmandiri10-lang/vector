@@ -1,4 +1,14 @@
 import { AI_REDRAW_PRICE_IDR, SUPERUSER_EMAIL } from './pricing.js';
+import {
+  decorateAdminJobs,
+  EXAMPLE_JOBS_BUCKET,
+  exampleActivePath,
+  exampleSourcePath,
+  getExampleSourcePathFromManifest,
+  isSuperuserProfile,
+  normalizeExampleJobsSetting,
+  updateExampleJobsSetting
+} from './example-jobs.js';
 
 const DEFAULT_PRICING = {
   ready_trace: 1000,
@@ -53,6 +63,17 @@ function litellmImagesUrl(env) {
   return `${baseUrl}/v1/images/edits`;
 }
 
+function storageBaseUrl(env) {
+  return `${supabaseBaseUrl(env)}/storage/v1`;
+}
+
+function encodeStoragePath(path) {
+  return String(path || '')
+    .split('/')
+    .map((segment) => encodeURIComponent(segment))
+    .join('/');
+}
+
 function formatDate(date) {
   return date.toISOString();
 }
@@ -75,6 +96,18 @@ function imageModelCandidates(env) {
   if (configured === 'openai/gpt-image-2') candidates.push('gpt-image-2');
 
   return [...new Set(candidates)];
+}
+
+function dataUrlToUint8Array(dataUrl) {
+  const match = String(dataUrl || '').match(/^data:(.+);base64,(.+)$/);
+  if (!match) throw new Error('Preview contoh gambar tidak valid.');
+  const [, mimeType, base64] = match;
+  if (mimeType !== 'image/png') throw new Error('Preview contoh harus berupa PNG.');
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
+function examplePublicUrl(env, path) {
+  return `${storageBaseUrl(env)}/object/public/${EXAMPLE_JOBS_BUCKET}/${encodeStoragePath(path)}`;
 }
 
 function handleHealth(env) {
@@ -118,6 +151,63 @@ async function supabaseFetch(env, path, { method = 'GET', token, body, prefer } 
   return data;
 }
 
+async function storageFetch(env, path, { method = 'GET', body, headers = {} } = {}) {
+  const serviceRoleKey = requireEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY');
+  const response = await fetch(`${storageBaseUrl(env)}${path}`, {
+    method,
+    headers: {
+      apikey: serviceRoleKey,
+      Authorization: `Bearer ${serviceRoleKey}`,
+      ...headers
+    },
+    body
+  });
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error || data?.msg || `Supabase storage request failed: ${response.status}`);
+  }
+  return data;
+}
+
+async function uploadStorageObject(env, bucket, path, bytes, contentType) {
+  return storageFetch(env, `/object/${encodeURIComponent(bucket)}/${encodeStoragePath(path)}`, {
+    method: 'POST',
+    body: bytes,
+    headers: {
+      'Content-Type': contentType,
+      'cache-control': '3600',
+      'x-upsert': 'true'
+    }
+  });
+}
+
+async function deleteStorageObjects(env, bucket, prefixes) {
+  const filtered = [...new Set((prefixes || []).filter(Boolean))];
+  if (filtered.length === 0) return null;
+  return storageFetch(env, `/object/${encodeURIComponent(bucket)}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ prefixes: filtered }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+}
+
+async function copyStorageObject(env, bucket, sourceKey, destinationKey) {
+  return storageFetch(env, '/object/copy', {
+    method: 'POST',
+    body: JSON.stringify({
+      bucketId: bucket,
+      sourceKey,
+      destinationKey
+    }),
+    headers: {
+      'Content-Type': 'application/json'
+    }
+  });
+}
+
 async function getPricing(env) {
   try {
     const rows = await supabaseFetch(env, '/rest/v1/pricing_rules?select=key,amount_idr,active,description&order=key.asc', {});
@@ -131,6 +221,26 @@ async function getPricing(env) {
   } catch (_err) {
     return { ...DEFAULT_PRICING };
   }
+}
+
+async function getAppSetting(env, key) {
+  const rows = await supabaseFetch(env, `/rest/v1/app_settings?select=key,value,is_public,description,updated_at&key=eq.${encodeURIComponent(key)}&limit=1`, {});
+  return rows?.[0] || null;
+}
+
+async function upsertAppSetting(env, { key, value, isPublic = true, description = '' }) {
+  const rows = await supabaseFetch(env, '/rest/v1/app_settings?select=*', {
+    method: 'POST',
+    prefer: 'resolution=merge-duplicates,return=representation',
+    body: {
+      key,
+      value,
+      is_public: isPublic,
+      description,
+      updated_at: formatDate(new Date())
+    }
+  });
+  return rows?.[0] || null;
 }
 
 async function listProfilesWithBalance(env) {
@@ -328,7 +438,26 @@ async function handleCommitJob(env, request) {
       ai_ledger_id: body.aiLedgerId || null
     }
   });
-  const job = jobRows?.[0];
+  let job = jobRows?.[0];
+
+  if (job && body.examplePreviewDataUrl && isSuperuserProfile(profile, user.email)) {
+    try {
+      const sourcePath = exampleSourcePath(job.id);
+      await uploadStorageObject(env, EXAMPLE_JOBS_BUCKET, sourcePath, dataUrlToUint8Array(body.examplePreviewDataUrl), 'image/png');
+      const manifest = {
+        ...(job.manifest || {}),
+        examplePreviewSourcePath: sourcePath
+      };
+      const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
+        method: 'PATCH',
+        prefer: 'return=representation',
+        body: { manifest }
+      });
+      job = updatedRows?.[0] || { ...job, manifest };
+    } catch (error) {
+      console.error('Failed to store example preview source', error);
+    }
+  }
 
   if (!profile.is_unlimited && priceIdr > 0) {
     await insertLedger(env, {
@@ -582,9 +711,15 @@ async function handleAdminOverview(env, request) {
 
 async function handleAdminJobs(env, request) {
   await requireAdmin(env, request);
-  const users = await supabaseFetch(env, '/rest/v1/profiles?select=id,email', {});
-  const jobs = await supabaseFetch(env, '/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at&order=created_at.desc&limit=100', {});
-  return json({ jobs: withUserEmails(jobs, users) });
+  const [users, jobs, exampleSetting] = await Promise.all([
+    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
+    supabaseFetch(env, '/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at,manifest&order=created_at.desc&limit=100', {}),
+    getAppSetting(env, 'example_jobs')
+  ]);
+  const decorated = decorateAdminJobs(jobs, users, exampleSetting?.value);
+  return json({
+    jobs: decorated.map(({ manifest, ...job }) => job)
+  });
 }
 
 async function handleAdminPayments(env, request) {
@@ -657,6 +792,52 @@ async function handleAdminSettings(env, request) {
   return json({ setting: rows?.[0] });
 }
 
+async function handleSetExampleJob(env, request, jobId) {
+  await requireAdmin(env, request);
+  const [jobRows, profiles, exampleSetting] = await Promise.all([
+    supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,production_type,status,manifest&limit=1`, {}),
+    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
+    getAppSetting(env, 'example_jobs')
+  ]);
+
+  const job = jobRows?.[0];
+  if (!job) throw new Error('Job tidak ditemukan.');
+  if (job.status !== 'done') throw new Error('Hanya job selesai yang bisa dijadikan contoh.');
+
+  const owner = profiles.find((profile) => profile.id === job.user_id);
+  if (!owner || owner.role !== 'superuser') throw new Error('Hanya job milik superadmin yang bisa dijadikan contoh.');
+
+  const sourcePath = getExampleSourcePathFromManifest(job.manifest);
+  if (!sourcePath) throw new Error('Job ini belum punya preview sumber contoh. Buat ulang job sebagai superadmin setelah fitur ini aktif.');
+
+  const destinationPath = exampleActivePath(job.production_type);
+  const currentExamples = normalizeExampleJobsSetting(exampleSetting?.value);
+  const currentPath = currentExamples[job.production_type]?.storagePath;
+
+  await deleteStorageObjects(env, EXAMPLE_JOBS_BUCKET, [currentPath, destinationPath].filter(Boolean));
+  await copyStorageObject(env, EXAMPLE_JOBS_BUCKET, sourcePath, destinationPath);
+
+  const nextExamples = updateExampleJobsSetting(currentExamples, job.production_type, {
+    jobId: job.id,
+    imageUrl: examplePublicUrl(env, destinationPath),
+    storagePath: destinationPath,
+    updatedAt: new Date().toISOString()
+  });
+
+  await upsertAppSetting(env, {
+    key: 'example_jobs',
+    value: nextExamples,
+    isPublic: true,
+    description: 'Contoh gambar aktif untuk sticker dan sablon'
+  });
+
+  return json({
+    jobId: job.id,
+    productionType: job.production_type,
+    exampleJobs: nextExamples
+  });
+}
+
 async function handleAdminCredits(env, request) {
   const admin = await requireAdmin(env, request);
   const body = await readJson(request);
@@ -714,6 +895,8 @@ export default {
       if (url.pathname === '/api/admin/manual-payments' && request.method === 'GET') return await handleAdminPayments(env, request);
       if (url.pathname === '/api/admin/pricing-rules') return await handleAdminPricingRules(env, request);
       if (url.pathname === '/api/admin/settings') return await handleAdminSettings(env, request);
+      const setExampleMatch = url.pathname.match(/^\/api\/admin\/jobs\/([^/]+)\/set-example$/);
+      if (setExampleMatch && request.method === 'POST') return await handleSetExampleJob(env, request, setExampleMatch[1]);
       const approveMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/approve$/);
       if (approveMatch && request.method === 'POST') return await handleApprovePayment(env, request, approveMatch[1]);
       const rejectMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/reject$/);

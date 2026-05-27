@@ -4,6 +4,7 @@ import AccountPanel from './components/AccountPanel.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import BillingPanel from './components/BillingPanel.jsx';
+import ExampleJobsPanel from './components/ExampleJobsPanel.jsx';
 import JobStatus from './components/JobStatus.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
@@ -147,7 +148,7 @@ export default function App() {
       }
 
       setJob(statusJob('vectorizing', 'Membuat vector, cutline, film, PDF, dan ZIP di browser.', 60));
-      const localResult = await processImageLocally(processingFile, settings);
+      const { examplePreviewDataUrl, ...localResult } = await processImageLocally(processingFile, settings);
       const finalPrice = calculateJobPrice({
         inputMode: settings.inputMode,
         separationFilmCount: localResult.separationFilmCount,
@@ -164,7 +165,8 @@ export default function App() {
           settings,
           manifest: localResult.manifest,
           aiLedgerId: retouchLedgerId,
-          priceIdr: finalPrice
+          priceIdr: finalPrice,
+          examplePreviewDataUrl: isSuperuser ? examplePreviewDataUrl : undefined
         },
         session.access_token
       );
@@ -261,6 +263,7 @@ export default function App() {
               onFileChange={setFile}
               disabled={isBusy}
             />
+            <ExampleJobsPanel activeProductionType={settings.productionType} />
             <JobStatus job={job} error={jobError} />
             <ResultPreview job={job} onDelete={() => setJob(null)} isDeleting={false} />
           </div>

@@ -368,6 +368,19 @@ function fileUrl(blob) {
   return URL.createObjectURL(blob);
 }
 
+function createExamplePreviewDataUrl(canvas) {
+  const maxEdge = 480;
+  const scale = Math.min(1, maxEdge / Math.max(canvas.width, canvas.height));
+  if (scale === 1) return canvas.toDataURL('image/png');
+
+  const scaled = document.createElement('canvas');
+  scaled.width = Math.max(1, Math.round(canvas.width * scale));
+  scaled.height = Math.max(1, Math.round(canvas.height * scale));
+  const ctx = scaled.getContext('2d');
+  ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
+  return scaled.toDataURL('image/png');
+}
+
 async function addSvgPdf(zip, name, svg, width, height, settings) {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
   const pdfBlob = await svgToPdfBlob(svg, width, height, settings.actualWidthCm);
@@ -464,6 +477,7 @@ export async function processImageLocally(file, settings) {
     priceIdr,
     separationFilmCount,
     palette,
+    examplePreviewDataUrl: createExamplePreviewDataUrl(canvas),
     settings,
     files: {
       fullPng: fileUrl(previewBlob),

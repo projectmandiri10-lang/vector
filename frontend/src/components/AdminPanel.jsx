@@ -1,4 +1,4 @@
-import { BarChart3, BriefcaseBusiness, Check, CreditCard, RefreshCw, Save, Shield, SlidersHorizontal, Trash2, UserPlus, X } from 'lucide-react';
+import { BarChart3, BriefcaseBusiness, Check, CreditCard, RefreshCw, Save, Shield, SlidersHorizontal, Star, Trash2, UserPlus, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import {
   addAdminCredit,
@@ -12,6 +12,7 @@ import {
   listAdminSettings,
   listAdminUsers,
   rejectManualPayment,
+  setAdminJobExample,
   toUserApiError,
   updateAdminPricingRule,
   updateAdminSetting,
@@ -276,6 +277,20 @@ export default function AdminPanel({ session, enabled }) {
       setMessage('Setting Shopee berhasil disimpan.');
     } catch (error) {
       setMessage(toUserApiError(error, 'Gagal menyimpan setting Shopee.').message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function setJobAsExample(job) {
+    setIsBusy(true);
+    setMessage('');
+    try {
+      await setAdminJobExample(job.id, accessToken);
+      await loadAdminData();
+      setMessage(`Job ${job.production_type === 'sablon' ? 'sablon' : 'sticker'} berhasil dijadikan contoh.`);
+    } catch (error) {
+      setMessage(toUserApiError(error, 'Gagal menjadikan job sebagai contoh.').message);
     } finally {
       setIsBusy(false);
     }
@@ -648,6 +663,7 @@ export default function AdminPanel({ session, enabled }) {
                 <th className="py-2 pr-3">Film</th>
                 <th className="py-2 pr-3">Nilai</th>
                 <th className="py-2 pr-3">Status</th>
+                <th className="py-2 pr-3">Contoh</th>
               </tr>
             </thead>
             <tbody>
@@ -660,6 +676,26 @@ export default function AdminPanel({ session, enabled }) {
                   <td className="py-2 pr-3">{job.separation_film_count}</td>
                   <td className="py-2 pr-3">{formatRupiah(job.price_idr || 0)}</td>
                   <td className="py-2 pr-3"><StatusBadge status={job.status} /></td>
+                  <td className="py-2 pr-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      {job.is_active_example && (
+                        <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-xs font-semibold text-spruce">
+                          <Star className="h-3.5 w-3.5" aria-hidden="true" />
+                          Contoh aktif
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        disabled={isBusy || !job.can_set_as_example}
+                        onClick={() => setJobAsExample(job)}
+                        className="inline-flex min-h-8 items-center justify-center gap-1 border border-spruce bg-white px-2 py-1 text-xs font-semibold text-spruce disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
+                        title={job.can_set_as_example ? 'Gunakan job ini sebagai contoh gambar user' : 'Hanya job superadmin yang sudah punya preview sumber yang bisa dijadikan contoh.'}
+                      >
+                        <Star className="h-3.5 w-3.5" aria-hidden="true" />
+                        Jadikan contoh
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
