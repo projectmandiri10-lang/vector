@@ -497,23 +497,23 @@ export default {
     const url = new URL(request.url);
     try {
       if ((url.pathname === '/' || url.pathname === '/health') && request.method === 'GET') return handleHealth();
-      if (url.pathname === '/api/app-config' && request.method === 'GET') return handleAppConfig(env);
-      if (url.pathname === '/api/manual-payments' && request.method === 'POST') return handleCreateManualPayment(env, request);
-      if (url.pathname === '/api/me/balance' && request.method === 'GET') return handleBalance(env, request);
-      if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return handleQuote(env, request);
-      if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return handleCommitJob(env, request);
-      if ((url.pathname === '/api/image-retouch' || url.pathname === '/api/ai-redraw') && request.method === 'POST') return handleAiRedraw(env, request);
-      if (url.pathname === '/api/admin/users') return handleAdminUsers(env, request);
-      if (url.pathname === '/api/admin/credits' && request.method === 'POST') return handleAdminCredits(env, request);
-      if (url.pathname === '/api/admin/overview' && request.method === 'GET') return handleAdminOverview(env, request);
-      if (url.pathname === '/api/admin/jobs' && request.method === 'GET') return handleAdminJobs(env, request);
-      if (url.pathname === '/api/admin/manual-payments' && request.method === 'GET') return handleAdminPayments(env, request);
-      if (url.pathname === '/api/admin/pricing-rules') return handleAdminPricingRules(env, request);
-      if (url.pathname === '/api/admin/settings') return handleAdminSettings(env, request);
+      if (url.pathname === '/api/app-config' && request.method === 'GET') return await handleAppConfig(env);
+      if (url.pathname === '/api/manual-payments' && request.method === 'POST') return await handleCreateManualPayment(env, request);
+      if (url.pathname === '/api/me/balance' && request.method === 'GET') return await handleBalance(env, request);
+      if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return await handleQuote(env, request);
+      if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return await handleCommitJob(env, request);
+      if ((url.pathname === '/api/image-retouch' || url.pathname === '/api/ai-redraw') && request.method === 'POST') return await handleAiRedraw(env, request);
+      if (url.pathname === '/api/admin/users') return await handleAdminUsers(env, request);
+      if (url.pathname === '/api/admin/credits' && request.method === 'POST') return await handleAdminCredits(env, request);
+      if (url.pathname === '/api/admin/overview' && request.method === 'GET') return await handleAdminOverview(env, request);
+      if (url.pathname === '/api/admin/jobs' && request.method === 'GET') return await handleAdminJobs(env, request);
+      if (url.pathname === '/api/admin/manual-payments' && request.method === 'GET') return await handleAdminPayments(env, request);
+      if (url.pathname === '/api/admin/pricing-rules') return await handleAdminPricingRules(env, request);
+      if (url.pathname === '/api/admin/settings') return await handleAdminSettings(env, request);
       const approveMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/approve$/);
-      if (approveMatch && request.method === 'POST') return handleApprovePayment(env, request, approveMatch[1]);
+      if (approveMatch && request.method === 'POST') return await handleApprovePayment(env, request, approveMatch[1]);
       const rejectMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/reject$/);
-      if (rejectMatch && request.method === 'POST') return handleRejectPayment(env, request, rejectMatch[1]);
+      if (rejectMatch && request.method === 'POST') return await handleRejectPayment(env, request, rejectMatch[1]);
       return error('Endpoint tidak ditemukan.', 404);
     } catch (err) {
       return error(err.message || 'Server error.', err.message?.includes('ditolak') ? 403 : 400);
