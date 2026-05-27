@@ -1,6 +1,6 @@
 import { ShoppingBag } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { createManualPayment, getAppConfig } from '../lib/api.js';
+import { createManualPayment, getAppConfig, toUserApiError } from '../lib/api.js';
 import { formatRupiah } from '../lib/pricing.js';
 
 export default function BillingPanel({ session }) {
@@ -31,7 +31,7 @@ export default function BillingPanel({ session }) {
       setNotes('');
       setMessage(`Konfirmasi pembayaran ${formatRupiah(payment.payment?.amount_idr || amountIdr)} sudah dikirim dan menunggu pengecekan admin.`);
     } catch (error) {
-      setMessage(error.message || 'Gagal mengirim konfirmasi pembayaran.');
+      setMessage(toUserApiError(error, 'Gagal mengirim konfirmasi pembayaran.').message);
     } finally {
       setIsBusy(false);
     }

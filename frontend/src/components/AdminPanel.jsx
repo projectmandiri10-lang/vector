@@ -10,6 +10,7 @@ import {
   listAdminSettings,
   listAdminUsers,
   rejectManualPayment,
+  toUserApiError,
   updateAdminPricingRule,
   updateAdminSetting,
   updateAdminUser
@@ -85,7 +86,7 @@ export default function AdminPanel({ session, enabled }) {
         contact: shopee.contact || ''
       });
     } catch (error) {
-      setMessage(error.message || 'Gagal membaca data superadmin.');
+      setMessage(toUserApiError(error, 'Gagal membaca data superadmin.').message);
     } finally {
       setIsBusy(false);
     }
@@ -127,7 +128,7 @@ export default function AdminPanel({ session, enabled }) {
       await loadAdminData();
       setMessage('Credit berhasil ditambahkan.');
     } catch (error) {
-      setMessage(error.message);
+      setMessage(toUserApiError(error, 'Gagal menambahkan credit.').message);
     } finally {
       setIsBusy(false);
     }
@@ -140,7 +141,7 @@ export default function AdminPanel({ session, enabled }) {
       await updateAdminUser({ userId, patch }, accessToken);
       await loadAdminData();
     } catch (error) {
-      setMessage(error.message);
+      setMessage(toUserApiError(error, 'Gagal memperbarui user.').message);
     } finally {
       setIsBusy(false);
     }
@@ -154,7 +155,7 @@ export default function AdminPanel({ session, enabled }) {
       await loadAdminData();
       setMessage('Pembayaran disetujui dan credit masuk.');
     } catch (error) {
-      setMessage(error.message);
+      setMessage(toUserApiError(error, 'Gagal menyetujui pembayaran.').message);
     } finally {
       setIsBusy(false);
     }
@@ -168,7 +169,7 @@ export default function AdminPanel({ session, enabled }) {
       await loadAdminData();
       setMessage('Pembayaran ditolak.');
     } catch (error) {
-      setMessage(error.message);
+      setMessage(toUserApiError(error, 'Gagal menolak pembayaran.').message);
     } finally {
       setIsBusy(false);
     }
@@ -191,7 +192,7 @@ export default function AdminPanel({ session, enabled }) {
       await loadAdminData();
       setMessage('Harga berhasil disimpan.');
     } catch (error) {
-      setMessage(error.message);
+      setMessage(toUserApiError(error, 'Gagal menyimpan harga.').message);
     } finally {
       setIsBusy(false);
     }
@@ -213,7 +214,7 @@ export default function AdminPanel({ session, enabled }) {
       await loadAdminData();
       setMessage('Setting Shopee berhasil disimpan.');
     } catch (error) {
-      setMessage(error.message);
+      setMessage(toUserApiError(error, 'Gagal menyimpan setting Shopee.').message);
     } finally {
       setIsBusy(false);
     }

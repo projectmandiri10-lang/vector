@@ -1,5 +1,21 @@
 export const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
+function isNetworkLikeError(message = '') {
+  const normalized = String(message).toLowerCase();
+  return normalized.includes('failed to fetch') || normalized.includes('networkerror') || normalized.includes('load failed');
+}
+
+export function toUserApiError(error, fallbackMessage) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  if (!API_BASE_URL || message.includes('VITE_API_BASE_URL')) {
+    return new Error('Koneksi ke layanan belum tersambung. Periksa URL API aplikasi.');
+  }
+  if (isNetworkLikeError(message)) {
+    return new Error(fallbackMessage || 'Koneksi ke layanan belum tersambung. Coba lagi beberapa saat.');
+  }
+  return error instanceof Error ? error : new Error(fallbackMessage || 'Terjadi kendala saat menghubungi layanan.');
+}
+
 export function absoluteUrl(path) {
   if (!path) return '';
   if (path.startsWith('http') || path.startsWith('blob:') || path.startsWith('data:')) return path;
@@ -12,15 +28,20 @@ async function apiFetch(path, { accessToken, method = 'GET', body, headers = {} 
     throw new Error('VITE_API_BASE_URL belum diatur. Hubungkan Cloudflare Worker API terlebih dahulu.');
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method,
-    headers: {
-      ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-      ...headers
-    },
-    body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers: {
+        ...(body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...headers
+      },
+      body: body instanceof FormData ? body : body ? JSON.stringify(body) : undefined
+    });
+  } catch (error) {
+    throw toUserApiError(error, 'Koneksi ke layanan belum tersambung. Periksa URL API aplikasi.');
+  }
 
   const contentType = response.headers.get('content-type') || '';
   const data = contentType.includes('application/json') ? await response.json().catch(() => ({})) : await response.blob();
@@ -54,11 +75,16 @@ export async function requestImageRetouch(file, settings, accessToken) {
   const formData = new FormData();
   formData.append('image', file);
   formData.append('settings', JSON.stringify(settings));
-  const response = await fetch(`${API_BASE_URL}/api/image-retouch`, {
-    method: 'POST',
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
-    body: formData
-  });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/image-retouch`, {
+      method: 'POST',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      body: formData
+    });
+  } catch (error) {
+    throw toUserApiError(error, 'Koneksi ke layanan gambar belum tersambung. Periksa URL API aplikasi.');
+  }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     throw new Error(data.error || 'Gambar ulang gagal.');

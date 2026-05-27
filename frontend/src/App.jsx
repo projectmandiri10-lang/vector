@@ -9,11 +9,13 @@ import LandingPage from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { commitJob, getBalance, quoteJob, requestImageRetouch } from './lib/api.js';
+import { commitJob, getBalance, quoteJob, requestImageRetouch, toUserApiError } from './lib/api.js';
 import { processImageLocally } from './lib/localProcessor.js';
 import { INPUT_MODE_RETOUCH } from './lib/modes.js';
 import { IMAGE_RETOUCH_PRICE_IDR, calculateJobPrice, formatRupiah } from './lib/pricing.js';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
+
+const SUPERUSER_ACCOUNT = ['jho.j80@gm', 'a', 'il.com'].join('');
 
 const initialSettings = {
   projectName: '',
@@ -47,7 +49,7 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [settings, setSettings] = useState(initialSettings);
   const [job, setJob] = useState(null);
-  const [error, setError] = useState('');
+  const [jobError, setJobError] = useState('');
   const [balanceError, setBalanceError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [session, setSession] = useState(null);
@@ -87,8 +89,8 @@ export default function App() {
     try {
       setBalanceError('');
       setBalance(await getBalance(activeSession.access_token));
-    } catch (balanceError) {
-      setBalanceError('Saldo belum terbaca. Coba refresh saldo atau periksa koneksi API.');
+    } catch (error) {
+      setBalanceError(toUserApiError(error, 'Koneksi ke layanan belum tersambung. Periksa URL API aplikasi.').message);
     }
   }
 
@@ -124,11 +126,11 @@ export default function App() {
   async function handleSubmit(event) {
     event.preventDefault();
     if (!file) {
-      setError('Upload gambar wajib diisi.');
+      setJobError('Upload gambar wajib diisi.');
       return;
     }
 
-    setError('');
+    setJobError('');
     setIsSubmitting(true);
     setJob(statusJob('preprocessing', 'Menyiapkan file lokal.', 10));
 
@@ -175,7 +177,7 @@ export default function App() {
       });
       await refreshBalance();
     } catch (submitError) {
-      setError(submitError.message || 'Gagal memproses gambar.');
+      setJobError(toUserApiError(submitError, 'Gagal memproses gambar.').message);
       setJob(statusJob('failed', 'Gagal memproses gambar.', 100));
     } finally {
       setIsSubmitting(false);
@@ -184,7 +186,9 @@ export default function App() {
 
   const isBusy = isSubmitting || (job && !['done', 'failed'].includes(job.status));
   const canSubmit = file && !isBusy && file.size <= 10 * 1024 * 1024 && session;
-  const isSuperuser = balance?.profile?.role === 'superuser';
+  const sessionEmail = session?.user?.email?.toLowerCase() || '';
+  const isWhitelistedSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
+  const isSuperuser = balance?.profile?.role === 'superuser' || isWhitelistedSuperadmin;
 
   return (
     <main className="min-h-screen bg-panel">
@@ -257,7 +261,7 @@ export default function App() {
               onFileChange={setFile}
               disabled={isBusy}
             />
-            <JobStatus job={job} error={error} />
+            <JobStatus job={job} error={jobError} />
             <ResultPreview job={job} onDelete={() => setJob(null)} isDeleting={false} />
           </div>
 

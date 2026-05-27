@@ -1,8 +1,16 @@
 import { CreditCard, LogOut, ShoppingBag } from 'lucide-react';
 import { formatRupiah } from '../lib/pricing.js';
 
+const SUPERUSER_ACCOUNT = ['jho.j80@gm', 'a', 'il.com'].join('');
+
 export default function AccountPanel({ session, balance, balanceError, onRefreshBalance, onSignOut }) {
   const profile = balance?.profile;
+  const sessionEmail = session?.user?.email?.toLowerCase() || '';
+  const isFallbackSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
+  const isSuperadmin = profile?.role === 'superuser' || (!profile && isFallbackSuperadmin);
+  const isUnlimited = profile?.is_unlimited ?? isFallbackSuperadmin;
+  const balanceLabel = isUnlimited ? 'Unlimited' : formatRupiah(balance?.balance || 0);
+
   return (
     <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex items-center justify-between gap-3">
@@ -10,7 +18,7 @@ export default function AccountPanel({ session, balance, balanceError, onRefresh
           <CreditCard className="h-5 w-5 shrink-0 text-spruce" aria-hidden="true" />
           <div className="min-w-0">
             <h2 className="truncate text-base font-semibold text-ink">{session?.user?.email}</h2>
-            <p className="text-xs text-gray-600">{profile?.role === 'superuser' ? 'Superadmin' : 'User'}</p>
+            <p className="text-xs text-gray-600">{isSuperadmin ? 'Superadmin' : 'User'}</p>
           </div>
         </div>
         <button
@@ -28,7 +36,7 @@ export default function AccountPanel({ session, balance, balanceError, onRefresh
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="border border-line bg-panel p-3">
           <p className="text-xs font-semibold uppercase text-gray-600">Saldo credit</p>
-          <p className="mt-1 text-2xl font-black text-ink">{profile?.is_unlimited ? 'Unlimited' : formatRupiah(balance?.balance || 0)}</p>
+          <p className="mt-1 text-2xl font-black text-ink">{balanceLabel}</p>
         </div>
         <div className="border border-line bg-panel p-3">
           <p className="text-xs font-semibold uppercase text-gray-600">Top up manual</p>

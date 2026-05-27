@@ -1,5 +1,5 @@
 import { ArrowRight, BadgeCheck, FileDown, PenTool, ShieldCheck } from 'lucide-react';
-import { formatRupiah, READY_TRACE_PRICE_IDR } from '../lib/pricing.js';
+import { formatRupiah, READY_PROCESS_PRICE_IDR } from '../lib/pricing.js';
 
 export default function LandingPage({ onStart, authPanel }) {
   const features = [
@@ -26,7 +26,7 @@ export default function LandingPage({ onStart, authPanel }) {
               onClick={onStart}
               className="inline-flex min-h-12 items-center justify-center gap-2 border border-spruce bg-spruce px-5 py-3 text-sm font-bold text-white transition hover:bg-teal-700"
             >
-              Mulai dari {formatRupiah(READY_TRACE_PRICE_IDR)}
+              Mulai dari {formatRupiah(READY_PROCESS_PRICE_IDR)}
               <ArrowRight className="h-4 w-4" aria-hidden="true" />
             </button>
             <button

@@ -284,10 +284,12 @@ dist
 VITE_SUPABASE_URL=https://PROJECT-REF.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_... atau anon key
 VITE_API_BASE_URL=https://design-mudah.USERNAME.workers.dev
-VITE_GOOGLE_OAUTH_REDIRECT_TO=https://DOMAIN-CLOUDFLARE-ANDA.pages.dev
+VITE_GOOGLE_OAUTH_REDIRECT_TO=https://designmudah.pages.dev
 ```
 
 Masukkan env tersebut minimal untuk `Production`. Jika Cloudflare menyediakan tab `Preview`, isi juga dengan value yang sama agar preview deploy tetap bisa login.
+
+Jangan isi `VITE_API_BASE_URL` dengan `http://localhost:8787` di Cloudflare Pages production. Jika value itu masih terpasang, dashboard user akan memanggil localhost browser user dan biasanya berakhir pada pesan `Failed to fetch`.
 
 7. Klik `Save and Deploy`.
 
@@ -313,14 +315,14 @@ Setelah URL Pages muncul:
 2. Set `Site URL` ke URL Pages produksi, contoh:
 
 ```text
-https://vectorizer.pages.dev
+https://designmudah.pages.dev
 ```
 
 3. Tambahkan ke `Redirect URLs`:
 
 ```text
 http://localhost:5173
-https://vectorizer.pages.dev
+https://designmudah.pages.dev
 ```
 
 4. Buka Google Cloud Console > OAuth Client.
@@ -351,7 +353,7 @@ https://PROJECT-REF.supabase.co/auth/v1/callback
 6. Login akun biasa.
 7. Upload gambar siap trace.
 8. Pastikan output SVG/PDF/ZIP bisa didownload tanpa file muncul di Supabase Storage atau R2.
-9. Coba mode AI redraw; pastikan credit Rp5.000 terdebit sebelum hasil AI diproses.
+9. Coba mode gambar ulang; pastikan credit Rp5.000 terdebit sebelum hasil gambar ulang diproses.
 10. Coba sablon separasi; pastikan Rp1.000 per film terdebit saat commit job.
 
 ## 7. Catatan Cloudflare Always Free
