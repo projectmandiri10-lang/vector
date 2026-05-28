@@ -2,7 +2,7 @@ import { INPUT_MODE_RETOUCH } from './modes.js';
 import { buildPrintLayout, createArtworkRegistrationMarks } from './localPrint.js';
 import { calculateJobPrice } from './pricing.js';
 
-const MAX_CANVAS_EDGE = 1400;
+const MAX_CANVAS_EDGE = 2048;
 const BIN_SIZE = 24;
 
 function clamp(value, min, max) {
@@ -807,7 +807,7 @@ async function svgToPdfBlob(svg, fallbackWidth, fallbackHeight) {
   }
 }
 
-async function svgToPngBlob(svg, fallbackWidth, fallbackHeight) {
+async function svgToPngBlob(svg, fallbackWidth, fallbackHeight, options = {}) {
   const { width, height } = dimensionsFromSvg(svg, fallbackWidth, fallbackHeight);
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
@@ -818,11 +818,18 @@ async function svgToPngBlob(svg, fallbackWidth, fallbackHeight) {
       img.src = url;
     });
     const canvas = document.createElement('canvas');
-    canvas.width = Math.min(2400, Math.max(640, width.viewportPx * 2));
-    canvas.height = Math.min(3200, Math.max(640, height.viewportPx * 2));
+    const scale = normalizeNumber(options.scale, 2);
+    const maxWidth = normalizeNumber(options.maxWidth, 2400);
+    const maxHeight = normalizeNumber(options.maxHeight, 3200);
+    canvas.width = Math.min(maxWidth, Math.max(640, Math.ceil(width.viewportPx * scale)));
+    canvas.height = Math.min(maxHeight, Math.max(640, Math.ceil(height.viewportPx * scale)));
     const context = canvas.getContext('2d');
-    context.fillStyle = '#ffffff';
-    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    if (options.background !== null) {
+      context.fillStyle = options.background || '#ffffff';
+      context.fillRect(0, 0, canvas.width, canvas.height);
+    }
     context.drawImage(image, 0, 0, canvas.width, canvas.height);
     return canvasToBlob(canvas);
   } finally {
@@ -837,7 +844,12 @@ function fileUrl(blob) {
 async function addSvgPdf(zip, name, svg, width, height, options = {}) {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
   const pdfBlob = await svgToPdfBlob(svg, width, height);
-  const previewBlob = options.includePreviewPng ? await svgToPngBlob(svg, options.previewWidth || width, options.previewHeight || height) : null;
+  const previewBlob = options.includePreviewPng
+    ? await svgToPngBlob(svg, options.previewWidth || width, options.previewHeight || height, {
+        background: options.previewBackground || '#ffffff',
+        scale: options.previewScale || 2
+      })
+    : null;
   zip.file(`${name}.svg`, svgBlob);
   zip.file(`${name}.pdf`, pdfBlob);
   if (previewBlob && options.includePreviewPng !== false) {
@@ -881,7 +893,12 @@ export async function processImageLocally(file, settings) {
   const zip = new JSZip();
   const separationZip = new JSZip();
   const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height);
-  const previewBlob = await svgToPngBlob(fullSvg, width, height);
+  const previewBlob = await svgToPngBlob(fullSvg, width, height, {
+    background: null,
+    scale: 4,
+    maxWidth: 4096,
+    maxHeight: 4096
+  });
   zip.file('preview-full-color.png', previewBlob);
   zip.file('palette.json', JSON.stringify(outputColors, null, 2));
 

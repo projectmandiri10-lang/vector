@@ -773,10 +773,12 @@ export function buildAiPrompt(settings) {
     'Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.',
     'Do not preserve photographic background, lighting gradients, glow, shadow, paper texture, table color, or empty canvas outside the design. Make all non-artwork outside the silhouette pure white or transparent-looking and non-printing.',
     'Any broad color or gradient that touches the image border is capture background unless it is a deliberate closed artwork shape with a clear boundary. Do not turn border-touching photo background into a printable color region.',
+    'Identify the background color family from the outer border and image corners. Remove every color that is the same as, or visually close to, that background color family, even when it appears inside enclosed holes. Do not leave a rectangular background layer.',
+    'Return isolated artwork on a transparent background if alpha is supported. If transparency is not supported, use pure #FFFFFF only for empty non-printing space with no colored halo or off-white fringe.',
     'If the same background is visible through enclosed holes inside letters, logos, counters, boxes, or ring shapes, keep those holes non-printing too; do not fill them as artwork color.',
     'Preserve composition, text, proportions, important visible colors, and deliberate design shapes. Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.',
     'Use solid flat colors only. No gradients, no shadows, no texture, no blur, no halftone, no noisy edge pixels.',
-    'Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges.',
+    'Make the outermost artwork silhouette smooth, clean, closed, continuous, high-density, anti-aliased, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges or stair-stepped low-resolution pixels.',
     'For text and logos, redraw the letterforms as clean bold shapes with smooth contours. Do not preserve pixel damage, rough source edges, gray anti-alias dust, or lighting artifacts.',
     'Avoid jagged outer contours, wavy borders, accidental rough corners, broken outlines, fringing, glow, anti-aliased halos, and noisy edge artifacts.',
     settings.productionType === 'sablon'
