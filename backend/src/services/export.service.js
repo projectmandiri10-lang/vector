@@ -69,6 +69,7 @@ export async function exportSvgToPdf(svgPath, pdfPath) {
   try {
     browser = await puppeteer.launch({
       headless: 'new',
+      executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
       args: ['--no-sandbox', '--disable-setuid-sandbox']
     });
     const page = await browser.newPage();

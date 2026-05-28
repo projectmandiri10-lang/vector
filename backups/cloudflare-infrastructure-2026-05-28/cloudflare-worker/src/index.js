@@ -18,7 +18,7 @@ const DEFAULT_PRICING = {
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Processor-API-Key'
+  'Access-Control-Allow-Headers': 'Authorization,Content-Type'
 };
 
 function requireEnvValue(env, key) {
@@ -59,10 +59,6 @@ function bearerToken(request) {
 
 function storageBaseUrl(env) {
   return `${supabaseBaseUrl(env)}/storage/v1`;
-}
-
-function processorBaseUrl(env) {
-  return requireEnvValue(env, 'PROCESSOR_BASE_URL').replace(/\/+$/, '');
 }
 
 function encodeStoragePath(path) {
@@ -379,9 +375,7 @@ function handleHealth(env) {
       supabaseServiceRoleKey: hasEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY'),
       geminiApiKey: hasEnvValue(env, 'GEMINI_API_KEY'),
       geminiAnalysisModel: env.GEMINI_ANALYSIS_MODEL || 'gemini-3.1-pro-preview',
-      imageModels: imageModelCandidates(env),
-      processorBaseUrl: hasEnvValue(env, 'PROCESSOR_BASE_URL'),
-      processorApiKey: hasEnvValue(env, 'PROCESSOR_API_KEY')
+      imageModels: imageModelCandidates(env)
     },
     endpoints: [
       'GET /api/me/balance',
@@ -389,9 +383,6 @@ function handleHealth(env) {
       'POST /api/jobs/commit',
       'DELETE /api/jobs/:jobId',
       'POST /api/jobs/:jobId/artifacts',
-      'POST /api/processor/jobs',
-      'GET /api/processor/jobs/:jobId',
-      'GET /api/processor/jobs/:jobId/download/...',
       'GET /api/example-jobs',
       'POST /api/admin/jobs/:jobId/set-example',
       'POST /api/admin/jobs/:jobId/unset-example',
@@ -751,32 +742,6 @@ async function handleAiRedraw(env, request) {
       'Content-Type': 'image/png',
       'X-AI-Ledger-Id': ledgerId
     }
-  });
-}
-
-async function handleProcessorProxy(env, request, processorPath) {
-  await requireUser(env, request);
-  const upstreamUrl = `${processorBaseUrl(env)}${processorPath}`;
-  const headers = new Headers(request.headers);
-  headers.delete('authorization');
-  headers.delete('Authorization');
-  headers.delete('host');
-  headers.delete('Host');
-  headers.set('x-processor-api-key', requireEnvValue(env, 'PROCESSOR_API_KEY'));
-
-  const upstream = await fetch(upstreamUrl, {
-    method: request.method,
-    headers,
-    body: request.method === 'GET' || request.method === 'HEAD' ? undefined : request.body,
-    redirect: 'manual'
-  });
-
-  const responseHeaders = new Headers(upstream.headers);
-  Object.entries(corsHeaders).forEach(([key, value]) => responseHeaders.set(key, value));
-  return new Response(upstream.body, {
-    status: upstream.status,
-    statusText: upstream.statusText,
-    headers: responseHeaders
   });
 }
 
@@ -1495,10 +1460,6 @@ export default {
       if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return await handleQuote(env, request);
       if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return await handleCommitJob(env, request);
       if (url.pathname === '/api/example-jobs' && request.method === 'GET') return await handleExampleJobs(env, request);
-      const processorMatch = url.pathname.match(/^\/api\/processor(\/jobs(?:\/.*)?)$/);
-      if (processorMatch && ['GET', 'POST', 'DELETE'].includes(request.method)) {
-        return await handleProcessorProxy(env, request, `/api${processorMatch[1]}`);
-      }
       const artifactsMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)\/artifacts$/);
       if (artifactsMatch && request.method === 'POST') return await handleJobArtifactsUpload(env, request, artifactsMatch[1]);
       const deleteJobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)$/);

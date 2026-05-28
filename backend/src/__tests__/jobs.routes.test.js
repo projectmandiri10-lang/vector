@@ -119,3 +119,17 @@ test('DELETE /api/jobs/:jobId rejects missing and active jobs', async () => {
   const activeResponse = await request(app).delete(`/api/jobs/${activeId}`);
   assert.equal(activeResponse.status, 409);
 });
+
+test('processor API key protects job routes when configured', async () => {
+  process.env.PROCESSOR_API_KEY = 'test-processor-key';
+
+  try {
+    const rejected = await request(app).get('/api/jobs');
+    assert.equal(rejected.status, 401);
+
+    const accepted = await request(app).get('/api/jobs').set('x-processor-api-key', 'test-processor-key');
+    assert.equal(accepted.status, 200);
+  } finally {
+    delete process.env.PROCESSOR_API_KEY;
+  }
+});

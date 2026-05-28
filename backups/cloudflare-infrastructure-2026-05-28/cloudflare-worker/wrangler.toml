@@ -7,13 +7,9 @@ GEMINI_ANALYSIS_MODEL = "gemini-3.1-pro-preview"
 GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
 GEMINI_IMAGE_SIZE = "2K"
 SUPABASE_URL = "https://aemnvrxpptessfxaefqe.supabase.co"
-# Isi setelah backend processor berhasil deploy ke Cloud Run.
-# PROCESSOR_BASE_URL = "https://design-mudah-processor-xxxxx.a.run.app"
 
 [secrets]
 required = ["SUPABASE_SERVICE_ROLE_KEY", "GEMINI_API_KEY"]
-# Optional untuk proxy processor Cloud Run:
-# PROCESSOR_API_KEY
 
 # Set required secrets before deploy:
 # wrangler secret put SUPABASE_SERVICE_ROLE_KEY

@@ -1,0 +1,54 @@
+substitutions:
+  _REGION: asia-southeast2
+  _ARTIFACT_REPOSITORY: design-mudah
+  _SERVICE: design-mudah-processor
+  _FRONTEND_ORIGIN: https://designmudah.pages.dev
+
+steps:
+  - id: build-backend-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - -t
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPOSITORY}/${_SERVICE}:$SHORT_SHA
+      - ./backend
+
+  - id: push-backend-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPOSITORY}/${_SERVICE}:$SHORT_SHA
+
+  - id: deploy-cloud-run
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPOSITORY}/${_SERVICE}:$SHORT_SHA
+      - --region
+      - ${_REGION}
+      - --platform
+      - managed
+      - --allow-unauthenticated
+      - --execution-environment
+      - gen2
+      - --cpu
+      - "2"
+      - --memory
+      - 2Gi
+      - --timeout
+      - "900"
+      - --concurrency
+      - "2"
+      - --max-instances
+      - "1"
+      - --set-env-vars
+      - NODE_ENV=production,STORAGE_DIR=/tmp/vectorizer-storage,MAX_UPLOAD_MB=10,CORS_ORIGIN=${_FRONTEND_ORIGIN},GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview,GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview,GEMINI_IMAGE_SIZE=2K
+      - --set-secrets
+      - GEMINI_API_KEY=gemini-api-key:latest,PROCESSOR_API_KEY=processor-api-key:latest
+
+images:
+  - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_ARTIFACT_REPOSITORY}/${_SERVICE}:$SHORT_SHA

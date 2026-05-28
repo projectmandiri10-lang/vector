@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { pathToFileURL } from 'node:url';
+import { processorAuth, processorAuthEnabled } from './middleware/processorAuth.js';
 import jobsRouter from './routes/jobs.routes.js';
 import { cleanupOldJobs, ensureStorage, markInterruptedJobsFailed } from './utils/file.js';
 
@@ -25,11 +26,15 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'ai-redraw-vector-backend',
-    model: process.env.GEMINI_IMAGE_MODEL || process.env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview'
+    runtime: process.env.K_SERVICE ? 'cloud-run' : 'node',
+    processorAuth: processorAuthEnabled(),
+    redrawProvider: 'gemini',
+    redrawModel: process.env.GEMINI_IMAGE_MODEL || process.env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview',
+    redrawScope: 'only when inputMode=ai_redraw'
   });
 });
 
-app.use('/api/jobs', jobsRouter);
+app.use('/api/jobs', processorAuth, jobsRouter);
 
 app.use((err, _req, res, _next) => {
   const status = err.status || err.statusCode || 500;

@@ -14,6 +14,7 @@ Repo ini juga sudah berisi jalur SaaS baru:
 Panduan deploy lengkap ada di `DEPLOY_CLOUDFLARE_SUPABASE.md`.
 
 Backend Express di folder `backend/` tetap tersedia sebagai legacy/dev workflow lokal yang memakai filesystem server.
+Backend ini sekarang juga bisa dipaketkan sebagai Google Cloud Run processor untuk trace, cutline, separasi warna, PDF, ZIP, dan registration mark. Panduan lengkap ada di `DEPLOY_GOOGLE_CLOUD_RUN.md`.
 
 ## 1. Install Backend
 
