@@ -17,6 +17,26 @@ function colorDistance(a, b) {
   return Math.sqrt((a.r - b.r) ** 2 + (a.g - b.g) ** 2 + (a.b - b.b) ** 2);
 }
 
+function colorChroma({ r, g, b }) {
+  return Math.max(r, g, b) - Math.min(r, g, b);
+}
+
+function averageChannel({ r, g, b }) {
+  return (r + g + b) / 3;
+}
+
+function shouldUseHardSpotColors(settings = {}) {
+  return settings.productionType === 'sablon' || settings.separateColors === true;
+}
+
+function canonicalizeSpotPixel(pixel, settings = {}) {
+  if (!shouldUseHardSpotColors(settings)) return pixel;
+  if (colorChroma(pixel) <= 32) {
+    return averageChannel(pixel) >= 165 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+  }
+  return pixel;
+}
+
 function isNearWhite({ r, g, b }) {
   return r >= 242 && g >= 242 && b >= 242;
 }
@@ -53,10 +73,10 @@ function canvasToBlob(canvas, type = 'image/png', quality) {
   return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob), type, quality));
 }
 
-function mergeSimilarColors(colors, maxColors) {
+function mergeSimilarColors(colors, maxColors, mergeDistance = 42) {
   const merged = [];
   for (const color of colors) {
-    const existing = merged.find((candidate) => colorDistance(candidate, color) < 42);
+    const existing = merged.find((candidate) => colorDistance(candidate, color) < mergeDistance);
     if (existing) {
       const total = existing.count + color.count;
       existing.r = Math.round((existing.r * existing.count + color.r * color.count) / total);
@@ -73,6 +93,14 @@ function mergeSimilarColors(colors, maxColors) {
   return merged.sort((a, b) => b.count - a.count).slice(0, maxColors);
 }
 
+function dropTinySpotColors(colors, enabled) {
+  if (!enabled || colors.length <= 3) return colors;
+  const total = colors.reduce((sum, color) => sum + color.count, 0);
+  const minPixels = Math.max(24, total * 0.001);
+  const filtered = colors.filter((color) => color.count >= minPixels);
+  return filtered.length >= 2 ? filtered : colors;
+}
+
 function buildPalette(imageData, settings) {
   const histogram = new Map();
   for (let index = 0; index < imageData.data.length; index += 4) {
@@ -84,16 +112,20 @@ function buildPalette(imageData, settings) {
       b: imageData.data[index + 2]
     };
     if (settings.whiteAsBackground && isNearWhite(pixel)) continue;
-    const key = `${Math.floor(pixel.r / BIN_SIZE)}-${Math.floor(pixel.g / BIN_SIZE)}-${Math.floor(pixel.b / BIN_SIZE)}`;
+    const quantizedPixel = canonicalizeSpotPixel(pixel, settings);
+    const key = `${Math.floor(quantizedPixel.r / BIN_SIZE)}-${Math.floor(quantizedPixel.g / BIN_SIZE)}-${Math.floor(quantizedPixel.b / BIN_SIZE)}`;
     const current = histogram.get(key) || { r: 0, g: 0, b: 0, count: 0 };
-    current.r += pixel.r;
-    current.g += pixel.g;
-    current.b += pixel.b;
+    current.r += quantizedPixel.r;
+    current.g += quantizedPixel.g;
+    current.b += quantizedPixel.b;
     current.count += 1;
     histogram.set(key, current);
   }
 
-  const maxColors = settings.colorLimitMode === 'manual' ? clamp(Number.parseInt(settings.maxColors || 4, 10), 2, 6) : 6;
+  const useHardSpotColors = shouldUseHardSpotColors(settings);
+  const maxColors =
+    settings.colorLimitMode === 'manual' || useHardSpotColors ? clamp(Number.parseInt(settings.maxColors || 4, 10), 2, 6) : 6;
+  const mergeDistance = useHardSpotColors ? 150 : 42;
   const candidates = [...histogram.values()]
     .map((bucket) => ({
       r: Math.round(bucket.r / bucket.count),
@@ -103,7 +135,7 @@ function buildPalette(imageData, settings) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  const palette = mergeSimilarColors(candidates, maxColors).map((color, index) => ({
+  const palette = dropTinySpotColors(mergeSimilarColors(candidates, maxColors, mergeDistance), useHardSpotColors).map((color, index) => ({
     index: index + 1,
     hex: rgbToHex(color),
     r: color.r,
@@ -126,6 +158,141 @@ function nearestColorIndex(pixel, palette) {
     }
   });
   return bestIndex;
+}
+
+function recomputeColors(assignments, palette, width, height) {
+  const colors = palette.map((color) => ({
+    ...color,
+    count: 0,
+    touchesTop: false,
+    touchesRight: false,
+    touchesBottom: false,
+    touchesLeft: false,
+    bounds: { x: width, y: height, maxX: 0, maxY: 0, width: 0, height: 0 }
+  }));
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const colorIndex = assignments[width * y + x];
+      if (colorIndex < 0) continue;
+      const color = colors[colorIndex];
+      color.count += 1;
+      color.touchesTop ||= y === 0;
+      color.touchesRight ||= x === width - 1;
+      color.touchesBottom ||= y === height - 1;
+      color.touchesLeft ||= x === 0;
+      color.bounds.x = Math.min(color.bounds.x, x);
+      color.bounds.y = Math.min(color.bounds.y, y);
+      color.bounds.maxX = Math.max(color.bounds.maxX, x + 1);
+      color.bounds.maxY = Math.max(color.bounds.maxY, y + 1);
+    }
+  }
+
+  colors.forEach((color) => {
+    if (color.count <= 0) return;
+    color.bounds.width = Math.max(1, color.bounds.maxX - color.bounds.x);
+    color.bounds.height = Math.max(1, color.bounds.maxY - color.bounds.y);
+  });
+
+  return colors.filter((color) => color.count > 0);
+}
+
+function shouldRemoveEdgeComponent(component, color, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const coverage = component.count / totalPixels;
+  const boundsCoverage = (component.width * component.height) / totalPixels;
+  const lowChroma = colorChroma(color) <= 36;
+  if (lowChroma) return true;
+  return component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
+}
+
+function removeEdgeConnectedBackground(assignments, palette, width, height, settings = {}) {
+  if (settings.includeBackgroundInFilmSize) {
+    return {
+      assignments,
+      colors: recomputeColors(assignments, palette, width, height)
+    };
+  }
+
+  const output = new Int16Array(assignments);
+  const visited = new Uint8Array(assignments.length);
+  const edgeStarts = [];
+
+  for (let x = 0; x < width; x += 1) {
+    edgeStarts.push(x, width * (height - 1) + x);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    edgeStarts.push(width * y, width * y + width - 1);
+  }
+
+  for (const start of edgeStarts) {
+    if (visited[start] || output[start] < 0) continue;
+    const colorIndex = output[start];
+    const color = palette[colorIndex];
+    const stack = [start];
+    const pixels = [];
+    let count = 0;
+    let minX = start % width;
+    let maxX = minX;
+    let minY = Math.floor(start / width);
+    let maxY = minY;
+    let touchesTop = false;
+    let touchesRight = false;
+    let touchesBottom = false;
+    let touchesLeft = false;
+    visited[start] = 1;
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const x = current % width;
+      const y = Math.floor(current / width);
+      pixels.push(current);
+      count += 1;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+      touchesTop ||= y === 0;
+      touchesRight ||= x === width - 1;
+      touchesBottom ||= y === height - 1;
+      touchesLeft ||= x === 0;
+
+      const neighbors = [current - 1, current + 1, current - width, current + width];
+      for (const next of neighbors) {
+        if (next < 0 || next >= output.length || visited[next] || output[next] !== colorIndex) continue;
+        const nextX = next % width;
+        const currentX = current % width;
+        if (Math.abs(nextX - currentX) > 1 && (next === current - 1 || next === current + 1)) continue;
+        visited[next] = 1;
+        stack.push(next);
+      }
+    }
+
+    const component = {
+      count,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+      edgeCount: [touchesTop, touchesRight, touchesBottom, touchesLeft].filter(Boolean).length
+    };
+    if (shouldRemoveEdgeComponent(component, color, width, height)) {
+      pixels.forEach((pixel) => {
+        output[pixel] = -1;
+      });
+    }
+  }
+
+  const colors = recomputeColors(output, palette, width, height);
+  if (colors.length === 0) {
+    return {
+      assignments,
+      colors: recomputeColors(assignments, palette, width, height)
+    };
+  }
+
+  return {
+    assignments: output,
+    colors
+  };
 }
 
 function assignPixels(imageData, palette, settings) {
@@ -152,7 +319,7 @@ function assignPixels(imageData, palette, settings) {
         b: imageData.data[offset + 2]
       };
       if (settings.whiteAsBackground && isNearWhite(pixel)) continue;
-      const colorIndex = nearestColorIndex(pixel, palette);
+      const colorIndex = nearestColorIndex(canonicalizeSpotPixel(pixel, settings), palette);
       assignments[imageData.width * y + x] = colorIndex;
       const color = colors[colorIndex];
       color.count += 1;
@@ -565,8 +732,10 @@ export async function processImageLocally(file, settings) {
 
   const imageData = ctx.getImageData(0, 0, width, height);
   const palette = buildPalette(imageData, settings);
-  const { assignments, colors } = assignPixels(imageData, palette, settings);
-  const outputColors = colors;
+  const assigned = assignPixels(imageData, palette, settings);
+  const cleaned = removeEdgeConnectedBackground(assigned.assignments, palette, width, height, settings);
+  const assignments = cleaned.assignments;
+  const outputColors = cleaned.colors;
   const filmPlan = createFilmPlan(outputColors, width, height, settings);
   const printable = filmPlan.colors;
   const bounds = filmPlan.bounds;
@@ -576,7 +745,7 @@ export async function processImageLocally(file, settings) {
   const previewBlob = await canvasToBlob(canvas);
   const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height);
   zip.file('preview-full-color.png', previewBlob);
-  zip.file('palette.json', JSON.stringify(palette, null, 2));
+  zip.file('palette.json', JSON.stringify(outputColors, null, 2));
 
   const separations = [];
   if (settings.separateColors) {

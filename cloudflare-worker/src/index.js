@@ -768,12 +768,14 @@ async function requestRetouchedImage(env, image, settings, ledgerId) {
 
 export function buildAiPrompt(settings) {
   return [
-    'Faithfully redraw only the actual artwork from the uploaded photo as a clean flat vector-style illustration for sticker and manual screen printing.',
+    'Faithfully redraw only the actual artwork from the uploaded photo as a fresh clean cartoon/vector illustration for sticker and manual screen printing.',
+    'This is a true redraw from shapes and colors, not pixel repair, not upscaling, not sharpening, and not automatic photo cleanup. Rebuild the artwork with smooth intentional vector-like shapes.',
     'Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.',
     'Do not preserve photographic background, lighting gradients, glow, shadow, paper texture, table color, or empty canvas outside the design. Make all non-artwork outside the silhouette pure white or transparent-looking and non-printing.',
     'Preserve composition, text, proportions, important visible colors, and deliberate design shapes. Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.',
     'Use solid flat colors only. No gradients, no shadows, no texture, no blur, no halftone, no noisy edge pixels.',
     'Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges.',
+    'For text and logos, redraw the letterforms as clean bold shapes with smooth contours. Do not preserve pixel damage, rough source edges, gray anti-alias dust, or lighting artifacts.',
     'Avoid jagged outer contours, wavy borders, accidental rough corners, broken outlines, fringing, glow, anti-aliased halos, and noisy edge artifacts.',
     settings.productionType === 'sablon'
       ? 'Optimize for clean spot-color screen print separation. Every color region must be intentional printable artwork; do not create any separate film for the photo background or lighting gradient.'

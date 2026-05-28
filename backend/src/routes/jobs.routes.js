@@ -253,7 +253,9 @@ async function processJob(jobId, uploadedBuffer) {
       const quantized = await quantizeImage(sourceImagePath, {
         colorLimitMode: meta.settings.colorLimitMode,
         maxColors: meta.settings.maxColors,
-        whiteAsBackground: meta.settings.whiteAsBackground
+        whiteAsBackground: meta.settings.whiteAsBackground,
+        productionType: meta.settings.productionType,
+        separateColors: meta.settings.separateColors
       });
       vectorWidth = quantized.width;
       vectorHeight = quantized.height;
@@ -261,7 +263,10 @@ async function processJob(jobId, uploadedBuffer) {
       await fs.writeJson(safeJobPath(jobId, 'palette.json'), palette, { spaces: 2 });
 
       const masks = await createMasksForPalette(sourceImagePath, palette, safeJobPath(jobId, 'masks'), {
-        whiteAsBackground: meta.settings.whiteAsBackground
+        whiteAsBackground: meta.settings.whiteAsBackground,
+        productionType: meta.settings.productionType,
+        separateColors: meta.settings.separateColors,
+        includeBackgroundInFilmSize: meta.settings.includeBackgroundInFilmSize
       });
 
       const vectorResult = await vectorizeMasks(masks, {

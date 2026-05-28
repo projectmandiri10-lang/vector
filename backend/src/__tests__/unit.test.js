@@ -9,7 +9,7 @@ import { buildRedrawPrompt } from '../services/aiRedraw.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
-import { isLowChroma, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
+import { canonicalizeSpotPixel, isLowChroma, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
 import { buildPrintLayout, getPaperSizeMm } from '../utils/paper.js';
 import { createRegistrationMarks } from '../utils/registrationMarks.js';
 
@@ -32,6 +32,7 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   });
 
   assert.match(prompt, /Faithfully redraw only the actual artwork/);
+  assert.match(prompt, /true redraw from shapes and colors, not pixel repair/);
   assert.match(prompt, /Preserve all important visible colors/);
   assert.match(prompt, /Separate the real design from camera background/);
   assert.match(prompt, /Treat white as a real printable artwork color/);
@@ -59,6 +60,9 @@ test('color helpers detect near white background and nearest palette', () => {
   assert.equal(isLowChroma({ r: 218, g: 59, b: 82 }), false);
   assert.equal(isNearWhite({ r: 247, g: 248, b: 249 }), true);
   assert.equal(isNearWhite({ r: 240, g: 248, b: 249 }), false);
+  assert.deepEqual(canonicalizeSpotPixel({ r: 229, g: 229, b: 228 }, { productionType: 'sablon' }), { r: 255, g: 255, b: 255 });
+  assert.deepEqual(canonicalizeSpotPixel({ r: 93, g: 94, b: 100 }, { productionType: 'sablon' }), { r: 0, g: 0, b: 0 });
+  assert.deepEqual(canonicalizeSpotPixel({ r: 249, g: 210, b: 4 }, { productionType: 'sablon' }), { r: 249, g: 210, b: 4 });
   assert.equal(
     nearestColorIndex({ r: 250, g: 10, b: 10 }, [
       { r: 0, g: 0, b: 0 },
@@ -167,6 +171,46 @@ test('quantizeImage defaults to automatic colors and manual mode limits palette 
 
     assert.equal(automatic.palette.length, 5);
     assert.equal(manual.palette.length, 3);
+  } finally {
+    await fs.remove(tempDir);
+  }
+});
+
+test('sablon quantize collapses grayscale anti-alias colors into black and white spot colors', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-spot-color-test-'));
+  try {
+    const sourcePath = path.join(tempDir, 'source.png');
+    const png = new PNG({ width: 40, height: 10, colorType: 6 });
+    const colors = [
+      [20, 23, 32],
+      [93, 94, 100],
+      [229, 229, 228],
+      [249, 210, 4]
+    ];
+
+    for (let y = 0; y < png.height; y += 1) {
+      for (let x = 0; x < png.width; x += 1) {
+        const [r, g, b] = colors[Math.floor(x / 10)];
+        const idx = (png.width * y + x) << 2;
+        png.data[idx] = r;
+        png.data[idx + 1] = g;
+        png.data[idx + 2] = b;
+        png.data[idx + 3] = 255;
+      }
+    }
+
+    await fs.writeFile(sourcePath, PNG.sync.write(png));
+    const quantized = await quantizeImage(sourcePath, {
+      colorLimitMode: 'auto',
+      whiteAsBackground: false,
+      productionType: 'sablon',
+      separateColors: true
+    });
+
+    assert.deepEqual(
+      quantized.palette.map((color) => color.hex).sort(),
+      ['#000000', '#F9D204', '#FFFFFF']
+    );
   } finally {
     await fs.remove(tempDir);
   }

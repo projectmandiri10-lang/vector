@@ -6,6 +6,7 @@ test('buildAiPrompt emphasizes smooth outer edges and faithful colors', () => {
   const prompt = buildAiPrompt({ productionType: 'sablon' });
 
   assert.match(prompt, /Faithfully redraw only the actual artwork/);
+  assert.match(prompt, /true redraw from shapes and colors, not pixel repair/);
   assert.match(prompt, /Separate the real design from camera background/);
   assert.match(prompt, /Do not preserve photographic background, lighting gradients/);
   assert.match(prompt, /Preserve a dark or colored background only when it is clearly an intentional bounded shape/);

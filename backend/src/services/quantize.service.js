@@ -1,7 +1,7 @@
 import fs from 'fs-extra';
 import path from 'node:path';
 import { PNG } from 'pngjs';
-import { colorDistance, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
+import { canonicalizeSpotPixel, colorChroma, colorDistance, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
 
 async function readPng(filePath) {
   return new Promise((resolve, reject) => {
@@ -38,6 +38,87 @@ function shouldRemoveMaskComponent(component) {
   if (component.count <= 24) return true;
   if (component.count <= 80 && (component.width <= 4 || component.height <= 4)) return true;
   return component.count <= 160 && (component.width <= 2 || component.height <= 2);
+}
+
+function shouldRemoveEdgeMaskComponent(component, color, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const coverage = component.count / totalPixels;
+  const boundsCoverage = (component.width * component.height) / totalPixels;
+  const lowChroma = colorChroma(color) <= 36;
+  if (lowChroma) return true;
+  return component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
+}
+
+function cleanupEdgeBackgroundComponents(png, color, options = {}) {
+  if (options.includeBackgroundInFilmSize === true) return;
+
+  const visited = new Uint8Array(png.width * png.height);
+  const edgeStarts = [];
+  for (let x = 0; x < png.width; x += 1) {
+    edgeStarts.push(x, png.width * (png.height - 1) + x);
+  }
+  for (let y = 1; y < png.height - 1; y += 1) {
+    edgeStarts.push(png.width * y, png.width * y + png.width - 1);
+  }
+
+  for (const start of edgeStarts) {
+    const startX = start % png.width;
+    const startY = Math.floor(start / png.width);
+    if (visited[start] || !isActiveMaskPixel(png, startX, startY)) continue;
+
+    const stack = [start];
+    const pixels = [];
+    let count = 0;
+    let minX = startX;
+    let maxX = startX;
+    let minY = startY;
+    let maxY = startY;
+    let touchesTop = false;
+    let touchesRight = false;
+    let touchesBottom = false;
+    let touchesLeft = false;
+    visited[start] = 1;
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const currentX = current % png.width;
+      const currentY = Math.floor(current / png.width);
+      pixels.push(current);
+      count += 1;
+      minX = Math.min(minX, currentX);
+      maxX = Math.max(maxX, currentX);
+      minY = Math.min(minY, currentY);
+      maxY = Math.max(maxY, currentY);
+      touchesTop ||= currentY === 0;
+      touchesRight ||= currentX === png.width - 1;
+      touchesBottom ||= currentY === png.height - 1;
+      touchesLeft ||= currentX === 0;
+
+      const neighbors = [
+        [currentX - 1, currentY],
+        [currentX + 1, currentY],
+        [currentX, currentY - 1],
+        [currentX, currentY + 1]
+      ];
+      for (const [nextX, nextY] of neighbors) {
+        if (nextX < 0 || nextX >= png.width || nextY < 0 || nextY >= png.height) continue;
+        const next = png.width * nextY + nextX;
+        if (visited[next] || !isActiveMaskPixel(png, nextX, nextY)) continue;
+        visited[next] = 1;
+        stack.push(next);
+      }
+    }
+
+    const component = {
+      count,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+      edgeCount: [touchesTop, touchesRight, touchesBottom, touchesLeft].filter(Boolean).length
+    };
+    if (shouldRemoveEdgeMaskComponent(component, color, png.width, png.height)) {
+      pixels.forEach((pixel) => clearMaskPixel(png, pixel));
+    }
+  }
 }
 
 function cleanupMaskNoise(png) {
@@ -99,10 +180,10 @@ function cleanupMaskNoise(png) {
   }
 }
 
-function mergeSimilarColors(colors, maxColors) {
+function mergeSimilarColors(colors, maxColors, mergeDistance = 42) {
   const merged = [];
   for (const color of colors) {
-    const existing = merged.find((candidate) => colorDistance(candidate, color) < 42);
+    const existing = merged.find((candidate) => colorDistance(candidate, color) < mergeDistance);
     if (existing) {
       const total = existing.count + color.count;
       existing.r = Math.round((existing.r * existing.count + color.r * color.count) / total);
@@ -117,6 +198,14 @@ function mergeSimilarColors(colors, maxColors) {
   }
 
   return merged.sort((a, b) => b.count - a.count).slice(0, maxColors);
+}
+
+function dropTinySpotColors(colors, enabled) {
+  if (!enabled || colors.length <= 3) return colors;
+  const total = colors.reduce((sum, color) => sum + color.count, 0);
+  const minPixels = Math.max(24, total * 0.001);
+  const filtered = colors.filter((color) => color.count >= minPixels);
+  return filtered.length >= 2 ? filtered : colors;
 }
 
 function normalizeMaxColors(value, fallback = 6) {
@@ -141,11 +230,12 @@ export async function quantizeImage(imagePath, options = {}) {
       const b = png.data[idx + 2];
       if (options.whiteAsBackground && isNearWhite({ r, g, b })) continue;
 
-      const key = `${Math.floor(r / binSize)}-${Math.floor(g / binSize)}-${Math.floor(b / binSize)}`;
+      const quantizedPixel = canonicalizeSpotPixel({ r, g, b }, options);
+      const key = `${Math.floor(quantizedPixel.r / binSize)}-${Math.floor(quantizedPixel.g / binSize)}-${Math.floor(quantizedPixel.b / binSize)}`;
       const current = histogram.get(key) || { r: 0, g: 0, b: 0, count: 0 };
-      current.r += r;
-      current.g += g;
-      current.b += b;
+      current.r += quantizedPixel.r;
+      current.g += quantizedPixel.g;
+      current.b += quantizedPixel.b;
       current.count += 1;
       histogram.set(key, current);
     }
@@ -160,8 +250,10 @@ export async function quantizeImage(imagePath, options = {}) {
     }))
     .sort((a, b) => b.count - a.count);
 
-  const maxColors = options.colorLimitMode === 'manual' ? normalizeMaxColors(options.maxColors, 4) : 6;
-  const palette = mergeSimilarColors(candidates, maxColors).map((color, index) => ({
+  const useHardSpotColors = options.productionType === 'sablon' || options.separateColors === true;
+  const maxColors = options.colorLimitMode === 'manual' || useHardSpotColors ? normalizeMaxColors(options.maxColors, 4) : 6;
+  const mergeDistance = useHardSpotColors ? 150 : 42;
+  const palette = dropTinySpotColors(mergeSimilarColors(candidates, maxColors, mergeDistance), useHardSpotColors).map((color, index) => ({
     index: index + 1,
     hex: rgbToHex(color),
     r: color.r,
@@ -206,7 +298,7 @@ export async function createMasksForPalette(imagePath, palette, outputDir, optio
       };
       if (options.whiteAsBackground && isNearWhite(pixel)) continue;
 
-      const activeIndex = nearestColorIndex(pixel, palette);
+      const activeIndex = nearestColorIndex(canonicalizeSpotPixel(pixel, options), palette);
       const target = masks[activeIndex];
       target.png.data[idx] = 0;
       target.png.data[idx + 1] = 0;
@@ -216,6 +308,7 @@ export async function createMasksForPalette(imagePath, palette, outputDir, optio
   }
 
   for (const mask of masks) {
+    cleanupEdgeBackgroundComponents(mask.png, mask, options);
     cleanupMaskNoise(mask.png);
     await writePng(mask.png, mask.filePath);
     delete mask.png;

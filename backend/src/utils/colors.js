@@ -19,8 +19,20 @@ export function colorChroma({ r, g, b }) {
   return Math.max(r, g, b) - Math.min(r, g, b);
 }
 
+export function averageChannel({ r, g, b }) {
+  return (r + g + b) / 3;
+}
+
 export function isLowChroma(color, tolerance = 18) {
   return colorChroma(color) <= tolerance;
+}
+
+export function canonicalizeSpotPixel(pixel, options = {}) {
+  if (options.productionType !== 'sablon' && options.separateColors !== true) return pixel;
+  if (colorChroma(pixel) <= 32) {
+    return averageChannel(pixel) >= 165 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+  }
+  return pixel;
 }
 
 export function isNearWhite({ r, g, b }) {

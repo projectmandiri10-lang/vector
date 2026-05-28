@@ -1,9 +1,11 @@
 import fs from 'fs-extra';
 import { editImageWithGPTImage2 } from './litellm.service.js';
 
-const basePrompt = `Faithfully redraw only the actual artwork from the uploaded image as a clean flat vector-style illustration suitable for screen printing, sticker production, and automatic vector tracing.
+const basePrompt = `Faithfully redraw only the actual artwork from the uploaded image as a fresh clean cartoon/vector illustration suitable for screen printing, sticker production, and automatic vector tracing.
 
 This is a faithful redraw and cleanup task, not a redesign.
+This is a true redraw from shapes and colors, not pixel repair, not upscaling, not sharpening, and not automatic photo cleanup.
+Rebuild the artwork with smooth intentional vector-like shapes.
 Preserve the main shape, composition, proportions, layout, text, letters, symbols, and recognizable design from the uploaded image.
 Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.
 Preserve all important visible colors from the actual artwork, including dark or black intentional shapes, colored accents, text colors, and small color regions.
@@ -28,6 +30,8 @@ No complex background.
 Use clean edges, high contrast, smooth shapes, and clearly separated color regions.
 Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes.
 Use rounded, intentional contours instead of rough pixel-like edges.
+For text and logos, redraw the letterforms as clean bold shapes with smooth contours.
+Do not preserve pixel damage, rough source edges, gray anti-alias dust, or lighting artifacts.
 Avoid jagged outer contours, wavy borders, broken outlines, fringing, glow, anti-aliased halos, and rough noisy edge artifacts.
 Make the result suitable for vector tracing and spot color separation.
 Keep colors limited, distinct, and easy to separate.
