@@ -151,6 +151,7 @@ export function decorateAdminJobs(jobs, profiles, exampleJobsValue) {
   const currentExamples = normalizeExampleJobsSetting(exampleJobsValue);
   return jobs.map((job) => {
     const owner = profilesById.get(job.user_id) || {};
+    const ownerIsSuperuser = isSuperuserProfile(owner, owner.email);
     const exampleArtifacts = getExampleArtifactsFromManifest(job.manifest);
     const examplePublished = isPublishedExample(job);
     const legacyExample = currentExamples[job.production_type]?.jobId === job.id;
@@ -158,7 +159,7 @@ export function decorateAdminJobs(jobs, profiles, exampleJobsValue) {
       ...job,
       user_email: owner.email || '',
       owner_role: owner.role || 'user',
-      can_set_as_example: job.status === 'done' && owner.role === 'superuser' && hasCompleteExampleArtifacts(job.manifest, job.production_type),
+      can_set_as_example: job.status === 'done' && ownerIsSuperuser && hasCompleteExampleArtifacts(job.manifest, job.production_type),
       can_unset_example: examplePublished || legacyExample,
       is_active_example: examplePublished || legacyExample,
       is_example_public: examplePublished,

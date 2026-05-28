@@ -107,6 +107,27 @@ test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligi
   assert.equal(decorated[2].can_set_as_example, false);
 });
 
+test('decorateAdminJobs treats protected whitelist email as example-capable superadmin', () => {
+  const decorated = decorateAdminJobs(
+    [
+      {
+        id: 'job-whitelist',
+        user_id: 'whitelist-1',
+        production_type: 'sablon',
+        status: 'done',
+        is_example_public: false,
+        deleted_at: null,
+        manifest: { exampleArtifacts: completeArtifacts('sablon') }
+      }
+    ],
+    [{ id: 'whitelist-1', email: 'jho.j80@gmail.com', role: 'user' }],
+    {}
+  );
+
+  assert.equal(decorated[0].can_set_as_example, true);
+  assert.equal(decorated[0].owner_role, 'user');
+});
+
 test('normalizeExampleJobsSetting keeps rich example fields and legacy imageUrl fallback', () => {
   const normalized = normalizeExampleJobsSetting({
     sticker: {

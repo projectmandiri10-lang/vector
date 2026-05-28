@@ -2,7 +2,7 @@ import { INPUT_MODE_RETOUCH } from './modes.js';
 import { buildPrintLayout, createArtworkRegistrationMarks } from './localPrint.js';
 import { calculateJobPrice } from './pricing.js';
 
-const MAX_CANVAS_EDGE = 720;
+const MAX_CANVAS_EDGE = 1400;
 const BIN_SIZE = 24;
 
 function clamp(value, min, max) {
@@ -27,6 +27,10 @@ function averageChannel({ r, g, b }) {
 
 function shouldUseHardSpotColors(settings = {}) {
   return settings.productionType === 'sablon' || settings.separateColors === true;
+}
+
+function requestedSpotColorLimit(settings = {}) {
+  return clamp(Number.parseInt(settings.maxColors || 4, 10), 2, 6);
 }
 
 function canonicalizeSpotPixel(pixel, settings = {}) {
@@ -123,8 +127,12 @@ function buildPalette(imageData, settings) {
   }
 
   const useHardSpotColors = shouldUseHardSpotColors(settings);
-  const maxColors =
-    settings.colorLimitMode === 'manual' || useHardSpotColors ? clamp(Number.parseInt(settings.maxColors || 4, 10), 2, 6) : 6;
+  const requestedMaxColors = requestedSpotColorLimit(settings);
+  const maxColors = useHardSpotColors
+    ? clamp(Math.max(requestedMaxColors + 3, 5), 2, 8)
+    : settings.colorLimitMode === 'manual'
+      ? requestedMaxColors
+      : 6;
   const mergeDistance = useHardSpotColors ? 150 : 42;
   const candidates = [...histogram.values()]
     .map((bucket) => ({
@@ -145,6 +153,59 @@ function buildPalette(imageData, settings) {
   }));
 
   return palette.length > 0 ? palette : [{ index: 1, hex: '#000000', r: 0, g: 0, b: 0, pixelCount: 0 }];
+}
+
+function remapAssignmentsToSelectedColors(assignments, colors, selectedColors, width, height) {
+  if (selectedColors.length === 0) {
+    return { assignments, colors };
+  }
+
+  const kept = selectedColors.map((color, index) => ({
+    ...color,
+    originalAssignmentIndex: color.index - 1,
+    index: index + 1
+  }));
+  const oldToNewIndex = new Map();
+  const remapDroppedIndex = new Map();
+
+  kept.forEach((color, index) => {
+    oldToNewIndex.set(color.originalAssignmentIndex, index);
+  });
+
+  colors.forEach((color) => {
+    if (oldToNewIndex.has(color.index - 1)) return;
+    const nearest = nearestColorIndex(color, kept);
+    remapDroppedIndex.set(color.index - 1, nearest);
+  });
+
+  const output = new Int16Array(assignments.length);
+  output.fill(-1);
+  for (let index = 0; index < assignments.length; index += 1) {
+    const colorIndex = assignments[index];
+    if (colorIndex < 0) continue;
+    output[index] = oldToNewIndex.has(colorIndex) ? oldToNewIndex.get(colorIndex) : remapDroppedIndex.get(colorIndex);
+  }
+
+  const normalizedPalette = kept.map(({ originalAssignmentIndex, ...color }) => color);
+  return {
+    assignments: output,
+    colors: recomputeColors(output, normalizedPalette, width, height)
+  };
+}
+
+function enforcePrintableColorLimit(assignments, colors, settings, width, height) {
+  if (!shouldUseHardSpotColors(settings)) {
+    return { assignments, colors };
+  }
+
+  const limit = requestedSpotColorLimit(settings);
+  const selectedColors =
+    colors.length <= limit ? colors : [...colors].sort((left, right) => right.count - left.count).slice(0, limit);
+
+  return {
+    ...remapAssignmentsToSelectedColors(assignments, colors, selectedColors, width, height),
+    wasColorLimited: colors.length > selectedColors.length
+  };
 }
 
 function nearestColorIndex(pixel, palette) {
@@ -728,22 +789,25 @@ export async function processImageLocally(file, settings) {
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bitmap, 0, 0, width, height);
 
   const imageData = ctx.getImageData(0, 0, width, height);
   const palette = buildPalette(imageData, settings);
   const assigned = assignPixels(imageData, palette, settings);
   const cleaned = removeEdgeConnectedBackground(assigned.assignments, palette, width, height, settings);
-  const assignments = cleaned.assignments;
-  const outputColors = cleaned.colors;
+  const limited = enforcePrintableColorLimit(cleaned.assignments, cleaned.colors, settings, width, height);
+  const assignments = limited.assignments;
+  const outputColors = limited.colors;
   const filmPlan = createFilmPlan(outputColors, width, height, settings);
   const printable = filmPlan.colors;
   const bounds = filmPlan.bounds;
   const fullSvg = buildFullSvg({ colors: outputColors, assignments, width, height, settings });
   const zip = new JSZip();
   const separationZip = new JSZip();
-  const previewBlob = await canvasToBlob(canvas);
   const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height);
+  const previewBlob = await svgToPngBlob(fullSvg, width, height);
   zip.file('preview-full-color.png', previewBlob);
   zip.file('palette.json', JSON.stringify(outputColors, null, 2));
 
@@ -820,7 +884,7 @@ export async function processImageLocally(file, settings) {
     localOnly: true,
     priceIdr,
     separationFilmCount,
-    palette,
+    palette: outputColors,
     settings,
     files: {
       fullPng: fileUrl(previewBlob),
@@ -853,7 +917,7 @@ export async function processImageLocally(file, settings) {
     manifest: {
       width,
       height,
-      palette,
+      palette: outputColors,
       separationFilmCount,
       hasStickerCutline: Boolean(stickerCutline),
       generatedFiles: [

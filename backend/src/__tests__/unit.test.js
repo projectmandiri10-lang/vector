@@ -37,7 +37,7 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   assert.match(prompt, /Separate the real design from camera background/);
   assert.match(prompt, /Treat white as a real printable artwork color/);
   assert.match(prompt, /Optimize for manual screen printing/);
-  assert.match(prompt, /approximately 4 solid colors as a target/);
+  assert.match(prompt, /approximately 4 printable solid artwork colors/);
   assert.match(prompt, /outermost artwork silhouette smooth, clean, closed, continuous/);
 });
 

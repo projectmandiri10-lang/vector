@@ -11,6 +11,8 @@ Treat the uploaded image as a reference photo. Separate the real design from cam
 Preserve all important visible colors from the actual artwork, including dark or black intentional shapes, colored accents, text colors, and small color regions.
 Keep each original color in the same visual region as the source image.
 Do not recolor the artwork.
+Any broad color or gradient that touches the image border is capture background unless it is a deliberate closed artwork shape with a clear boundary.
+Do not turn border-touching photo background into a printable color region.
 Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.
 Do not remove colored accents.
 Do not omit readable text or brand-like lettering if present.
@@ -68,13 +70,13 @@ export function buildRedrawPrompt(settings) {
 
   if (settings.colorLimitMode === 'auto') {
     lines.push(
-      'Automatically keep the important visible solid colors from the source image. Do not force the artwork into a fixed color count unless colors are visually redundant.'
+      'Automatically keep only intentional visible solid colors from the artwork. Reject photo background gradients, shadows, and camera lighting as colors. Do not force the artwork into a fixed color count unless colors are visually redundant.'
     );
   }
 
   if (settings.colorLimitMode !== 'auto' && settings.maxColors) {
     lines.push(
-      `Use approximately ${settings.maxColors} solid colors as a target for simplifying close color variations. Do not drop distinct important artwork colors; include a background color only if it is a deliberate bounded part of the uploaded design, never if it is just photo lighting or empty backdrop.`
+      `Use at most approximately ${settings.maxColors} printable solid artwork colors, excluding the non-printing background. Merge redundant shading and lighting artifacts first. Do not drop distinct important artwork colors; include a background color only if it is a deliberate bounded part of the uploaded design, never if it is just photo lighting or empty backdrop.`
     );
   }
 

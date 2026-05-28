@@ -767,11 +767,12 @@ async function requestRetouchedImage(env, image, settings, ledgerId) {
 }
 
 export function buildAiPrompt(settings) {
-  return [
+  const lines = [
     'Faithfully redraw only the actual artwork from the uploaded photo as a fresh clean cartoon/vector illustration for sticker and manual screen printing.',
     'This is a true redraw from shapes and colors, not pixel repair, not upscaling, not sharpening, and not automatic photo cleanup. Rebuild the artwork with smooth intentional vector-like shapes.',
     'Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.',
     'Do not preserve photographic background, lighting gradients, glow, shadow, paper texture, table color, or empty canvas outside the design. Make all non-artwork outside the silhouette pure white or transparent-looking and non-printing.',
+    'Any broad color or gradient that touches the image border is capture background unless it is a deliberate closed artwork shape with a clear boundary. Do not turn border-touching photo background into a printable color region.',
     'Preserve composition, text, proportions, important visible colors, and deliberate design shapes. Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.',
     'Use solid flat colors only. No gradients, no shadows, no texture, no blur, no halftone, no noisy edge pixels.',
     'Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges.',
@@ -780,7 +781,21 @@ export function buildAiPrompt(settings) {
     settings.productionType === 'sablon'
       ? 'Optimize for clean spot-color screen print separation. Every color region must be intentional printable artwork; do not create any separate film for the photo background or lighting gradient.'
       : 'Optimize for full-color sticker output with crisp smooth edges suitable for vector tracing and cutline generation.'
-  ].join('\n\n');
+  ];
+
+  if (settings.whiteAsBackground) {
+    lines.push('Treat white, near-white, pale gray, paper, glare, and empty outside area as non-printing background. Internal white only stays if it is clearly enclosed inside the actual artwork.');
+  } else {
+    lines.push('White may be a printable artwork color only inside real letters or bounded design shapes. Still remove outside paper, lighting, wall, table, and photo backdrop completely.');
+  }
+
+  if (settings.colorLimitMode === 'manual' && settings.maxColors) {
+    lines.push(`Target at most ${settings.maxColors} printable spot colors, excluding the non-printing background. Merge only redundant shading or lighting artifacts; do not count the removed photo background as one of the colors.`);
+  } else {
+    lines.push('Automatically choose only intentional flat artwork colors. Reject background gradients, shadows, and camera lighting as colors.');
+  }
+
+  return lines.join('\n\n');
 }
 
 async function handleJobArtifactsUpload(env, request, jobId) {
@@ -1146,7 +1161,7 @@ async function handleExampleJobs(env, request) {
     return json({ exampleJobs: await listLegacyPublishedExampleJobs(env) });
   }
 
-  const superuserIds = new Set(profiles.filter((profile) => profile.role === 'superuser').map((profile) => profile.id));
+  const superuserIds = new Set(profiles.filter((profile) => isSuperuserProfile(profile, profile.email)).map((profile) => profile.id));
   const exampleJobs = jobs
     .filter((job) => superuserIds.has(job.user_id))
     .map((job) => toExampleFeedJob(env, job))
@@ -1251,7 +1266,7 @@ async function handleSetExampleJob(env, request, jobId) {
   if (job.status !== 'done') throw new Error('Hanya job selesai yang bisa dijadikan contoh.');
 
   const owner = profiles.find((profile) => profile.id === job.user_id);
-  if (!owner || owner.role !== 'superuser') throw new Error('Hanya job milik superadmin yang bisa dijadikan contoh.');
+  if (!owner || !isSuperuserProfile(owner, owner.email)) throw new Error('Hanya job milik superadmin yang bisa dijadikan contoh.');
 
   if (!hasCompleteExampleArtifacts(job.manifest, job.production_type)) {
     throw new Error('Job ini belum punya bundle contoh lengkap. Jalankan ulang job superadmin dengan fitur artefak contoh aktif.');
@@ -1289,14 +1304,14 @@ async function handleUnsetExampleJob(env, request, jobId) {
       'id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at',
       'id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at'
     ),
-    supabaseFetch(env, '/rest/v1/profiles?select=id,role', {})
+    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {})
   ]);
 
   if (!job) throw new Error('Job tidak ditemukan.');
   if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
 
   const owner = profiles.find((profile) => profile.id === job.user_id);
-  if (!owner || owner.role !== 'superuser') throw new Error('Hanya job milik superadmin yang bisa dicabut dari contoh.');
+  if (!owner || !isSuperuserProfile(owner, owner.email)) throw new Error('Hanya job milik superadmin yang bisa dicabut dari contoh.');
 
   const publishResult = await patchJobPublishState(
     env,
