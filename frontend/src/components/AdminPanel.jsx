@@ -691,7 +691,7 @@ export default function AdminPanel({ session, enabled }) {
                         disabled={isBusy || !job.can_set_as_example}
                         onClick={() => setJobAsExample(job)}
                         className="inline-flex min-h-8 items-center justify-center gap-1 border border-spruce bg-white px-2 py-1 text-xs font-semibold text-spruce disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
-                        title={job.can_set_as_example ? 'Gunakan job ini sebagai contoh gambar user' : 'Hanya job superadmin yang sudah punya preview sumber yang bisa dijadikan contoh.'}
+                        title={job.can_set_as_example ? 'Gunakan job ini sebagai contoh gambar user' : 'Hanya job superadmin dengan bundle contoh lengkap yang bisa dijadikan contoh.'}
                       >
                         <Star className="h-3.5 w-3.5" aria-hidden="true" />
                         Jadikan contoh

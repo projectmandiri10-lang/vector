@@ -1,4 +1,5 @@
 import { INPUT_MODE_RETOUCH } from './modes.js';
+import { buildPrintLayout, createArtworkRegistrationMarks } from './localPrint.js';
 import { calculateJobPrice } from './pricing.js';
 
 const MAX_CANVAS_EDGE = 720;
@@ -195,6 +196,44 @@ function printableColors(colors, settings, width, height) {
   return filtered.length > 0 ? filtered : colors;
 }
 
+function fullCanvasBounds(width, height) {
+  return {
+    x: 0,
+    y: 0,
+    width,
+    height,
+    maxX: width,
+    maxY: height
+  };
+}
+
+function touchesCanvas(bounds, width, height) {
+  const tolerance = 2;
+  return bounds.x <= tolerance && bounds.y <= tolerance && bounds.maxX >= width - tolerance && bounds.maxY >= height - tolerance;
+}
+
+function createFilmPlan(colors, width, height, settings = {}) {
+  if (settings.includeBackgroundInFilmSize) {
+    return {
+      colors,
+      bounds: fullCanvasBounds(width, height),
+      backgroundColor: null
+    };
+  }
+
+  const backgroundColor = [...colors]
+    .filter((color) => touchesCanvas(color.bounds, width, height))
+    .sort((left, right) => right.count - left.count)[0];
+  const filtered = backgroundColor ? colors.filter((color) => color.index !== backgroundColor.index) : colors;
+  const effectiveColors = filtered.length > 0 ? filtered : colors;
+
+  return {
+    colors: effectiveColors,
+    bounds: mergeBounds(effectiveColors, width, height),
+    backgroundColor: backgroundColor || null
+  };
+}
+
 function rowRunPath(assignments, width, height, activeIndexes) {
   const active = activeIndexes instanceof Set ? activeIndexes : new Set([activeIndexes]);
   const commands = [];
@@ -307,13 +346,37 @@ function buildFullSvg({ colors, assignments, width, height, settings }) {
   return svgDocument({ width, height, body: groups, label: 'Sticker and screen print vector', physicalWidthCm: settings.actualWidthCm });
 }
 
-function buildFilmSvg({ color, assignments, width, height, settings, activeIndexes, label }) {
+function buildFilmSvg({ assignments, width, height, settings, activeIndexes, label, bounds }) {
+  const artworkBounds = bounds || fullCanvasBounds(width, height);
   const path = rowRunPath(assignments, width, height, activeIndexes);
-  const body = `<g id="film-artwork">
+  const layout = buildPrintLayout({
+    sourceWidth: artworkBounds.width,
+    sourceHeight: artworkBounds.height,
+    actualWidthCm: settings.actualWidthCm,
+    paperSize: settings.paperSize,
+    paperOrientation: settings.paperOrientation
+  });
+  const marks = createArtworkRegistrationMarks({
+    x: layout.artworkX,
+    y: layout.artworkY,
+    width: layout.artworkWidthMm,
+    height: layout.artworkHeightMm
+  });
+  const transform = `translate(${layout.artworkX.toFixed(3)} ${layout.artworkY.toFixed(3)}) scale(${layout.scale.toFixed(8)}) translate(${(-artworkBounds.x).toFixed(3)} ${(-artworkBounds.y).toFixed(3)})`;
+  const body = `${marks}
+<g id="film-artwork" transform="${transform}">
 <path d="${path}" fill="#000000" fill-rule="evenodd"/>
 </g>
-<text x="8" y="${height - 8}" fill="#000000" font-family="Arial, sans-serif" font-size="12">${escapeXml(label)}</text>`;
-  return svgDocument({ width, height, body, label, physicalWidthCm: settings.actualWidthCm });
+<text x="${layout.artworkX.toFixed(3)}" y="${(layout.artworkY + layout.artworkHeightMm + 12).toFixed(3)}" fill="#000000" font-family="Arial, sans-serif" font-size="4">${escapeXml(label)}</text>`;
+
+  return {
+    svg: `<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="${layout.paperWidthMm}mm" height="${layout.paperHeightMm}mm" viewBox="0 0 ${layout.paperWidthMm} ${layout.paperHeightMm}" role="img" aria-label="${escapeXml(label)}">
+${body}
+</svg>`,
+    previewWidth: layout.paperWidthMm,
+    previewHeight: layout.paperHeightMm
+  };
 }
 
 function buildCutlineSvg({ assignments, colors, width, height, settings, bounds }) {
@@ -333,10 +396,62 @@ function buildCutlineSvg({ assignments, colors, width, height, settings, bounds 
   return svgDocument({ width, height, body, label: `Sticker cutline ${offsetMm} mm`, physicalWidthCm: actualWidthCm });
 }
 
-async function svgToPdfBlob(svg, width, height, physicalWidthCm) {
+function parseSvgLength(value, fallbackPx = 1024) {
+  if (!value) {
+    return {
+      css: `${fallbackPx}px`,
+      viewportPx: fallbackPx,
+      pdfPoints: fallbackPx * 0.75
+    };
+  }
+
+  const match = String(value).match(/^([\d.]+)([a-z%]*)$/i);
+  if (!match) {
+    return {
+      css: `${fallbackPx}px`,
+      viewportPx: fallbackPx,
+      pdfPoints: fallbackPx * 0.75
+    };
+  }
+
+  const amount = Number(match[1]);
+  const unit = match[2] || 'px';
+
+  if (unit === 'mm') {
+    return {
+      css: `${amount}mm`,
+      viewportPx: Math.ceil((amount / 25.4) * 96),
+      pdfPoints: (amount / 25.4) * 72
+    };
+  }
+
+  if (unit === 'cm') {
+    return {
+      css: `${amount}cm`,
+      viewportPx: Math.ceil((amount / 2.54) * 96),
+      pdfPoints: (amount / 2.54) * 72
+    };
+  }
+
+  return {
+    css: `${amount}px`,
+    viewportPx: Math.ceil(amount),
+    pdfPoints: amount * 0.75
+  };
+}
+
+function dimensionsFromSvg(svg, fallbackWidth = 1024, fallbackHeight = 1024) {
+  const widthMatch = svg.match(/\swidth="([^"]+)"/);
+  const heightMatch = svg.match(/\sheight="([^"]+)"/);
+  return {
+    width: parseSvgLength(widthMatch?.[1], fallbackWidth),
+    height: parseSvgLength(heightMatch?.[1], fallbackHeight)
+  };
+}
+
+async function svgToPdfBlob(svg, fallbackWidth, fallbackHeight) {
   const { jsPDF } = await import('jspdf');
-  const widthMm = normalizeNumber(physicalWidthCm, 10) * 10;
-  const heightMm = (widthMm * height) / width;
+  const { width, height } = dimensionsFromSvg(svg, fallbackWidth, fallbackHeight);
   const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
   try {
     const image = await new Promise((resolve, reject) => {
@@ -346,19 +461,42 @@ async function svgToPdfBlob(svg, width, height, physicalWidthCm) {
       img.src = url;
     });
     const canvas = document.createElement('canvas');
-    canvas.width = Math.min(2400, Math.max(320, width * 2));
-    canvas.height = Math.round((canvas.width * height) / width);
+    canvas.width = Math.min(2400, Math.max(320, width.viewportPx));
+    canvas.height = Math.min(3200, Math.max(320, height.viewportPx));
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
     const pdf = new jsPDF({
-      orientation: widthMm >= heightMm ? 'landscape' : 'portrait',
+      orientation: width.pdfPoints >= height.pdfPoints ? 'landscape' : 'portrait',
       unit: 'mm',
-      format: [widthMm, heightMm]
+      format: [(width.pdfPoints / 72) * 25.4, (height.pdfPoints / 72) * 25.4]
     });
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, widthMm, heightMm);
+    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', 0, 0, (width.pdfPoints / 72) * 25.4, (height.pdfPoints / 72) * 25.4);
     return pdf.output('blob');
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+async function svgToPngBlob(svg, fallbackWidth, fallbackHeight) {
+  const { width, height } = dimensionsFromSvg(svg, fallbackWidth, fallbackHeight);
+  const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+  try {
+    const image = await new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => resolve(img);
+      img.onerror = reject;
+      img.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(2400, Math.max(640, width.viewportPx * 2));
+    canvas.height = Math.min(3200, Math.max(640, height.viewportPx * 2));
+    const context = canvas.getContext('2d');
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvasToBlob(canvas);
   } finally {
     URL.revokeObjectURL(url);
   }
@@ -368,29 +506,22 @@ function fileUrl(blob) {
   return URL.createObjectURL(blob);
 }
 
-function createExamplePreviewDataUrl(canvas) {
-  const maxEdge = 480;
-  const scale = Math.min(1, maxEdge / Math.max(canvas.width, canvas.height));
-  if (scale === 1) return canvas.toDataURL('image/png');
-
-  const scaled = document.createElement('canvas');
-  scaled.width = Math.max(1, Math.round(canvas.width * scale));
-  scaled.height = Math.max(1, Math.round(canvas.height * scale));
-  const ctx = scaled.getContext('2d');
-  ctx.drawImage(canvas, 0, 0, scaled.width, scaled.height);
-  return scaled.toDataURL('image/png');
-}
-
-async function addSvgPdf(zip, name, svg, width, height, settings) {
+async function addSvgPdf(zip, name, svg, width, height, options = {}) {
   const svgBlob = new Blob([svg], { type: 'image/svg+xml' });
-  const pdfBlob = await svgToPdfBlob(svg, width, height, settings.actualWidthCm);
+  const pdfBlob = await svgToPdfBlob(svg, width, height);
+  const previewBlob = options.includePreviewPng ? await svgToPngBlob(svg, options.previewWidth || width, options.previewHeight || height) : null;
   zip.file(`${name}.svg`, svgBlob);
   zip.file(`${name}.pdf`, pdfBlob);
+  if (previewBlob && options.includePreviewPng !== false) {
+    zip.file(`${name}-preview.png`, previewBlob);
+  }
   return {
     svgBlob,
     pdfBlob,
+    previewBlob,
     svg: fileUrl(svgBlob),
-    pdf: fileUrl(pdfBlob)
+    pdf: fileUrl(pdfBlob),
+    preview: previewBlob ? fileUrl(previewBlob) : ''
   };
 }
 
@@ -410,12 +541,14 @@ export async function processImageLocally(file, settings) {
   const palette = buildPalette(imageData, settings);
   const { assignments, colors } = assignPixels(imageData, palette, settings);
   const outputColors = colors;
-  const printable = printableColors(outputColors, settings, width, height);
-  const bounds = mergeBounds(printable, width, height);
+  const filmPlan = createFilmPlan(outputColors, width, height, settings);
+  const printable = filmPlan.colors;
+  const bounds = filmPlan.bounds;
   const fullSvg = buildFullSvg({ colors: outputColors, assignments, width, height, settings });
   const zip = new JSZip();
+  const separationZip = new JSZip();
   const previewBlob = await canvasToBlob(canvas);
-  const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height, settings);
+  const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height);
   zip.file('preview-full-color.png', previewBlob);
   zip.file('palette.json', JSON.stringify(palette, null, 2));
 
@@ -429,9 +562,17 @@ export async function processImageLocally(file, settings) {
         height,
         settings,
         activeIndexes: new Set(printable.map((color) => color.index - 1)),
-        label
+        label,
+        bounds: filmPlan.bounds
       });
-      const files = await addSvgPdf(zip, 'separations/film-underbase', film, width, height, settings);
+      const files = await addSvgPdf(zip, 'separations/film-underbase', film.svg, width, height, {
+        includePreviewPng: true,
+        previewWidth: film.previewWidth,
+        previewHeight: film.previewHeight
+      });
+      separationZip.file('film-underbase.svg', files.svgBlob);
+      separationZip.file('film-underbase.pdf', files.pdfBlob);
+      if (files.previewBlob) separationZip.file('film-underbase-preview.png', files.previewBlob);
       separations.push({ index: 'underbase', kind: 'underbase', hex: '#000000', label, ...files });
     }
 
@@ -439,15 +580,22 @@ export async function processImageLocally(file, settings) {
       const index = String(color.index).padStart(2, '0');
       const label = `FILM ${index} - ${color.hex}`;
       const film = buildFilmSvg({
-        color,
         assignments,
         width,
         height,
         settings,
         activeIndexes: color.index - 1,
-        label
+        label,
+        bounds: filmPlan.bounds
       });
-      const files = await addSvgPdf(zip, `separations/film-color-${index}`, film, width, height, settings);
+      const files = await addSvgPdf(zip, `separations/film-color-${index}`, film.svg, width, height, {
+        includePreviewPng: true,
+        previewWidth: film.previewWidth,
+        previewHeight: film.previewHeight
+      });
+      separationZip.file(`film-color-${index}.svg`, files.svgBlob);
+      separationZip.file(`film-color-${index}.pdf`, files.pdfBlob);
+      if (files.previewBlob) separationZip.file(`film-color-${index}-preview.png`, files.previewBlob);
       separations.push({ index: color.index, kind: 'color', hex: color.hex, label, ...files });
     }
   }
@@ -455,10 +603,11 @@ export async function processImageLocally(file, settings) {
   let stickerCutline = null;
   if (settings.productionType === 'sticker' && settings.stickerCutlineEnabled && printable.length > 0) {
     const cutlineSvg = buildCutlineSvg({ assignments, colors: printable, width, height, settings, bounds });
-    stickerCutline = await addSvgPdf(zip, 'sticker-cutline', cutlineSvg, width, height, settings);
+    stickerCutline = await addSvgPdf(zip, 'sticker-cutline', cutlineSvg, width, height);
   }
 
   const zipBlob = await zip.generateAsync({ type: 'blob' });
+  const separationZipBlob = separations.length > 0 ? await separationZip.generateAsync({ type: 'blob' }) : null;
   const separationFilmCount = separations.length;
   const priceIdr = calculateJobPrice({
     inputMode: settings.inputMode,
@@ -477,7 +626,6 @@ export async function processImageLocally(file, settings) {
     priceIdr,
     separationFilmCount,
     palette,
-    examplePreviewDataUrl: createExamplePreviewDataUrl(canvas),
     settings,
     files: {
       fullPng: fileUrl(previewBlob),
@@ -486,7 +634,26 @@ export async function processImageLocally(file, settings) {
       stickerCutlineSvg: stickerCutline?.svg,
       stickerCutlinePdf: stickerCutline?.pdf,
       zip: fileUrl(zipBlob),
+      separationZip: separationZipBlob ? fileUrl(separationZipBlob) : '',
       separations
+    },
+    artifactBlobs: {
+      fullPng: previewBlob,
+      fullSvg: fullSvgPdf.svgBlob,
+      fullPdf: fullSvgPdf.pdfBlob,
+      stickerCutlineSvg: stickerCutline?.svgBlob || null,
+      stickerCutlinePdf: stickerCutline?.pdfBlob || null,
+      zip: zipBlob,
+      separationZip: separationZipBlob,
+      separations: separations.map((separation) => ({
+        index: separation.index,
+        kind: separation.kind,
+        hex: separation.hex,
+        label: separation.label,
+        svgBlob: separation.svgBlob,
+        pdfBlob: separation.pdfBlob,
+        previewBlob: separation.previewBlob || null
+      }))
     },
     manifest: {
       width,
@@ -494,7 +661,15 @@ export async function processImageLocally(file, settings) {
       palette,
       separationFilmCount,
       hasStickerCutline: Boolean(stickerCutline),
-      generatedFiles: ['preview-full-color.png', 'full-vector.svg', 'full-vector.pdf', 'result.zip']
+      generatedFiles: [
+        'preview-full-color.png',
+        'full-vector.svg',
+        'full-vector.pdf',
+        stickerCutline ? 'sticker-cutline.svg' : null,
+        stickerCutline ? 'sticker-cutline.pdf' : null,
+        separations.length > 0 ? 'separation-films.zip' : null,
+        'result.zip'
+      ].filter(Boolean)
     }
   };
 }

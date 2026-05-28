@@ -23,6 +23,8 @@ No unnecessary new elements.
 No complex background.
 
 Use clean edges, high contrast, smooth shapes, and clearly separated color regions.
+Make the outermost artwork edges smooth, closed, continuous, and easy to trace into vector shapes.
+Avoid jagged outer contours, wavy borders, broken outlines, and rough noisy edge artifacts.
 Make the result suitable for vector tracing and spot color separation.
 Keep colors limited, distinct, and easy to separate.
 The final image should look like a clean professional redraw ready for sticker printing or screen printing.`;
@@ -46,13 +48,13 @@ export function buildRedrawPrompt(settings) {
 
   if (settings.productionType === 'sticker') {
     lines.push(
-      'Optimize for full-color sticker production. A clean outline is allowed. Do not create screen-printing film output. Keep the design attractive as a finished sticker.'
+      'Optimize for full-color sticker production. A clean outline is allowed. Keep the outer silhouette crisp and smooth. Do not create screen-printing film output. Keep the design attractive as a finished sticker.'
     );
   }
 
   if (settings.productionType === 'sablon') {
     lines.push(
-      'Optimize for manual screen printing. Use spot-color style flat color areas. Avoid gradients, tiny details, halftone textures, and complicated shapes. Make each color region clean and separable for film output.'
+      'Optimize for manual screen printing. Use spot-color style flat color areas. Avoid gradients, tiny details, halftone textures, and complicated shapes. Make each color region clean and separable for film output, with a smooth outer silhouette.'
     );
   }
 

@@ -4,13 +4,15 @@ import AccountPanel from './components/AccountPanel.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import BillingPanel from './components/BillingPanel.jsx';
-import ExampleJobsPanel from './components/ExampleJobsPanel.jsx';
+import JobLibraryPanel from './components/JobLibraryPanel.jsx';
 import JobStatus from './components/JobStatus.jsx';
 import LandingPage from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { commitJob, getBalance, quoteJob, requestImageRetouch, toUserApiError } from './lib/api.js';
+import { commitJob, getBalance, quoteJob, requestImageRetouch, toUserApiError, uploadExampleArtifacts } from './lib/api.js';
+import { createNormalizedImagePreviewBlob } from './lib/imagePreview.js';
+import { deleteHistoryJob, loadHistoryJobs, releaseHistoryJobs, saveHistoryJob } from './lib/localHistoryStore.js';
 import { processImageLocally } from './lib/localProcessor.js';
 import { INPUT_MODE_RETOUCH } from './lib/modes.js';
 import { IMAGE_RETOUCH_PRICE_IDR, calculateJobPrice, formatRupiah } from './lib/pricing.js';
@@ -46,6 +48,54 @@ function statusJob(status, message, progress = 0) {
   };
 }
 
+function appendFileIfPresent(formData, key, blob, filename) {
+  if (blob instanceof Blob) {
+    formData.append(key, blob, filename);
+  }
+}
+
+function buildExampleArtifactsFormData({ sourcePreviewBlob, sourceFileName, job }) {
+  const artifacts = job.artifactBlobs || {};
+  const formData = new FormData();
+
+  appendFileIfPresent(formData, 'sourcePreview', sourcePreviewBlob, 'source-preview.png');
+  appendFileIfPresent(formData, 'fullPng', artifacts.fullPng, 'preview-full-color.png');
+  appendFileIfPresent(formData, 'fullSvg', artifacts.fullSvg, 'full-vector.svg');
+  appendFileIfPresent(formData, 'fullPdf', artifacts.fullPdf, 'full-vector.pdf');
+  appendFileIfPresent(formData, 'stickerCutlineSvg', artifacts.stickerCutlineSvg, 'sticker-cutline.svg');
+  appendFileIfPresent(formData, 'stickerCutlinePdf', artifacts.stickerCutlinePdf, 'sticker-cutline.pdf');
+  appendFileIfPresent(formData, 'zip', artifacts.zip, 'result.zip');
+  appendFileIfPresent(formData, 'separationZip', artifacts.separationZip, 'separation-films.zip');
+
+  (artifacts.separations || []).forEach((separation) => {
+    const slug = separation.kind === 'underbase' ? 'underbase' : `color-${String(separation.index).padStart(2, '0')}`;
+    appendFileIfPresent(formData, 'separationSvg', separation.svgBlob, `film-${slug}.svg`);
+    appendFileIfPresent(formData, 'separationPdf', separation.pdfBlob, `film-${slug}.pdf`);
+    appendFileIfPresent(formData, 'separationPreview', separation.previewBlob, `film-${slug}-preview.png`);
+  });
+
+  formData.append(
+    'manifest',
+    JSON.stringify({
+      projectName: job.settings?.projectName || 'Project Vector',
+      productionType: job.settings?.productionType || 'sticker',
+      inputMode: job.settings?.inputMode || 'ready_trace',
+      settings: job.settings || {},
+      createdAt: job.createdAt,
+      updatedAt: job.updatedAt,
+      sourceFileName: sourceFileName || '',
+      separations: (artifacts.separations || []).map((separation) => ({
+        index: separation.index,
+        kind: separation.kind || 'color',
+        hex: separation.hex || '#000000',
+        label: separation.label || ''
+      }))
+    })
+  );
+
+  return formData;
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [settings, setSettings] = useState(initialSettings);
@@ -57,6 +107,9 @@ export default function App() {
   const [balance, setBalance] = useState(null);
   const [view, setView] = useState('app');
   const previewRef = useRef('');
+  const historyJobsRef = useRef([]);
+  const [historyJobs, setHistoryJobs] = useState([]);
+  const [historyError, setHistoryError] = useState('');
 
   const previewUrl = useMemo(() => {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -95,9 +148,43 @@ export default function App() {
     }
   }
 
+  function replaceHistoryJobs(nextJobs) {
+    releaseHistoryJobs(historyJobsRef.current);
+    historyJobsRef.current = nextJobs;
+    setHistoryJobs(nextJobs);
+  }
+
+  async function refreshHistory(activeSession = session) {
+    const ownerId = activeSession?.user?.id;
+    if (!ownerId) {
+      replaceHistoryJobs([]);
+      setHistoryError('');
+      return;
+    }
+
+    try {
+      setHistoryError('');
+      replaceHistoryJobs(await loadHistoryJobs(ownerId));
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Riwayat lokal tidak bisa dibaca di browser ini.');
+      replaceHistoryJobs([]);
+    }
+  }
+
   useEffect(() => {
     refreshBalance(session);
   }, [session?.access_token]);
+
+  useEffect(() => {
+    refreshHistory(session);
+  }, [session?.user?.id]);
+
+  useEffect(() => {
+    return () => {
+      releaseHistoryJobs(historyJobsRef.current);
+      historyJobsRef.current = [];
+    };
+  }, []);
 
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
@@ -105,6 +192,8 @@ export default function App() {
     setBalance(null);
     setJob(null);
     setView('app');
+    replaceHistoryJobs([]);
+    setHistoryError('');
   }
 
   async function ensureCanRun(estimatedFilmCount = 0) {
@@ -136,6 +225,12 @@ export default function App() {
     setJob(statusJob('preprocessing', 'Menyiapkan file lokal.', 10));
 
     try {
+      let sourcePreviewBlob = null;
+      try {
+        sourcePreviewBlob = await createNormalizedImagePreviewBlob(file);
+      } catch (_previewError) {
+        sourcePreviewBlob = file;
+      }
       await ensureCanRun(settings.separateColors ? 1 : 0);
       let processingFile = file;
       let retouchLedgerId = '';
@@ -148,7 +243,7 @@ export default function App() {
       }
 
       setJob(statusJob('vectorizing', 'Membuat vector, cutline, film, PDF, dan ZIP di browser.', 60));
-      const { examplePreviewDataUrl, ...localResult } = await processImageLocally(processingFile, settings);
+      const localResult = await processImageLocally(processingFile, settings);
       const finalPrice = calculateJobPrice({
         inputMode: settings.inputMode,
         separationFilmCount: localResult.separationFilmCount,
@@ -165,18 +260,46 @@ export default function App() {
           settings,
           manifest: localResult.manifest,
           aiLedgerId: retouchLedgerId,
-          priceIdr: finalPrice,
-          examplePreviewDataUrl: isSuperuser ? examplePreviewDataUrl : undefined
+          priceIdr: finalPrice
         },
         session.access_token
       );
 
-      setJob({
+      const completedJob = {
         ...localResult,
         jobId: committed.job?.id || localResult.jobId,
         priceIdr: (settings.inputMode === INPUT_MODE_RETOUCH ? IMAGE_RETOUCH_PRICE_IDR : 0) + finalPrice,
         remoteJob: committed.job
-      });
+      };
+
+      setJob(completedJob);
+
+      try {
+        await saveHistoryJob({
+          ownerId: session.user.id,
+          ownerEmail: session.user.email || '',
+          sourcePreviewBlob,
+          sourceFileName: file.name,
+          job: completedJob
+        });
+        await refreshHistory();
+      } catch (historySaveError) {
+        setHistoryError(historySaveError instanceof Error ? historySaveError.message : 'Riwayat lokal tidak bisa disimpan di browser ini.');
+      }
+
+      if (isSuperuser && committed.job?.id) {
+        try {
+          const artifactFormData = buildExampleArtifactsFormData({
+            sourcePreviewBlob,
+            sourceFileName: file.name,
+            job: completedJob
+          });
+          await uploadExampleArtifacts(committed.job.id, artifactFormData, session.access_token);
+        } catch (artifactError) {
+          console.error('Failed to upload example artifacts', artifactError);
+        }
+      }
+
       await refreshBalance();
     } catch (submitError) {
       setJobError(toUserApiError(submitError, 'Gagal memproses gambar.').message);
@@ -191,6 +314,15 @@ export default function App() {
   const sessionEmail = session?.user?.email?.toLowerCase() || '';
   const isWhitelistedSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
   const isSuperuser = balance?.profile?.role === 'superuser' || isWhitelistedSuperadmin;
+
+  async function handleDeleteHistory(item) {
+    try {
+      await deleteHistoryJob(item.id);
+      await refreshHistory();
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Riwayat lokal gagal dihapus.');
+    }
+  }
 
   return (
     <main className="min-h-screen bg-panel">
@@ -263,9 +395,15 @@ export default function App() {
               onFileChange={setFile}
               disabled={isBusy}
             />
-            <ExampleJobsPanel activeProductionType={settings.productionType} />
+            <JobLibraryPanel historyJobs={historyJobs} historyError={historyError} onDeleteHistoryJob={handleDeleteHistory} />
             <JobStatus job={job} error={jobError} />
-            <ResultPreview job={job} onDelete={() => setJob(null)} isDeleting={false} />
+            <ResultPreview
+              job={job}
+              sourcePreviewUrl={previewUrl}
+              sourcePreviewLabel={file?.name ? `Preview awal: ${file.name}` : 'Preview gambar awal'}
+              onDelete={() => setJob(null)}
+              isDeleting={false}
+            />
           </div>
 
           <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">

@@ -1,8 +1,51 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { decorateAdminJobs, exampleActivePath, exampleSourcePath, isSuperuserProfile, normalizeExampleJobsSetting, updateExampleJobsSetting } from './example-jobs.js';
+import {
+  decorateAdminJobs,
+  getExampleArtifactsFromManifest,
+  hasCompleteExampleArtifacts,
+  isSuperuserProfile,
+  normalizeExampleJobsSetting,
+  updateExampleJobsSetting
+} from './example-jobs.js';
 
-test('decorateAdminJobs marks superadmin jobs with preview source as eligible examples', () => {
+function completeArtifacts(productionType = 'sticker') {
+  return {
+    version: 1,
+    projectName: `Contoh ${productionType}`,
+    productionType,
+    inputMode: 'ai_redraw',
+    sourcePreviewPath: `jobs/job-1/source-preview.png`,
+    resultPreviewPath: `jobs/job-1/preview-full-color.png`,
+    manifestPath: `jobs/job-1/manifest.json`,
+    files: {
+      fullPng: 'https://example.com/full.png',
+      fullSvg: 'https://example.com/full.svg',
+      fullPdf: 'https://example.com/full.pdf',
+      stickerCutlineSvg: '',
+      stickerCutlinePdf: '',
+      zip: 'https://example.com/result.zip',
+      separationZip: productionType === 'sablon' ? 'https://example.com/separations.zip' : ''
+    },
+    separations:
+      productionType === 'sablon'
+        ? [
+            {
+              index: 1,
+              kind: 'color',
+              hex: '#000000',
+              label: 'FILM 01 - #000000',
+              svg: 'https://example.com/film-01.svg',
+              pdf: 'https://example.com/film-01.pdf',
+              preview: 'https://example.com/film-01-preview.png'
+            }
+          ]
+        : [],
+    updatedAt: '2026-05-28T00:00:00.000Z'
+  };
+}
+
+test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligible examples', () => {
   const profiles = [
     { id: 'super-1', email: 'boss@example.com', role: 'superuser' },
     { id: 'user-1', email: 'user@example.com', role: 'user' }
@@ -13,29 +56,37 @@ test('decorateAdminJobs marks superadmin jobs with preview source as eligible ex
       user_id: 'super-1',
       production_type: 'sticker',
       status: 'done',
-      manifest: { examplePreviewSourcePath: exampleSourcePath('job-1') }
+      manifest: { exampleArtifacts: completeArtifacts('sticker') }
     },
     {
       id: 'job-2',
       user_id: 'user-1',
       production_type: 'sablon',
       status: 'done',
-      manifest: { examplePreviewSourcePath: exampleSourcePath('job-2') }
+      manifest: { exampleArtifacts: completeArtifacts('sablon') }
     },
     {
       id: 'job-3',
       user_id: 'super-1',
       production_type: 'sablon',
-      status: 'pending',
-      manifest: { examplePreviewSourcePath: exampleSourcePath('job-3') }
+      status: 'done',
+      manifest: {
+        exampleArtifacts: {
+          ...completeArtifacts('sablon'),
+          files: { ...completeArtifacts('sablon').files, separationZip: '' },
+          separations: []
+        }
+      }
     }
   ];
 
   const decorated = decorateAdminJobs(jobs, profiles, {
     sticker: {
       jobId: 'job-1',
-      imageUrl: 'https://example.com/sticker.png',
-      storagePath: exampleActivePath('sticker'),
+      projectName: 'Contoh sticker',
+      productionType: 'sticker',
+      resultPreviewUrl: 'https://example.com/full.png',
+      files: { fullPng: 'https://example.com/full.png' },
       updatedAt: '2026-05-28T00:00:00.000Z'
     }
   });
@@ -47,25 +98,62 @@ test('decorateAdminJobs marks superadmin jobs with preview source as eligible ex
   assert.equal(decorated[2].can_set_as_example, false);
 });
 
+test('normalizeExampleJobsSetting keeps rich example fields and legacy imageUrl fallback', () => {
+  const normalized = normalizeExampleJobsSetting({
+    sticker: {
+      jobId: 'job-1',
+      projectName: 'Contoh lama',
+      imageUrl: 'https://example.com/legacy.png',
+      files: { fullSvg: 'https://example.com/full.svg' },
+      updatedAt: '2026-05-28T00:00:00.000Z'
+    }
+  });
+
+  assert.equal(normalized.sticker.resultPreviewUrl, 'https://example.com/legacy.png');
+  assert.equal(normalized.sticker.files.fullSvg, 'https://example.com/full.svg');
+});
+
 test('updateExampleJobsSetting keeps other production examples untouched', () => {
   const current = normalizeExampleJobsSetting({
     sticker: {
       jobId: 'job-1',
-      imageUrl: 'https://example.com/sticker.png',
-      storagePath: exampleActivePath('sticker'),
+      projectName: 'Contoh sticker',
+      productionType: 'sticker',
+      resultPreviewUrl: 'https://example.com/sticker.png',
+      files: { fullPng: 'https://example.com/sticker.png' },
       updatedAt: '2026-05-28T00:00:00.000Z'
     }
   });
 
   const next = updateExampleJobsSetting(current, 'sablon', {
     jobId: 'job-2',
-    imageUrl: 'https://example.com/sablon.png',
-    storagePath: exampleActivePath('sablon'),
+    projectName: 'Contoh sablon',
+    productionType: 'sablon',
+    resultPreviewUrl: 'https://example.com/sablon.png',
+    files: { fullPng: 'https://example.com/sablon.png', separationZip: 'https://example.com/sablon.zip' },
+    separations: [{ index: 1, kind: 'color', hex: '#000000', label: 'FILM 01', svg: 'a', pdf: 'b', preview: 'c' }],
     updatedAt: '2026-05-28T00:05:00.000Z'
   });
 
   assert.equal(next.sticker.jobId, 'job-1');
   assert.equal(next.sablon.jobId, 'job-2');
+});
+
+test('getExampleArtifactsFromManifest and completeness guard require full sablon bundle', () => {
+  const stickerManifest = { exampleArtifacts: completeArtifacts('sticker') };
+  const sablonManifest = { exampleArtifacts: completeArtifacts('sablon') };
+  const brokenManifest = {
+    exampleArtifacts: {
+      ...completeArtifacts('sablon'),
+      files: { ...completeArtifacts('sablon').files, separationZip: '' },
+      separations: []
+    }
+  };
+
+  assert.equal(getExampleArtifactsFromManifest(stickerManifest).projectName, 'Contoh sticker');
+  assert.equal(hasCompleteExampleArtifacts(stickerManifest, 'sticker'), true);
+  assert.equal(hasCompleteExampleArtifacts(sablonManifest, 'sablon'), true);
+  assert.equal(hasCompleteExampleArtifacts(brokenManifest, 'sablon'), false);
 });
 
 test('whitelist email still counts as superuser fallback', () => {

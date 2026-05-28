@@ -71,6 +71,14 @@ export async function commitJob(payload, accessToken) {
   });
 }
 
+export async function uploadExampleArtifacts(jobId, formData, accessToken) {
+  return apiFetch(`/api/jobs/${jobId}/artifacts`, {
+    method: 'POST',
+    accessToken,
+    body: formData
+  });
+}
+
 export async function requestImageRetouch(file, settings, accessToken) {
   const formData = new FormData();
   formData.append('image', file);

@@ -37,6 +37,7 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   assert.match(prompt, /Treat white as a real printable artwork color/);
   assert.match(prompt, /Optimize for manual screen printing/);
   assert.match(prompt, /approximately 4 solid colors as a target/);
+  assert.match(prompt, /outermost artwork edges smooth, closed, continuous/);
 });
 
 test('standard prompt prioritizes faithful color matching', () => {
@@ -49,6 +50,7 @@ test('standard prompt prioritizes faithful color matching', () => {
 
   assert.match(prompt, /prioritize accurate color matching/);
   assert.match(prompt, /Preserve any non-white background color/);
+  assert.match(prompt, /Avoid jagged outer contours, wavy borders/);
 });
 
 test('color helpers detect near white background and nearest palette', () => {
