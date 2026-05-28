@@ -3,7 +3,6 @@ import {
   decorateAdminJobs,
   EXAMPLE_JOBS_BUCKET,
   getExampleArtifactsFromManifest,
-  getExampleSourcePathFromManifest,
   hasCompleteExampleArtifacts,
   isSuperuserProfile,
   normalizeExampleJobsSetting,
@@ -18,7 +17,7 @@ const DEFAULT_PRICING = {
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET,POST,OPTIONS',
+  'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
   'Access-Control-Allow-Headers': 'Authorization,Content-Type'
 };
 
@@ -106,6 +105,89 @@ function exampleJobPath(jobId, filename) {
   return `jobs/${jobId}/${filename}`;
 }
 
+function exampleJobPrefix(jobId) {
+  return `jobs/${jobId}`;
+}
+
+function notDeletedQuery(column = 'deleted_at') {
+  return `${column}=is.null`;
+}
+
+function jobIsDeleted(job = {}) {
+  return Boolean(job?.deleted_at);
+}
+
+function buildLegacyExampleSettingEntry(env, job, artifacts) {
+  const resultPreviewUrl = artifacts?.files?.fullPng || (artifacts?.resultPreviewPath ? examplePublicUrl(env, artifacts.resultPreviewPath) : '');
+  const sourcePreviewUrl = artifacts?.sourcePreviewPath ? examplePublicUrl(env, artifacts.sourcePreviewPath) : '';
+  return {
+    jobId: job.id,
+    projectName: artifacts?.projectName || job.project_name,
+    productionType: job.production_type,
+    inputMode: artifacts?.inputMode || job.input_mode,
+    imageUrl: resultPreviewUrl,
+    sourcePreviewUrl,
+    resultPreviewUrl,
+    files: artifacts?.files || {},
+    separations: artifacts?.separations || [],
+    settings: artifacts?.settings || job.settings || {},
+    updatedAt: formatDate(new Date())
+  };
+}
+
+async function syncLegacyExampleSetting(env, job, artifacts) {
+  const exampleSetting = await getAppSetting(env, 'example_jobs');
+  const currentExamples = normalizeExampleJobsSetting(exampleSetting?.value);
+  const nextExamples = updateExampleJobsSetting(currentExamples, job.production_type, buildLegacyExampleSettingEntry(env, job, artifacts));
+  await upsertAppSetting(env, {
+    key: 'example_jobs',
+    value: nextExamples,
+    isPublic: true,
+    description: 'Contoh gambar aktif untuk sticker dan sablon'
+  });
+  return nextExamples;
+}
+
+async function clearLegacyExampleSettingIfMatches(env, job) {
+  const exampleSetting = await getAppSetting(env, 'example_jobs');
+  const currentExamples = normalizeExampleJobsSetting(exampleSetting?.value);
+  if (currentExamples[job.production_type]?.jobId !== job.id) {
+    return currentExamples;
+  }
+  const nextExamples = updateExampleJobsSetting(currentExamples, job.production_type, null);
+  await upsertAppSetting(env, {
+    key: 'example_jobs',
+    value: nextExamples,
+    isPublic: true,
+    description: 'Contoh gambar aktif untuk sticker dan sablon'
+  });
+  return nextExamples;
+}
+
+function toExampleFeedJob(env, job) {
+  if (!job || job.status !== 'done' || job.is_example_public !== true || jobIsDeleted(job)) return null;
+  if (!hasCompleteExampleArtifacts(job.manifest, job.production_type)) return null;
+
+  const artifacts = getExampleArtifactsFromManifest(job.manifest);
+  if (!artifacts) return null;
+
+  return {
+    jobId: job.id,
+    projectName: artifacts.projectName || job.project_name,
+    productionType: job.production_type,
+    inputMode: artifacts.inputMode || job.input_mode,
+    sourcePreviewUrl: artifacts.sourcePreviewPath ? examplePublicUrl(env, artifacts.sourcePreviewPath) : '',
+    resultPreviewUrl: artifacts.files?.fullPng || (artifacts.resultPreviewPath ? examplePublicUrl(env, artifacts.resultPreviewPath) : ''),
+    files: artifacts.files || {},
+    separations: artifacts.separations || [],
+    settings: artifacts.settings || job.settings || {},
+    createdAt: job.created_at,
+    updatedAt: job.example_published_at || artifacts.updatedAt || job.created_at,
+    ownerId: job.user_id,
+    isExamplePublic: true
+  };
+}
+
 async function fileToUint8Array(file) {
   return new Uint8Array(await file.arrayBuffer());
 }
@@ -158,7 +240,11 @@ function handleHealth(env) {
       'GET /api/me/balance',
       'POST /api/jobs/quote',
       'POST /api/jobs/commit',
+      'DELETE /api/jobs/:jobId',
       'POST /api/jobs/:jobId/artifacts',
+      'GET /api/example-jobs',
+      'POST /api/admin/jobs/:jobId/set-example',
+      'POST /api/admin/jobs/:jobId/unset-example',
       'POST /api/image-retouch'
     ]
   });
@@ -574,11 +660,12 @@ async function handleJobArtifactsUpload(env, request, jobId) {
 
   const rows = await supabaseFetch(
     env,
-    `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest&limit=1`,
+    `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,deleted_at&limit=1`,
     {}
   );
   const job = rows?.[0];
   if (!job) throw new Error('Job tidak ditemukan.');
+  if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
   if (job.user_id !== user.id) throw new Error('Hanya job milik Anda sendiri yang boleh dijadikan contoh.');
   if (job.status !== 'done') throw new Error('Artefak contoh hanya boleh diunggah untuk job yang sudah selesai.');
 
@@ -865,7 +952,7 @@ async function handleAdminOverview(env, request) {
   await requireAdmin(env, request);
   const [users, jobs, payments, ledger] = await Promise.all([
     supabaseFetch(env, '/rest/v1/profiles?select=id,is_active,is_unlimited,deleted_at', {}),
-    supabaseFetch(env, '/rest/v1/jobs?select=id,price_idr,production_type,input_mode,created_at&order=created_at.desc&limit=500', {}),
+    supabaseFetch(env, `/rest/v1/jobs?select=id,price_idr,production_type,input_mode,created_at&${notDeletedQuery()}&order=created_at.desc&limit=500`, {}),
     supabaseFetch(env, '/rest/v1/manual_payments?select=id,status,amount_idr,created_at&order=created_at.desc&limit=500', {}),
     supabaseFetch(env, '/rest/v1/credit_ledger?select=amount_idr,kind,reason,created_at&order=created_at.desc&limit=500', {})
   ]);
@@ -891,15 +978,39 @@ async function handleAdminOverview(env, request) {
 
 async function handleAdminJobs(env, request) {
   await requireAdmin(env, request);
-  const [users, jobs, exampleSetting] = await Promise.all([
+  const [users, jobs] = await Promise.all([
     supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
-    supabaseFetch(env, '/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at,manifest&order=created_at.desc&limit=100', {}),
-    getAppSetting(env, 'example_jobs')
+    supabaseFetch(
+      env,
+      `/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at,manifest,is_example_public,example_published_at,deleted_at&${notDeletedQuery()}&order=created_at.desc&limit=100`,
+      {}
+    )
   ]);
-  const decorated = decorateAdminJobs(jobs, users, exampleSetting?.value);
+  const decorated = decorateAdminJobs(jobs, users);
   return json({
     jobs: decorated.map(({ manifest, ...job }) => job)
   });
+}
+
+async function handleExampleJobs(env, request) {
+  await requireUser(env, request);
+  const [profiles, jobs] = await Promise.all([
+    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
+    supabaseFetch(
+      env,
+      `/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at,is_example_public,example_published_at,deleted_at&is_example_public=eq.true&status=eq.done&${notDeletedQuery()}&order=created_at.desc&limit=200`,
+      {}
+    )
+  ]);
+
+  const superuserIds = new Set(profiles.filter((profile) => profile.role === 'superuser').map((profile) => profile.id));
+  const exampleJobs = jobs
+    .filter((job) => superuserIds.has(job.user_id))
+    .map((job) => toExampleFeedJob(env, job))
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
+
+  return json({ exampleJobs });
 }
 
 async function handleAdminPayments(env, request) {
@@ -974,14 +1085,18 @@ async function handleAdminSettings(env, request) {
 
 async function handleSetExampleJob(env, request, jobId) {
   await requireAdmin(env, request);
-  const [jobRows, profiles, exampleSetting] = await Promise.all([
-    supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest&limit=1`, {}),
-    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
-    getAppSetting(env, 'example_jobs')
+  const [jobRows, profiles] = await Promise.all([
+    supabaseFetch(
+      env,
+      `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at&limit=1`,
+      {}
+    ),
+    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {})
   ]);
 
   const job = jobRows?.[0];
   if (!job) throw new Error('Job tidak ditemukan.');
+  if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
   if (job.status !== 'done') throw new Error('Hanya job selesai yang bisa dijadikan contoh.');
 
   const owner = profiles.find((profile) => profile.id === job.user_id);
@@ -992,33 +1107,97 @@ async function handleSetExampleJob(env, request, jobId) {
   }
 
   const artifacts = getExampleArtifactsFromManifest(job.manifest);
-  const currentExamples = normalizeExampleJobsSetting(exampleSetting?.value);
-
-  const nextExamples = updateExampleJobsSetting(currentExamples, job.production_type, {
-    jobId: job.id,
-    projectName: artifacts?.projectName || job.project_name,
-    productionType: job.production_type,
-    inputMode: artifacts?.inputMode || job.input_mode,
-    imageUrl: examplePublicUrl(env, artifacts?.resultPreviewPath),
-    sourcePreviewUrl: examplePublicUrl(env, artifacts?.sourcePreviewPath),
-    resultPreviewUrl: examplePublicUrl(env, artifacts?.resultPreviewPath),
-    files: artifacts?.files || {},
-    separations: artifacts?.separations || [],
-    settings: artifacts?.settings || job.settings || {},
-    updatedAt: new Date().toISOString()
+  const publishedAt = formatDate(new Date());
+  const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: {
+      is_example_public: true,
+      example_published_at: publishedAt
+    }
   });
+  const updatedJob = updatedRows?.[0] || { ...job, is_example_public: true, example_published_at: publishedAt };
+  const nextExamples = await syncLegacyExampleSetting(env, updatedJob, artifacts);
 
-  await upsertAppSetting(env, {
-    key: 'example_jobs',
-    value: nextExamples,
-    isPublic: true,
-    description: 'Contoh gambar aktif untuk sticker dan sablon'
+  return json({
+    jobId: updatedJob.id,
+    productionType: updatedJob.production_type,
+    isExamplePublic: true,
+    examplePublishedAt: updatedJob.example_published_at,
+    exampleJobs: nextExamples
+  });
+}
+
+async function handleUnsetExampleJob(env, request, jobId) {
+  await requireAdmin(env, request);
+  const [jobRows, profiles] = await Promise.all([
+    supabaseFetch(
+      env,
+      `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at&limit=1`,
+      {}
+    ),
+    supabaseFetch(env, '/rest/v1/profiles?select=id,role', {})
+  ]);
+
+  const job = jobRows?.[0];
+  if (!job) throw new Error('Job tidak ditemukan.');
+  if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
+
+  const owner = profiles.find((profile) => profile.id === job.user_id);
+  if (!owner || owner.role !== 'superuser') throw new Error('Hanya job milik superadmin yang bisa dicabut dari contoh.');
+
+  const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: {
+      is_example_public: false,
+      example_published_at: null
+    }
+  });
+  await clearLegacyExampleSettingIfMatches(env, job);
+
+  return json({
+    jobId: job.id,
+    isExamplePublic: false,
+    job: updatedRows?.[0] || { ...job, is_example_public: false, example_published_at: null }
+  });
+}
+
+async function handleDeleteJob(env, request, jobId) {
+  const { user } = await requireUser(env, request);
+  const jobRows = await supabaseFetch(
+    env,
+    `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,production_type,status,manifest,is_example_public,example_published_at,deleted_at&limit=1`,
+    {}
+  );
+  const job = jobRows?.[0];
+  if (!job) throw new Error('Job tidak ditemukan.');
+  if (job.user_id !== user.id) throw new Error('Hanya pemilik job yang boleh menghapus job ini.');
+  const hasExampleArtifacts = Boolean(getExampleArtifactsFromManifest(job.manifest));
+  if (!jobIsDeleted(job) && hasExampleArtifacts) {
+    await deleteStorageObjects(env, EXAMPLE_JOBS_BUCKET, [exampleJobPrefix(job.id)]);
+  }
+  await clearLegacyExampleSettingIfMatches(env, job);
+  if (jobIsDeleted(job)) {
+    return json({ jobId: job.id, deleted: true });
+  }
+
+  const deletedAt = formatDate(new Date());
+  const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: {
+      deleted_at: deletedAt,
+      is_example_public: false,
+      example_published_at: null
+    }
   });
 
   return json({
     jobId: job.id,
-    productionType: job.production_type,
-    exampleJobs: nextExamples
+    deleted: true,
+    deletedAt,
+    job: updatedRows?.[0] || { ...job, deleted_at: deletedAt, is_example_public: false, example_published_at: null }
   });
 }
 
@@ -1071,8 +1250,11 @@ export default {
       if (url.pathname === '/api/me/balance' && request.method === 'GET') return await handleBalance(env, request);
       if (url.pathname === '/api/jobs/quote' && request.method === 'POST') return await handleQuote(env, request);
       if (url.pathname === '/api/jobs/commit' && request.method === 'POST') return await handleCommitJob(env, request);
+      if (url.pathname === '/api/example-jobs' && request.method === 'GET') return await handleExampleJobs(env, request);
       const artifactsMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)\/artifacts$/);
       if (artifactsMatch && request.method === 'POST') return await handleJobArtifactsUpload(env, request, artifactsMatch[1]);
+      const deleteJobMatch = url.pathname.match(/^\/api\/jobs\/([^/]+)$/);
+      if (deleteJobMatch && request.method === 'DELETE') return await handleDeleteJob(env, request, deleteJobMatch[1]);
       if ((url.pathname === '/api/image-retouch' || url.pathname === '/api/ai-redraw') && request.method === 'POST') return await handleAiRedraw(env, request);
       if (url.pathname === '/api/admin/users') return await handleAdminUsers(env, request);
       if (url.pathname === '/api/admin/credits' && request.method === 'POST') return await handleAdminCredits(env, request);
@@ -1083,13 +1265,17 @@ export default {
       if (url.pathname === '/api/admin/settings') return await handleAdminSettings(env, request);
       const setExampleMatch = url.pathname.match(/^\/api\/admin\/jobs\/([^/]+)\/set-example$/);
       if (setExampleMatch && request.method === 'POST') return await handleSetExampleJob(env, request, setExampleMatch[1]);
+      const unsetExampleMatch = url.pathname.match(/^\/api\/admin\/jobs\/([^/]+)\/unset-example$/);
+      if (unsetExampleMatch && request.method === 'POST') return await handleUnsetExampleJob(env, request, unsetExampleMatch[1]);
       const approveMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/approve$/);
       if (approveMatch && request.method === 'POST') return await handleApprovePayment(env, request, approveMatch[1]);
       const rejectMatch = url.pathname.match(/^\/api\/admin\/manual-payments\/([^/]+)\/reject$/);
       if (rejectMatch && request.method === 'POST') return await handleRejectPayment(env, request, rejectMatch[1]);
       return error('Endpoint tidak ditemukan.', 404);
     } catch (err) {
-      return error(err.message || 'Server error.', err.message?.includes('ditolak') ? 403 : 400);
+      const message = err.message || 'Server error.';
+      const status = message.includes('ditolak') || message.startsWith('Hanya ') ? 403 : 400;
+      return error(message, status);
     }
   }
 };

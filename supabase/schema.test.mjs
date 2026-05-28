@@ -6,6 +6,7 @@ import { test } from 'node:test';
 const migration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526000000_saas_credit_auth.sql'), 'utf8');
 const superadminMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260526001000_ensure_superadmin_whitelist.sql'), 'utf8');
 const exampleJobsMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260528091500_example_jobs_bucket.sql'), 'utf8');
+const publishedExamplesMigration = fs.readFileSync(path.join(import.meta.dirname, 'migrations/20260528153000_publishable_example_jobs.sql'), 'utf8');
 
 test('migration creates SaaS credit/auth tables', () => {
   for (const table of ['profiles', 'credit_ledger', 'jobs', 'manual_payments', 'pricing_rules']) {
@@ -47,4 +48,11 @@ test('example jobs migration provisions storage bucket and public setting seed',
   assert.match(exampleJobsMigration, /example_jobs/);
   assert.match(exampleJobsMigration, /"sticker":null/);
   assert.match(exampleJobsMigration, /"sablon":null/);
+});
+
+test('published example migration adds job publish and delete columns', () => {
+  assert.match(publishedExamplesMigration, /is_example_public boolean not null default false/);
+  assert.match(publishedExamplesMigration, /example_published_at timestamptz/);
+  assert.match(publishedExamplesMigration, /deleted_at timestamptz/);
+  assert.match(publishedExamplesMigration, /jobs_example_public_created_idx/);
 });

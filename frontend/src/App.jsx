@@ -10,7 +10,7 @@ import LandingPage from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { commitJob, getBalance, quoteJob, requestImageRetouch, toUserApiError, uploadExampleArtifacts } from './lib/api.js';
+import { commitJob, deleteCloudJob, getBalance, listExampleJobs, quoteJob, requestImageRetouch, toUserApiError, uploadExampleArtifacts } from './lib/api.js';
 import { createNormalizedImagePreviewBlob } from './lib/imagePreview.js';
 import { deleteHistoryJob, loadHistoryJobs, releaseHistoryJobs, saveHistoryJob } from './lib/localHistoryStore.js';
 import { processImageLocally } from './lib/localProcessor.js';
@@ -110,6 +110,9 @@ export default function App() {
   const historyJobsRef = useRef([]);
   const [historyJobs, setHistoryJobs] = useState([]);
   const [historyError, setHistoryError] = useState('');
+  const [exampleJobs, setExampleJobs] = useState([]);
+  const [exampleError, setExampleError] = useState('');
+  const [deletingLibraryJobId, setDeletingLibraryJobId] = useState('');
 
   const previewUrl = useMemo(() => {
     if (previewRef.current) URL.revokeObjectURL(previewRef.current);
@@ -171,6 +174,23 @@ export default function App() {
     }
   }
 
+  async function refreshExampleJobs(activeSession = session) {
+    if (!activeSession?.access_token) {
+      setExampleJobs([]);
+      setExampleError('');
+      return;
+    }
+
+    try {
+      setExampleError('');
+      const data = await listExampleJobs(activeSession.access_token);
+      setExampleJobs(Array.isArray(data.exampleJobs) ? data.exampleJobs : []);
+    } catch (error) {
+      setExampleError(toUserApiError(error, 'Contoh pekerjaan belum bisa dimuat saat ini.').message);
+      setExampleJobs([]);
+    }
+  }
+
   useEffect(() => {
     refreshBalance(session);
   }, [session?.access_token]);
@@ -178,6 +198,11 @@ export default function App() {
   useEffect(() => {
     refreshHistory(session);
   }, [session?.user?.id]);
+
+  useEffect(() => {
+    if (view !== 'app') return;
+    refreshExampleJobs(session);
+  }, [session?.access_token, session?.user?.id, view]);
 
   useEffect(() => {
     return () => {
@@ -194,6 +219,9 @@ export default function App() {
     setView('app');
     replaceHistoryJobs([]);
     setHistoryError('');
+    setExampleJobs([]);
+    setExampleError('');
+    setDeletingLibraryJobId('');
   }
 
   async function ensureCanRun(estimatedFilmCount = 0) {
@@ -315,12 +343,43 @@ export default function App() {
   const isWhitelistedSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
   const isSuperuser = balance?.profile?.role === 'superuser' || isWhitelistedSuperadmin;
 
-  async function handleDeleteHistory(item) {
+  async function handleDeleteLibraryJob(item) {
+    if (!item?.canDelete) return;
+    setDeletingLibraryJobId(item.id || item.jobId || '');
+    setHistoryError('');
+    setExampleError('');
     try {
-      await deleteHistoryJob(item.id);
+      let localWarning = '';
+      if (item.isExamplePublic) {
+        await deleteCloudJob(item.jobId, session?.access_token);
+      } else if (item.jobId && session?.access_token) {
+        try {
+          await deleteCloudJob(item.jobId, session.access_token);
+        } catch (_error) {
+          localWarning = 'Riwayat lokal dihapus, tetapi metadata server belum berhasil dibersihkan.';
+        }
+      }
+
+      if (item.localRecordId) {
+        await deleteHistoryJob(item.localRecordId);
+      }
+
       await refreshHistory();
+      if (item.isExamplePublic) {
+        await refreshExampleJobs();
+      }
+      if (localWarning) {
+        setHistoryError(localWarning);
+      }
     } catch (error) {
-      setHistoryError(error instanceof Error ? error.message : 'Riwayat lokal gagal dihapus.');
+      const message = toUserApiError(error, item.isExamplePublic ? 'Gagal menghapus job contoh.' : 'Gagal menghapus riwayat job.').message;
+      if (item.isExamplePublic) {
+        setExampleError(message);
+      } else {
+        setHistoryError(message);
+      }
+    } finally {
+      setDeletingLibraryJobId('');
     }
   }
 
@@ -395,7 +454,15 @@ export default function App() {
               onFileChange={setFile}
               disabled={isBusy}
             />
-            <JobLibraryPanel historyJobs={historyJobs} historyError={historyError} onDeleteHistoryJob={handleDeleteHistory} />
+            <JobLibraryPanel
+              historyJobs={historyJobs}
+              exampleJobs={exampleJobs}
+              historyError={historyError}
+              exampleError={exampleError}
+              onDeleteJob={handleDeleteLibraryJob}
+              deletingJobId={deletingLibraryJobId}
+              currentUserId={session.user.id}
+            />
             <JobStatus job={job} error={jobError} />
             <ResultPreview
               job={job}

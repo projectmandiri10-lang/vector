@@ -13,6 +13,7 @@ import {
   listAdminUsers,
   rejectManualPayment,
   setAdminJobExample,
+  unsetAdminJobExample,
   toUserApiError,
   updateAdminPricingRule,
   updateAdminSetting,
@@ -284,15 +285,23 @@ export default function AdminPanel({ session, enabled }) {
     }
   }
 
-  async function setJobAsExample(job) {
+  async function toggleJobExample(job) {
     setIsBusy(true);
     setMessage('');
     try {
-      await setAdminJobExample(job.id, accessToken);
+      if (job.is_example_public) {
+        await unsetAdminJobExample(job.id, accessToken);
+      } else {
+        await setAdminJobExample(job.id, accessToken);
+      }
       await loadAdminData();
-      setMessage(`Job ${job.production_type === 'sablon' ? 'sablon' : 'sticker'} berhasil dijadikan contoh.`);
+      setMessage(
+        job.is_example_public
+          ? `Publikasi contoh untuk job ${job.production_type === 'sablon' ? 'sablon' : 'sticker'} berhasil dicabut.`
+          : `Job ${job.production_type === 'sablon' ? 'sablon' : 'sticker'} berhasil dipublish sebagai contoh.`
+      );
     } catch (error) {
-      setMessage(toUserApiError(error, 'Gagal menjadikan job sebagai contoh.').message);
+      setMessage(toUserApiError(error, job.is_example_public ? 'Gagal mencabut contoh job.' : 'Gagal menjadikan job sebagai contoh.').message);
     } finally {
       setIsBusy(false);
     }
@@ -683,18 +692,24 @@ export default function AdminPanel({ session, enabled }) {
                       {job.is_active_example && (
                         <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-xs font-semibold text-spruce">
                           <Star className="h-3.5 w-3.5" aria-hidden="true" />
-                          Contoh aktif
+                          Contoh dipublish
                         </span>
                       )}
                       <button
                         type="button"
-                        disabled={isBusy || !job.can_set_as_example}
-                        onClick={() => setJobAsExample(job)}
+                        disabled={isBusy || (!job.is_example_public && !job.can_set_as_example)}
+                        onClick={() => toggleJobExample(job)}
                         className="inline-flex min-h-8 items-center justify-center gap-1 border border-spruce bg-white px-2 py-1 text-xs font-semibold text-spruce disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
-                        title={job.can_set_as_example ? 'Gunakan job ini sebagai contoh gambar user' : 'Hanya job superadmin dengan bundle contoh lengkap yang bisa dijadikan contoh.'}
+                        title={
+                          job.is_example_public
+                            ? 'Cabut job ini dari feed contoh user.'
+                            : job.can_set_as_example
+                              ? 'Publish job ini ke feed contoh user.'
+                              : 'Hanya job superadmin dengan bundle contoh lengkap yang bisa dipublish.'
+                        }
                       >
                         <Star className="h-3.5 w-3.5" aria-hidden="true" />
-                        Jadikan contoh
+                        {job.is_example_public ? 'Cabut contoh' : 'Publish contoh'}
                       </button>
                     </div>
                   </td>

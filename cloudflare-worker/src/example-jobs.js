@@ -85,6 +85,10 @@ function normalizeExampleEntry(entry) {
   };
 }
 
+function isPublishedExample(job = {}) {
+  return job.is_example_public === true && !job.deleted_at;
+}
+
 export function isSuperuserProfile(profile, email = '') {
   return profile?.role === 'superuser' || normalizeEmail(email) === SUPERUSER_EMAIL;
 }
@@ -142,18 +146,20 @@ export function updateExampleJobsSetting(currentValue, productionType, entry) {
   return next;
 }
 
-export function decorateAdminJobs(jobs, profiles, exampleJobsValue) {
+export function decorateAdminJobs(jobs, profiles) {
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
-  const currentExamples = normalizeExampleJobsSetting(exampleJobsValue);
   return jobs.map((job) => {
     const owner = profilesById.get(job.user_id) || {};
     const exampleArtifacts = getExampleArtifactsFromManifest(job.manifest);
+    const examplePublished = isPublishedExample(job);
     return {
       ...job,
       user_email: owner.email || '',
       owner_role: owner.role || 'user',
       can_set_as_example: job.status === 'done' && owner.role === 'superuser' && hasCompleteExampleArtifacts(job.manifest, job.production_type),
-      is_active_example: currentExamples[job.production_type]?.jobId === job.id,
+      can_unset_example: examplePublished,
+      is_active_example: examplePublished,
+      is_example_public: examplePublished,
       example_source_path: getExampleSourcePathFromManifest(job.manifest),
       has_example_artifacts: Boolean(exampleArtifacts)
     };

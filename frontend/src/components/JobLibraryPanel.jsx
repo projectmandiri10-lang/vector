@@ -1,6 +1,5 @@
-import { Archive, Clock3, Eye, FileImage, Sparkles, Trash2 } from 'lucide-react';
+import { Archive, Eye, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { getAppConfig } from '../lib/api.js';
 import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from '../lib/modes.js';
 import ResultPreview from './ResultPreview.jsx';
 
@@ -26,62 +25,133 @@ function ExamplePreview({ label, src }) {
   );
 }
 
-function normalizeExampleEntry(type, entry) {
-  if (!entry || typeof entry !== 'object') return null;
+function toSeparationFiles(separations = []) {
+  return separations.map((separation) => ({
+    index: separation.index,
+    kind: separation.kind || 'color',
+    hex: separation.hex || '#000000',
+    label: separation.label || '',
+    svg: separation.svg || '',
+    pdf: separation.pdf || '',
+    preview: separation.preview || separation.previewPng || separation.svg || ''
+  }));
+}
 
-  const projectName = entry.projectName || `Contoh ${productionLabels[type] || type}`;
-  const resultPreviewUrl = entry.resultPreviewUrl || entry.imageUrl || entry.files?.fullPng || '';
-  const sourcePreviewUrl = entry.sourcePreviewUrl || '';
+function sortTimestamp(value) {
+  const time = new Date(value || 0).getTime();
+  return Number.isFinite(time) ? time : 0;
+}
 
+function normalizeHistoryItem(item, currentUserId) {
+  const job = item.job || {};
+  const settings = job.settings || {};
   return {
-    id: `example-${type}`,
-    kind: 'example',
-    projectName,
-    productionType: entry.productionType || type,
-    inputMode: entry.inputMode || INPUT_MODE_READY,
-    createdAt: entry.updatedAt || '',
-    updatedAt: entry.updatedAt || '',
-    sourcePreviewUrl,
-    resultPreviewUrl,
+    id: `history-${item.id}`,
+    selectionKey: job.jobId || item.id,
+    localRecordId: item.id,
+    jobId: job.jobId || item.id,
+    projectName: item.projectName || settings.projectName || 'Project Vector',
+    productionType: item.productionType || settings.productionType || 'sticker',
+    inputMode: item.inputMode || settings.inputMode || INPUT_MODE_READY,
+    createdAt: item.createdAt || job.createdAt || '',
+    updatedAt: item.updatedAt || job.updatedAt || item.createdAt || '',
+    sourcePreviewUrl: item.sourcePreviewUrl || '',
+    resultPreviewUrl: job.files?.fullPng || '',
+    sourceFileName: item.sourceFileName || '',
+    ownerId: currentUserId || '',
+    isExample: false,
+    isExamplePublic: false,
+    canDelete: true,
     job: {
-      jobId: entry.jobId || `example-${type}`,
-      status: 'done',
-      createdAt: entry.updatedAt || '',
-      updatedAt: entry.updatedAt || '',
-      settings: {
-        projectName,
-        productionType: entry.productionType || type,
-        inputMode: entry.inputMode || INPUT_MODE_READY,
-        actualWidthCm: entry.settings?.actualWidthCm || 10,
-        paperSize: entry.settings?.paperSize || 'A4',
-        paperOrientation: entry.settings?.paperOrientation || 'portrait',
-        separateColors: Boolean(entry.files?.separationZip || entry.separations?.length),
-        includeBackgroundInFilmSize: Boolean(entry.settings?.includeBackgroundInFilmSize),
-        stickerCutlineEnabled: Boolean(entry.files?.stickerCutlineSvg || entry.files?.stickerCutlinePdf)
-      },
+      ...job,
+      settings,
       files: {
-        fullPng: entry.files?.fullPng || resultPreviewUrl,
-        fullSvg: entry.files?.fullSvg || '',
-        fullPdf: entry.files?.fullPdf || '',
-        stickerCutlineSvg: entry.files?.stickerCutlineSvg || '',
-        stickerCutlinePdf: entry.files?.stickerCutlinePdf || '',
-        zip: entry.files?.zip || '',
-        separationZip: entry.files?.separationZip || '',
-        separations: (entry.separations || []).map((separation) => ({
-          index: separation.index,
-          kind: separation.kind || 'color',
-          hex: separation.hex || '#000000',
-          label: separation.label || '',
-          svg: separation.svg || '',
-          pdf: separation.pdf || '',
-          preview: separation.preview || separation.previewPng || separation.svg || ''
-        }))
+        ...(job.files || {}),
+        separations: toSeparationFiles(job.files?.separations || [])
       }
     }
   };
 }
 
-function LibraryCard({ item, onOpen, onDelete }) {
+function normalizeExampleItem(item, currentUserId) {
+  if (!item || typeof item !== 'object') return null;
+  const settings = item.settings || {};
+  const projectName = item.projectName || settings.projectName || 'Contoh pekerjaan';
+  const productionType = item.productionType || settings.productionType || 'sticker';
+  const inputMode = item.inputMode || settings.inputMode || INPUT_MODE_READY;
+
+  return {
+    id: `example-${item.jobId}`,
+    selectionKey: item.jobId || `example-${productionType}`,
+    localRecordId: '',
+    jobId: item.jobId || `example-${productionType}`,
+    projectName,
+    productionType,
+    inputMode,
+    createdAt: item.createdAt || item.updatedAt || '',
+    updatedAt: item.updatedAt || item.createdAt || '',
+    sourcePreviewUrl: item.sourcePreviewUrl || '',
+    resultPreviewUrl: item.resultPreviewUrl || item.files?.fullPng || '',
+    sourceFileName: '',
+    ownerId: item.ownerId || '',
+    isExample: true,
+    isExamplePublic: item.isExamplePublic !== false,
+    canDelete: Boolean(item.ownerId && currentUserId && item.ownerId === currentUserId),
+    job: {
+      jobId: item.jobId || `example-${productionType}`,
+      status: 'done',
+      createdAt: item.createdAt || item.updatedAt || '',
+      updatedAt: item.updatedAt || item.createdAt || '',
+      settings,
+      files: {
+        fullPng: item.files?.fullPng || item.resultPreviewUrl || '',
+        fullSvg: item.files?.fullSvg || '',
+        fullPdf: item.files?.fullPdf || '',
+        stickerCutlineSvg: item.files?.stickerCutlineSvg || '',
+        stickerCutlinePdf: item.files?.stickerCutlinePdf || '',
+        zip: item.files?.zip || '',
+        separationZip: item.files?.separationZip || '',
+        separations: toSeparationFiles(item.separations || [])
+      }
+    }
+  };
+}
+
+function mergeLibraryItems(localItem, exampleItem) {
+  const localFiles = localItem.job?.files || {};
+  const exampleFiles = exampleItem.job?.files || {};
+  const sourcePreviewUrl = localItem.sourcePreviewUrl || exampleItem.sourcePreviewUrl;
+  const resultPreviewUrl = exampleItem.resultPreviewUrl || localItem.resultPreviewUrl;
+
+  return {
+    ...localItem,
+    ...exampleItem,
+    id: `merged-${exampleItem.jobId}`,
+    selectionKey: exampleItem.jobId || localItem.selectionKey,
+    localRecordId: localItem.localRecordId,
+    sourcePreviewUrl,
+    resultPreviewUrl,
+    sourceFileName: localItem.sourceFileName || '',
+    isExample: true,
+    isExamplePublic: true,
+    canDelete: Boolean(localItem.canDelete || exampleItem.canDelete),
+    job: {
+      ...localItem.job,
+      ...exampleItem.job,
+      settings: {
+        ...(localItem.job?.settings || {}),
+        ...(exampleItem.job?.settings || {})
+      },
+      files: {
+        ...localFiles,
+        ...exampleFiles,
+        separations: exampleFiles.separations?.length ? exampleFiles.separations : localFiles.separations || []
+      }
+    }
+  };
+}
+
+function LibraryCard({ item, onOpen, onDelete, isDeleting }) {
   const productionLabel = productionLabels[item.productionType] || item.productionType;
   const inputLabel = inputModeLabels[item.inputMode] || item.inputMode;
 
@@ -95,21 +165,25 @@ function LibraryCard({ item, onOpen, onDelete }) {
           </p>
           {item.updatedAt && <p className="mt-1 text-[11px] text-gray-500">{new Date(item.updatedAt).toLocaleString('id-ID')}</p>}
         </div>
-        {item.kind === 'history' ? (
-          <button
-            type="button"
-            onClick={() => onDelete(item)}
-            className="inline-flex h-9 w-9 items-center justify-center border border-tomato bg-white text-tomato transition hover:bg-orange-50"
-            title="Hapus dari perangkat"
-          >
-            <Trash2 className="h-4 w-4" aria-hidden="true" />
-          </button>
-        ) : (
-          <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-[11px] font-semibold text-spruce">
-            <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
-            Contoh
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {item.isExample && (
+            <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-[11px] font-semibold text-spruce">
+              <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+              Contoh
+            </span>
+          )}
+          {item.canDelete && (
+            <button
+              type="button"
+              onClick={() => onDelete(item)}
+              disabled={isDeleting}
+              className="inline-flex h-9 w-9 items-center justify-center border border-tomato bg-white text-tomato transition hover:bg-orange-50 disabled:cursor-not-allowed disabled:opacity-60"
+              title={item.isExample ? 'Hapus job dan cabut publikasi contoh' : 'Hapus job'}
+            >
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
@@ -131,88 +205,58 @@ function LibraryCard({ item, onOpen, onDelete }) {
   );
 }
 
-export default function JobLibraryPanel({ historyJobs, historyError = '', onDeleteHistoryJob }) {
-  const [activeTab, setActiveTab] = useState('history');
-  const [selectedId, setSelectedId] = useState('');
-  const [exampleJobs, setExampleJobs] = useState([]);
-  const [examplesError, setExamplesError] = useState('');
-
-  useEffect(() => {
-    let cancelled = false;
-    getAppConfig()
-      .then((data) => {
-        if (cancelled) return;
-        const settings = data.settings?.example_jobs || {};
-        const nextExamples = ['sticker', 'sablon']
-          .map((type) => normalizeExampleEntry(type, settings?.[type]))
-          .filter(Boolean);
-        setExampleJobs(nextExamples);
-        setExamplesError('');
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setExampleJobs([]);
-        setExamplesError('Contoh pekerjaan belum tersedia saat ini.');
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+export default function JobLibraryPanel({
+  historyJobs,
+  exampleJobs,
+  historyError = '',
+  exampleError = '',
+  onDeleteJob,
+  deletingJobId = '',
+  currentUserId = ''
+}) {
+  const [selectedKey, setSelectedKey] = useState('');
 
   const items = useMemo(() => {
-    if (activeTab === 'history') return historyJobs;
-    return exampleJobs;
-  }, [activeTab, exampleJobs, historyJobs]);
+    const localItems = (historyJobs || []).map((item) => normalizeHistoryItem(item, currentUserId));
+    const remoteItems = (exampleJobs || []).map((item) => normalizeExampleItem(item, currentUserId)).filter(Boolean);
+    const merged = new Map();
 
-  const selectedItem = useMemo(() => items.find((item) => item.id === selectedId) || null, [items, selectedId]);
+    localItems.forEach((item) => {
+      merged.set(item.selectionKey, item);
+    });
+
+    remoteItems.forEach((item) => {
+      const existing = merged.get(item.selectionKey);
+      merged.set(item.selectionKey, existing ? mergeLibraryItems(existing, item) : item);
+    });
+
+    return [...merged.values()].sort((left, right) => sortTimestamp(right.updatedAt || right.createdAt) - sortTimestamp(left.updatedAt || left.createdAt));
+  }, [currentUserId, exampleJobs, historyJobs]);
+
+  const selectedItem = useMemo(() => items.find((item) => item.selectionKey === selectedKey) || null, [items, selectedKey]);
 
   useEffect(() => {
-    if (selectedId && !items.some((item) => item.id === selectedId)) {
-      setSelectedId('');
+    if (selectedKey && !items.some((item) => item.selectionKey === selectedKey)) {
+      setSelectedKey('');
     }
-  }, [items, selectedId]);
-
-  async function handleDeleteHistory(item) {
-    await onDeleteHistoryJob(item);
-    if (selectedId === item.id) setSelectedId('');
-  }
+  }, [items, selectedKey]);
 
   return (
     <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex items-center gap-2">
         <Archive className="h-5 w-5 text-spruce" aria-hidden="true" />
         <div>
-          <h2 className="text-base font-semibold text-ink">Riwayat & contoh pekerjaan</h2>
-          <p className="text-xs text-gray-600">Lihat job milik Anda di perangkat ini dan contoh job penuh dari superadmin.</p>
+          <h2 className="text-base font-semibold text-ink">Riwayat job & contoh</h2>
+          <p className="text-xs text-gray-600">Riwayat milik Anda di browser ini digabung dengan contoh job superadmin yang siap dibuka dan didownload.</p>
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveTab('history')}
-          className={`inline-flex min-h-10 items-center gap-2 border px-3 py-2 text-sm font-semibold ${activeTab === 'history' ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink'}`}
-        >
-          <Clock3 className="h-4 w-4" aria-hidden="true" />
-          Riwayat Saya
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab('examples')}
-          className={`inline-flex min-h-10 items-center gap-2 border px-3 py-2 text-sm font-semibold ${activeTab === 'examples' ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink'}`}
-        >
-          <FileImage className="h-4 w-4" aria-hidden="true" />
-          Contoh Pekerjaan
-        </button>
-      </div>
-
-      {activeTab === 'history' && historyError && <p className="mb-3 border border-line bg-panel px-3 py-2 text-sm text-gray-700">{historyError}</p>}
-      {activeTab === 'examples' && examplesError && <p className="mb-3 border border-line bg-panel px-3 py-2 text-sm text-gray-700">{examplesError}</p>}
+      {historyError && <p className="mb-3 border border-line bg-panel px-3 py-2 text-sm text-gray-700">{historyError}</p>}
+      {exampleError && <p className="mb-3 border border-line bg-panel px-3 py-2 text-sm text-gray-700">{exampleError}</p>}
 
       {items.length === 0 ? (
         <div className="border border-dashed border-line bg-panel px-4 py-6 text-sm text-gray-600">
-          {activeTab === 'history' ? 'Belum ada riwayat job di browser ini.' : 'Belum ada contoh pekerjaan yang dipilih superadmin.'}
+          Belum ada riwayat job di browser ini dan belum ada contoh pekerjaan yang dipublish.
         </div>
       ) : (
         <div className="grid gap-3">
@@ -220,8 +264,9 @@ export default function JobLibraryPanel({ historyJobs, historyError = '', onDele
             <LibraryCard
               key={item.id}
               item={item}
-              onOpen={(nextItem) => setSelectedId(nextItem.id)}
-              onDelete={handleDeleteHistory}
+              onOpen={(nextItem) => setSelectedKey(nextItem.selectionKey)}
+              onDelete={onDeleteJob}
+              isDeleting={deletingJobId === item.id || deletingJobId === item.jobId}
             />
           ))}
         </div>
@@ -233,10 +278,11 @@ export default function JobLibraryPanel({ historyJobs, historyError = '', onDele
             job={selectedItem.job}
             sourcePreviewUrl={selectedItem.sourcePreviewUrl}
             sourcePreviewLabel={selectedItem.sourceFileName ? `Preview awal: ${selectedItem.sourceFileName}` : 'Preview gambar awal'}
-            heading={selectedItem.kind === 'history' ? 'Detail riwayat job' : 'Detail contoh pekerjaan'}
+            heading={selectedItem.isExample ? 'Detail contoh pekerjaan' : 'Detail riwayat job'}
             subheading={`${productionLabels[selectedItem.productionType] || selectedItem.productionType} · ${inputModeLabels[selectedItem.inputMode] || selectedItem.inputMode}`}
-            showDelete={selectedItem.kind === 'history'}
-            onDelete={selectedItem.kind === 'history' ? () => handleDeleteHistory(selectedItem) : undefined}
+            showDelete={selectedItem.canDelete}
+            onDelete={selectedItem.canDelete ? () => onDeleteJob(selectedItem) : undefined}
+            isDeleting={deletingJobId === selectedItem.id || deletingJobId === selectedItem.jobId}
           />
         </div>
       )}

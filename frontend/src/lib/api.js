@@ -79,6 +79,17 @@ export async function uploadExampleArtifacts(jobId, formData, accessToken) {
   });
 }
 
+export async function listExampleJobs(accessToken) {
+  return apiFetch('/api/example-jobs', { accessToken });
+}
+
+export async function deleteCloudJob(jobId, accessToken) {
+  return apiFetch(`/api/jobs/${jobId}`, {
+    method: 'DELETE',
+    accessToken
+  });
+}
+
 export async function requestImageRetouch(file, settings, accessToken) {
   const formData = new FormData();
   formData.append('image', file);
@@ -169,6 +180,13 @@ export async function listAdminJobs(accessToken) {
 
 export async function setAdminJobExample(jobId, accessToken) {
   return apiFetch(`/api/admin/jobs/${jobId}/set-example`, {
+    method: 'POST',
+    accessToken
+  });
+}
+
+export async function unsetAdminJobExample(jobId, accessToken) {
+  return apiFetch(`/api/admin/jobs/${jobId}/unset-example`, {
     method: 'POST',
     accessToken
   });

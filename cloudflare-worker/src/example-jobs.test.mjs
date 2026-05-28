@@ -56,6 +56,8 @@ test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligi
       user_id: 'super-1',
       production_type: 'sticker',
       status: 'done',
+      is_example_public: true,
+      deleted_at: null,
       manifest: { exampleArtifacts: completeArtifacts('sticker') }
     },
     {
@@ -63,6 +65,8 @@ test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligi
       user_id: 'user-1',
       production_type: 'sablon',
       status: 'done',
+      is_example_public: false,
+      deleted_at: null,
       manifest: { exampleArtifacts: completeArtifacts('sablon') }
     },
     {
@@ -70,6 +74,8 @@ test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligi
       user_id: 'super-1',
       production_type: 'sablon',
       status: 'done',
+      is_example_public: false,
+      deleted_at: null,
       manifest: {
         exampleArtifacts: {
           ...completeArtifacts('sablon'),
@@ -80,21 +86,15 @@ test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligi
     }
   ];
 
-  const decorated = decorateAdminJobs(jobs, profiles, {
-    sticker: {
-      jobId: 'job-1',
-      projectName: 'Contoh sticker',
-      productionType: 'sticker',
-      resultPreviewUrl: 'https://example.com/full.png',
-      files: { fullPng: 'https://example.com/full.png' },
-      updatedAt: '2026-05-28T00:00:00.000Z'
-    }
-  });
+  const decorated = decorateAdminJobs(jobs, profiles);
 
   assert.equal(decorated[0].user_email, 'boss@example.com');
   assert.equal(decorated[0].can_set_as_example, true);
+  assert.equal(decorated[0].can_unset_example, true);
   assert.equal(decorated[0].is_active_example, true);
+  assert.equal(decorated[0].is_example_public, true);
   assert.equal(decorated[1].can_set_as_example, false);
+  assert.equal(decorated[1].can_unset_example, false);
   assert.equal(decorated[2].can_set_as_example, false);
 });
 
