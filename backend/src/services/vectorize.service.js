@@ -3,17 +3,27 @@ import { optimize } from 'svgo';
 import potrace from 'potrace';
 import { escapeXml } from '../utils/svg.js';
 
+function numberFromEnv(key, fallback, min, max) {
+  const parsed = Number.parseFloat(process.env[key]);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function traceOptions() {
+  return {
+    color: '#000000',
+    background: 'transparent',
+    threshold: numberFromEnv('TRACE_THRESHOLD', 180, 1, 254),
+    turdSize: numberFromEnv('TRACE_TURD_SIZE', 4, 0, 100),
+    optTolerance: numberFromEnv('TRACE_OPT_TOLERANCE', 0.18, 0.05, 1)
+  };
+}
+
 function traceMask(filePath) {
   return new Promise((resolve, reject) => {
     potrace.trace(
       filePath,
-      {
-        color: '#000000',
-        background: 'transparent',
-        threshold: 180,
-        turdSize: 8,
-        optTolerance: 0.25
-      },
+      traceOptions(),
       (error, svg) => {
         if (error) reject(error);
         else resolve(svg);
@@ -67,7 +77,7 @@ export function buildFullColorSvg(pathsByColor, width, height) {
     .join('\n');
 
   return `<?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="AI redraw vector">
+<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" role="img" aria-label="Design Mudah vector artwork">
 ${body}
 </svg>`;
 }

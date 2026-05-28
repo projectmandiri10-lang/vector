@@ -15,6 +15,37 @@ const DEFAULT_PRICING = {
   separation_film: 1000
 };
 
+const AI_REDRAW_MODEL_PRESETS = {
+  budget: {
+    mode: 'budget',
+    label: 'Hemat',
+    model: 'gemini-2.5-flash-image',
+    imageSize: '1K',
+    estimatedUsdPerImage: 0.039
+  },
+  standard: {
+    mode: 'standard',
+    label: 'Standar',
+    model: 'gemini-3.1-flash-image-preview',
+    imageSize: '1K',
+    estimatedUsdPerImage: 0.067
+  },
+  quality: {
+    mode: 'quality',
+    label: 'Kualitas',
+    model: 'gemini-3.1-flash-image-preview',
+    imageSize: '2K',
+    estimatedUsdPerImage: 0.101
+  },
+  premium: {
+    mode: 'premium',
+    label: 'Premium',
+    model: 'gemini-3-pro-image-preview',
+    imageSize: '2K',
+    estimatedUsdPerImage: 0.134
+  }
+};
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
@@ -86,8 +117,26 @@ function calculateDynamicJobPrice({ inputMode = 'ready_trace', separationFilmCou
   return basePrice + Math.max(0, Number(separationFilmCount) || 0) * pricing.separation_film;
 }
 
-function imageModelCandidates(env) {
-  const configured = env.GEMINI_IMAGE_MODEL || env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
+function normalizeAiRedrawModelConfig(value = {}, env = {}) {
+  const input = value && typeof value === 'object' ? value : {};
+  const preset = AI_REDRAW_MODEL_PRESETS[input.mode] || null;
+  const defaultPreset = AI_REDRAW_MODEL_PRESETS.quality;
+  const configuredModel = input.model || preset?.model || env.GEMINI_IMAGE_MODEL || env.AI_IMAGE_MODEL || defaultPreset.model;
+  const configuredSize = String(input.imageSize || preset?.imageSize || env.GEMINI_IMAGE_SIZE || defaultPreset.imageSize).toUpperCase();
+  const imageSize = ['1K', '2K', '4K'].includes(configuredSize) ? configuredSize : defaultPreset.imageSize;
+
+  return {
+    mode: input.mode || preset?.mode || 'custom',
+    label: input.label || preset?.label || 'Custom',
+    model: configuredModel,
+    imageSize,
+    estimatedUsdPerImage:
+      Number(input.estimatedUsdPerImage) || preset?.estimatedUsdPerImage || defaultPreset.estimatedUsdPerImage
+  };
+}
+
+function imageModelCandidates(env, configuredModel) {
+  const configured = configuredModel || env.GEMINI_IMAGE_MODEL || env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
   const candidates = [configured];
 
   if (configured === 'imagen-3.0-generate-002') {
@@ -380,6 +429,7 @@ function handleHealth(env) {
       geminiApiKey: hasEnvValue(env, 'GEMINI_API_KEY'),
       geminiAnalysisModel: env.GEMINI_ANALYSIS_MODEL || 'gemini-3.1-pro-preview',
       imageModels: imageModelCandidates(env),
+      defaultAiRedrawModel: normalizeAiRedrawModelConfig({}, env),
       processorBaseUrl: hasEnvValue(env, 'PROCESSOR_BASE_URL'),
       processorApiKey: hasEnvValue(env, 'PROCESSOR_API_KEY')
     },
@@ -495,6 +545,15 @@ async function getPricing(env) {
 async function getAppSetting(env, key) {
   const rows = await supabaseFetch(env, `/rest/v1/app_settings?select=key,value,is_public,description,updated_at&key=eq.${encodeURIComponent(key)}&limit=1`, {});
   return rows?.[0] || null;
+}
+
+async function getAiRedrawModelConfig(env) {
+  try {
+    const setting = await getAppSetting(env, 'ai_redraw_model');
+    return normalizeAiRedrawModelConfig(setting?.value, env);
+  } catch (_error) {
+    return normalizeAiRedrawModelConfig({}, env);
+  }
 }
 
 async function upsertAppSetting(env, { key, value, isPublic = true, description = '' }) {
@@ -787,8 +846,9 @@ async function requestRetouchedImage(env, image, settings, ledgerId) {
   const mimeType = image.type || 'image/png';
   const prompt = buildAiPrompt(settings);
   const apiKey = requireEnvValue(env, 'GEMINI_API_KEY');
+  const aiModelConfig = await getAiRedrawModelConfig(env);
 
-  for (const model of imageModelCandidates(env)) {
+  for (const model of imageModelCandidates(env, aiModelConfig.model)) {
     if (model.startsWith('imagen-')) {
       errors.push(`${model}: Imagen tidak mendukung redraw dari gambar upload melalui endpoint Gemini ini; memakai model image Gemini sebagai fallback.`);
       continue;
@@ -820,7 +880,7 @@ async function requestRetouchedImage(env, image, settings, ledgerId) {
           responseFormat: {
             image: {
               aspectRatio: '1:1',
-              imageSize: env.GEMINI_IMAGE_SIZE || '2K'
+              imageSize: aiModelConfig.imageSize
             }
           }
         }
@@ -844,6 +904,10 @@ async function requestRetouchedImage(env, image, settings, ledgerId) {
   }
 
   throw new Error(`Gambar ulang gagal. ${errors.join(' | ')}`);
+}
+
+export function getAiRedrawModelPresets() {
+  return AI_REDRAW_MODEL_PRESETS;
 }
 
 export function buildAiPrompt(settings) {

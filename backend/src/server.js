@@ -28,6 +28,13 @@ app.get('/api/health', (_req, res) => {
     service: 'ai-redraw-vector-backend',
     runtime: process.env.K_SERVICE ? 'cloud-run' : 'node',
     processorAuth: processorAuthEnabled(),
+    trace: {
+      engine: 'potrace',
+      maxDimension: Number.parseInt(process.env.PREPROCESS_MAX_DIMENSION || '2048', 10),
+      threshold: Number.parseFloat(process.env.TRACE_THRESHOLD || '180'),
+      turdSize: Number.parseFloat(process.env.TRACE_TURD_SIZE || '4'),
+      optTolerance: Number.parseFloat(process.env.TRACE_OPT_TOLERANCE || '0.18')
+    },
     redrawProvider: 'gemini',
     redrawModel: process.env.GEMINI_IMAGE_MODEL || process.env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview',
     redrawScope: 'only when inputMode=ai_redraw'

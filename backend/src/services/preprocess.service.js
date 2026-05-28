@@ -14,7 +14,8 @@ export async function preprocessUploadedImage(buffer, jobDir) {
     throw new Error('File gambar tidak valid atau tidak bisa dibaca.');
   }
 
-  const resize = { width: 2048, height: 2048, fit: 'inside', withoutEnlargement: true };
+  const maxDimension = Math.min(3072, Math.max(1024, Number.parseInt(process.env.PREPROCESS_MAX_DIMENSION || '2048', 10)));
+  const resize = { width: maxDimension, height: maxDimension, fit: 'inside', withoutEnlargement: true };
   await sharp(buffer, { failOn: 'error' }).rotate().resize(resize).png().toFile(inputPath);
   const cleanMeta = await sharp(inputPath)
     .flatten({ background: '#ffffff' })

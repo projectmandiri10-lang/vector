@@ -36,17 +36,19 @@ steps:
       - --execution-environment
       - gen2
       - --cpu
-      - "2"
+      - "1"
       - --memory
       - 2Gi
       - --timeout
-      - "900"
+      - "600"
       - --concurrency
-      - "2"
+      - "1"
+      - --min-instances
+      - "0"
       - --max-instances
       - "1"
       - --set-env-vars
-      - NODE_ENV=production,STORAGE_DIR=/tmp/vectorizer-storage,MAX_UPLOAD_MB=10,CORS_ORIGIN=${_FRONTEND_ORIGIN},GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview,GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview,GEMINI_IMAGE_SIZE=2K
+      - NODE_ENV=production,STORAGE_DIR=/tmp/vectorizer-storage,MAX_UPLOAD_MB=10,UPLOAD_RATE_LIMIT_PER_MINUTE=3,PREPROCESS_MAX_DIMENSION=2048,TRACE_THRESHOLD=180,TRACE_TURD_SIZE=4,TRACE_OPT_TOLERANCE=0.18,CORS_ORIGIN=${_FRONTEND_ORIGIN},GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview,GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview,GEMINI_IMAGE_SIZE=2K
       - --set-secrets
       - GEMINI_API_KEY=gemini-api-key:latest,PROCESSOR_API_KEY=processor-api-key:latest
 

@@ -29,6 +29,7 @@ const jobs = new Map();
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const allowedExt = new Set(['.jpg', '.jpeg', '.png', '.webp']);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 10);
+const uploadRateLimitPerMinute = Math.min(30, Math.max(1, Number.parseInt(process.env.UPLOAD_RATE_LIMIT_PER_MINUTE || '4', 10)));
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -61,7 +62,7 @@ function handleUpload(req, res, next) {
 
 const uploadLimiter = rateLimit({
   windowMs: 60 * 1000,
-  limit: 10,
+  limit: uploadRateLimitPerMinute,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: 'Terlalu banyak upload. Coba lagi sebentar.' }

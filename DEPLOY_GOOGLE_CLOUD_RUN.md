@@ -164,6 +164,31 @@ Test health:
 Invoke-RestMethod "$PROCESSOR_URL/api/health"
 ```
 
+Profil resource default di `cloudbuild.cloud-run.yaml` sengaja dibuat hemat:
+
+```text
+1 vCPU
+2GiB memory
+min-instances=0
+max-instances=1
+concurrency=1
+timeout=600s
+```
+
+Alasannya: kualitas trace tidak ditentukan oleh jumlah CPU, melainkan oleh kualitas input, resolusi preprocess, mask warna, dan parameter Potrace. `1 vCPU + 2GiB` biasanya lebih masuk akal untuk free tier daripada `2 vCPU + 2GiB`, karena kuota vCPU-second lebih cepat habis saat CPU dinaikkan. `max-instances=1` dan `concurrency=1` juga mencegah lonjakan paralel yang bisa membakar kuota.
+
+Parameter trace default:
+
+```text
+PREPROCESS_MAX_DIMENSION=2048
+TRACE_THRESHOLD=180
+TRACE_TURD_SIZE=4
+TRACE_OPT_TOLERANCE=0.18
+UPLOAD_RATE_LIMIT_PER_MINUTE=3
+```
+
+Jika ingin lebih hemat untuk banyak user, turunkan `PREPROCESS_MAX_DIMENSION` ke `1600` dan naikkan `TRACE_TURD_SIZE` ke `6`. Jika ingin kualitas paling tajam untuk job sedikit, biarkan `2048`, `4`, dan `0.18`.
+
 Test endpoint job yang dilindungi:
 
 ```powershell

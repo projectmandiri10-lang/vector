@@ -33,6 +33,56 @@ const inputModeLabels = {
   [INPUT_MODE_RETOUCH]: 'Gambar ulang'
 };
 
+const aiRedrawModelPresets = [
+  {
+    mode: 'budget',
+    label: 'Hemat',
+    model: 'gemini-2.5-flash-image',
+    imageSize: '1K',
+    estimatedUsdPerImage: 0.039,
+    note: 'Biaya paling rendah, cocok untuk logo sederhana dan volume tinggi.'
+  },
+  {
+    mode: 'standard',
+    label: 'Standar',
+    model: 'gemini-3.1-flash-image-preview',
+    imageSize: '1K',
+    estimatedUsdPerImage: 0.067,
+    note: 'Kompromi biaya dan kualitas untuk kebanyakan upload.'
+  },
+  {
+    mode: 'quality',
+    label: 'Kualitas',
+    model: 'gemini-3.1-flash-image-preview',
+    imageSize: '2K',
+    estimatedUsdPerImage: 0.101,
+    note: 'Default aman untuk trace lebih halus.'
+  },
+  {
+    mode: 'premium',
+    label: 'Premium',
+    model: 'gemini-3-pro-image-preview',
+    imageSize: '2K',
+    estimatedUsdPerImage: 0.134,
+    note: 'Untuk testing kualitas tinggi, biaya lebih mahal.'
+  }
+];
+
+function normalizeAiModelDraft(value = {}) {
+  const selected = aiRedrawModelPresets.find((preset) => preset.mode === value.mode) || aiRedrawModelPresets[2];
+  return {
+    mode: value.mode || selected.mode,
+    label: value.label || selected.label,
+    model: value.model || selected.model,
+    imageSize: value.imageSize || selected.imageSize,
+    estimatedUsdPerImage: Number(value.estimatedUsdPerImage) || selected.estimatedUsdPerImage
+  };
+}
+
+function estimatedIdr(usd) {
+  return Math.round((Number(usd) || 0) * 17700);
+}
+
 function examplePublishHint(job, isPublished) {
   if (isPublished) return 'Job ini sedang tampil di feed contoh user.';
   if (job.can_set_as_example) return 'Siap dipublish sebagai contoh.';
@@ -64,6 +114,7 @@ export default function AdminPanel({ session, enabled }) {
   const [amountByUser, setAmountByUser] = useState({});
   const [pricingDraft, setPricingDraft] = useState({});
   const [shopeeDraft, setShopeeDraft] = useState({ url: '', note: '', contact: '' });
+  const [aiModelDraft, setAiModelDraft] = useState(normalizeAiModelDraft());
   const [rejectReasonByPayment, setRejectReasonByPayment] = useState({});
   const [newUser, setNewUser] = useState({
     fullName: '',
@@ -102,6 +153,7 @@ export default function AdminPanel({ session, enabled }) {
         Object.fromEntries((pricingData.rules || []).map((rule) => [rule.key, { amountIdr: rule.amount_idr, description: rule.description || '', active: rule.active !== false }]))
       );
       const shopee = (settingsData.settings || []).find((setting) => setting.key === 'shopee_payment')?.value || {};
+      const aiModel = (settingsData.settings || []).find((setting) => setting.key === 'ai_redraw_model')?.value || {};
       const defaultShopeeNote =
         'Checkout nominal credit di Shopee, lalu kirim email akun Design Mudah melalui chat Shopee. Admin top up manual 5-15 menit pada jam kerja.';
       setShopeeDraft({
@@ -109,6 +161,7 @@ export default function AdminPanel({ session, enabled }) {
         note: shopee.note || defaultShopeeNote,
         contact: shopee.contact || ''
       });
+      setAiModelDraft(normalizeAiModelDraft(aiModel));
     } catch (error) {
       setMessage(toUserApiError(error, 'Gagal membaca data superadmin.').message);
     } finally {
@@ -289,6 +342,29 @@ export default function AdminPanel({ session, enabled }) {
       setMessage('Setting Shopee berhasil disimpan.');
     } catch (error) {
       setMessage(toUserApiError(error, 'Gagal menyimpan setting Shopee.').message);
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function saveAiModelSetting() {
+    const nextValue = normalizeAiModelDraft(aiModelDraft);
+    setIsBusy(true);
+    setMessage('');
+    try {
+      await updateAdminSetting(
+        {
+          key: 'ai_redraw_model',
+          value: nextValue,
+          isPublic: false,
+          description: 'Model dan ukuran output untuk gambar ulang AI'
+        },
+        accessToken
+      );
+      await loadAdminData();
+      setMessage(`Model gambar ulang disimpan: ${nextValue.label} (${nextValue.model}, ${nextValue.imageSize}).`);
+    } catch (error) {
+      setMessage(toUserApiError(error, 'Gagal menyimpan model gambar ulang.').message);
     } finally {
       setIsBusy(false);
     }
@@ -645,6 +721,72 @@ export default function AdminPanel({ session, enabled }) {
 
       {activeTab === 'settings' && (
         <div className="grid gap-3">
+          <div className="border border-line bg-panel p-3">
+            <h3 className="mb-3 text-sm font-bold text-ink">Model gambar ulang</h3>
+            <div className="grid gap-3">
+              <label className="block">
+                <span className="mb-1.5 block text-sm font-medium text-ink">Preset model</span>
+                <select
+                  value={aiModelDraft.mode}
+                  onChange={(event) => {
+                    const preset = aiRedrawModelPresets.find((item) => item.mode === event.target.value) || aiRedrawModelPresets[2];
+                    setAiModelDraft(normalizeAiModelDraft(preset));
+                  }}
+                  className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                >
+                  {aiRedrawModelPresets.map((preset) => (
+                    <option key={preset.mode} value={preset.mode}>
+                      {preset.label} - {preset.model} {preset.imageSize}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Model</span>
+                  <input
+                    value={aiModelDraft.model}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', label: 'Custom', model: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran output</span>
+                  <select
+                    value={aiModelDraft.imageSize}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', label: 'Custom', imageSize: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="1K">1K</option>
+                    <option value="2K">2K</option>
+                    <option value="4K">4K</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Estimasi USD/gambar</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.001"
+                    value={aiModelDraft.estimatedUsdPerImage}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', label: 'Custom', estimatedUsdPerImage: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  />
+                </label>
+              </div>
+              <div className="border border-line bg-white p-3 text-sm leading-6 text-gray-700">
+                <p>
+                  Aktif: <strong>{aiModelDraft.label}</strong> · {aiModelDraft.model} · {aiModelDraft.imageSize}
+                </p>
+                <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw, belum termasuk input token kecil.</p>
+                <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen model.'}</p>
+              </div>
+              <button type="button" onClick={saveAiModelSetting} className="inline-flex min-h-10 w-fit items-center justify-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-bold text-white">
+                <Save className="h-4 w-4" aria-hidden="true" />
+                Simpan model gambar ulang
+              </button>
+            </div>
+          </div>
           <div className="border border-line bg-panel p-3">
             <h3 className="mb-3 text-sm font-bold text-ink">Pembayaran Shopee</h3>
             <div className="grid gap-3">
