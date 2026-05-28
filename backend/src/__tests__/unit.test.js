@@ -140,26 +140,33 @@ test('createMasksForPalette removes tiny color specks and keeps real color regio
   }
 });
 
-test('createMasksForPalette removes enclosed holes that match detected edge background', async () => {
+test('createMasksForPalette removes enclosed holes while keeping separate same-color objects', async () => {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-mask-hole-test-'));
   try {
     const sourcePath = path.join(tempDir, 'source.png');
     const maskDir = path.join(tempDir, 'masks');
-    const png = new PNG({ width: 32, height: 32, colorType: 6 });
+    const png = new PNG({ width: 40, height: 40, colorType: 6 });
 
     for (let y = 0; y < png.height; y += 1) {
       for (let x = 0; x < png.width; x += 1) {
         const idx = (png.width * y + x) << 2;
-        png.data[idx] = 0;
-        png.data[idx + 1] = 0;
-        png.data[idx + 2] = 0;
+        const isEdgeBackground = x < 4 || y < 4 || x >= png.width - 4 || y >= png.height - 4;
+        png.data[idx] = isEdgeBackground ? 22 : 255;
+        png.data[idx + 1] = isEdgeBackground ? 22 : 255;
+        png.data[idx + 2] = isEdgeBackground ? 22 : 255;
         png.data[idx + 3] = 255;
       }
     }
 
-    for (let y = 6; y < 26; y += 1) {
-      for (let x = 6; x < 26; x += 1) {
-        if (x >= 12 && x < 20 && y >= 12 && y < 20) continue;
+    for (let y = 14; y < 34; y += 1) {
+      for (let x = 14; x < 34; x += 1) {
+        if (x >= 20 && x < 28 && y >= 20 && y < 28) {
+          const idx = (png.width * y + x) << 2;
+          png.data[idx] = 22;
+          png.data[idx + 1] = 22;
+          png.data[idx + 2] = 22;
+          continue;
+        }
         const idx = (png.width * y + x) << 2;
         png.data[idx] = 218;
         png.data[idx + 1] = 59;
@@ -167,20 +174,29 @@ test('createMasksForPalette removes enclosed holes that match detected edge back
       }
     }
 
+    for (let y = 7; y < 13; y += 1) {
+      for (let x = 7; x < 13; x += 1) {
+        const idx = (png.width * y + x) << 2;
+        png.data[idx] = 22;
+        png.data[idx + 1] = 22;
+        png.data[idx + 2] = 22;
+      }
+    }
+
     await fs.writeFile(sourcePath, PNG.sync.write(png));
     await createMasksForPalette(
       sourcePath,
       [
-        { index: 1, hex: '#000000', r: 0, g: 0, b: 0 },
+        { index: 1, hex: '#161616', r: 22, g: 22, b: 22 },
         { index: 2, hex: '#DA3B52', r: 218, g: 59, b: 82 }
       ],
       maskDir,
-      { whiteAsBackground: false }
+      { whiteAsBackground: true }
     );
 
     const backgroundMask = PNG.sync.read(await fs.readFile(path.join(maskDir, 'color-01.png')));
     const redMask = PNG.sync.read(await fs.readFile(path.join(maskDir, 'color-02.png')));
-    assert.equal(activeMaskPixelCount(backgroundMask), 0);
+    assert.equal(activeMaskPixelCount(backgroundMask), 36);
     assert.equal(activeMaskPixelCount(redMask), 336);
   } finally {
     await fs.remove(tempDir);

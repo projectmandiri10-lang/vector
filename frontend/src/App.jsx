@@ -345,6 +345,10 @@ export default function App() {
 
   async function handleDeleteLibraryJob(item) {
     if (!item?.canDelete) return;
+    const deleteMessage = item.isExample
+      ? 'Hapus job contoh ini? Publikasi contoh akan dicabut dan artefak bucket akan dibersihkan.'
+      : 'Hapus job ini dari riwayat perangkat dan metadata server? Jika ingin menjadikannya contoh, publish dulu sebelum menghapus.';
+    if (!window.confirm(deleteMessage)) return;
     setDeletingLibraryJobId(item.id || item.jobId || '');
     setHistoryError('');
     setExampleError('');

@@ -267,13 +267,61 @@ function shouldRemoveEdgeComponent(component, color, width, height) {
   return component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
 }
 
-function shouldRemoveColorEverywhere(component, color, width, height) {
+function shouldSearchEnclosedBackground(component, color, width, height) {
   const totalPixels = Math.max(1, width * height);
   const coverage = component.count / totalPixels;
   const boundsCoverage = (component.width * component.height) / totalPixels;
   const lowChroma = colorChroma(color) <= 36;
   const broadEdgeBackground = component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
   return broadEdgeBackground || (lowChroma && component.edgeCount >= 3 && boundsCoverage >= 0.18);
+}
+
+function removeEnclosedBackgroundComponents(output, width, height, backgroundColorIndexes) {
+  const visited = new Uint8Array(output.length);
+  for (let start = 0; start < output.length; start += 1) {
+    const colorIndex = output[start];
+    if (visited[start] || !backgroundColorIndexes.has(colorIndex)) continue;
+
+    const stack = [start];
+    const pixels = [];
+    let touchesCanvasEdge = false;
+    const adjacentSides = new Set();
+    visited[start] = 1;
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const x = current % width;
+      const y = Math.floor(current / width);
+      pixels.push(current);
+      touchesCanvasEdge ||= x === 0 || y === 0 || x === width - 1 || y === height - 1;
+
+      const neighbors = [
+        [x - 1, y, 'left'],
+        [x + 1, y, 'right'],
+        [x, y - 1, 'top'],
+        [x, y + 1, 'bottom']
+      ];
+      for (const [nextX, nextY, side] of neighbors) {
+        if (nextX < 0 || nextX >= width || nextY < 0 || nextY >= height) continue;
+        const next = width * nextY + nextX;
+        const nextColorIndex = output[next];
+        if (nextColorIndex === colorIndex) {
+          if (!visited[next]) {
+            visited[next] = 1;
+            stack.push(next);
+          }
+        } else if (nextColorIndex >= 0 && !backgroundColorIndexes.has(nextColorIndex)) {
+          adjacentSides.add(side);
+        }
+      }
+    }
+
+    if (!touchesCanvasEdge && adjacentSides.size >= 3) {
+      pixels.forEach((pixel) => {
+        output[pixel] = -1;
+      });
+    }
+  }
 }
 
 function removeEdgeConnectedBackground(assignments, palette, width, height, settings = {}) {
@@ -349,16 +397,14 @@ function removeEdgeConnectedBackground(assignments, palette, width, height, sett
       pixels.forEach((pixel) => {
         output[pixel] = -1;
       });
-      if (shouldRemoveColorEverywhere(component, color, width, height)) {
+      if (shouldSearchEnclosedBackground(component, color, width, height)) {
         backgroundColorIndexes.add(colorIndex);
       }
     }
   }
 
   if (backgroundColorIndexes.size > 0) {
-    for (let index = 0; index < output.length; index += 1) {
-      if (backgroundColorIndexes.has(output[index])) output[index] = -1;
-    }
+    removeEnclosedBackgroundComponents(output, width, height, backgroundColorIndexes);
   }
 
   const colors = recomputeColors(output, palette, width, height);

@@ -33,6 +33,15 @@ const inputModeLabels = {
   [INPUT_MODE_RETOUCH]: 'Gambar ulang'
 };
 
+function examplePublishHint(job, isPublished) {
+  if (isPublished) return 'Job ini sedang tampil di feed contoh user.';
+  if (job.can_set_as_example) return 'Siap dipublish sebagai contoh.';
+  if (job.status !== 'done') return 'Hanya job selesai yang bisa dipublish.';
+  if (job.owner_role !== 'superuser') return 'Hanya job milik superadmin yang bisa dipublish.';
+  if (!job.has_example_artifacts) return 'Belum ada bundle contoh lengkap. Generate ulang job superadmin dan jangan hapus riwayatnya sebelum dipublish.';
+  return 'Bundle contoh belum lengkap atau belum selesai diunggah.';
+}
+
 function StatusBadge({ status }) {
   const styles = {
     pending: 'border-amber-300 bg-amber-50 text-amber-800',
@@ -692,7 +701,7 @@ export default function AdminPanel({ session, enabled }) {
                     {(() => {
                       const isPublished = job.is_example_public || job.is_active_example;
                       return (
-                    <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex max-w-72 flex-wrap items-center gap-2">
                       {isPublished && (
                         <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-xs font-semibold text-spruce">
                           <Star className="h-3.5 w-3.5" aria-hidden="true" />
@@ -715,6 +724,9 @@ export default function AdminPanel({ session, enabled }) {
                         <Star className="h-3.5 w-3.5" aria-hidden="true" />
                         {isPublished ? 'Cabut contoh' : 'Publish contoh'}
                       </button>
+                      {!isPublished && !job.can_set_as_example && (
+                        <p className="basis-full text-xs leading-5 text-gray-600">{examplePublishHint(job, isPublished)}</p>
+                      )}
                     </div>
                       );
                     })()}

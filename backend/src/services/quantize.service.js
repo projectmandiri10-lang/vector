@@ -49,7 +49,7 @@ function shouldRemoveEdgeMaskComponent(component, color, width, height) {
   return component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
 }
 
-function shouldRemoveMaskColorEverywhere(component, color, width, height) {
+function shouldSearchEnclosedMaskBackground(component, color, width, height) {
   const totalPixels = Math.max(1, width * height);
   const coverage = component.count / totalPixels;
   const boundsCoverage = (component.width * component.height) / totalPixels;
@@ -58,21 +58,12 @@ function shouldRemoveMaskColorEverywhere(component, color, width, height) {
   return broadEdgeBackground || (lowChroma && component.edgeCount >= 3 && boundsCoverage >= 0.18);
 }
 
-function clearAllActiveMaskPixels(png) {
-  for (let y = 0; y < png.height; y += 1) {
-    for (let x = 0; x < png.width; x += 1) {
-      const pixelIndex = png.width * y + x;
-      if (isActiveMaskPixel(png, x, y)) clearMaskPixel(png, pixelIndex);
-    }
-  }
-}
-
 function cleanupEdgeBackgroundComponents(png, color, options = {}) {
-  if (options.includeBackgroundInFilmSize === true) return;
+  if (options.includeBackgroundInFilmSize === true) return false;
 
   const visited = new Uint8Array(png.width * png.height);
   const edgeStarts = [];
-  let removeColorEverywhere = false;
+  let shouldSearchEnclosed = false;
   for (let x = 0; x < png.width; x += 1) {
     edgeStarts.push(x, png.width * (png.height - 1) + x);
   }
@@ -136,11 +127,11 @@ function cleanupEdgeBackgroundComponents(png, color, options = {}) {
     };
     if (shouldRemoveEdgeMaskComponent(component, color, png.width, png.height)) {
       pixels.forEach((pixel) => clearMaskPixel(png, pixel));
-      removeColorEverywhere ||= shouldRemoveMaskColorEverywhere(component, color, png.width, png.height);
+      shouldSearchEnclosed ||= shouldSearchEnclosedMaskBackground(component, color, png.width, png.height);
     }
   }
 
-  if (removeColorEverywhere) clearAllActiveMaskPixels(png);
+  return shouldSearchEnclosed;
 }
 
 function cleanupMaskNoise(png) {
@@ -196,6 +187,59 @@ function cleanupMaskNoise(png) {
           height: maxY - minY + 1
         })
       ) {
+        pixels.forEach((pixel) => clearMaskPixel(png, pixel));
+      }
+    }
+  }
+}
+
+function hasActiveArtworkNeighbor(masks, x, y, excludeMask) {
+  return masks.some((mask) => mask !== excludeMask && isActiveMaskPixel(mask.png, x, y));
+}
+
+function cleanupEnclosedBackgroundMask(mask, masks) {
+  const png = mask.png;
+  const visited = new Uint8Array(png.width * png.height);
+
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const start = png.width * y + x;
+      if (visited[start] || !isActiveMaskPixel(png, x, y)) continue;
+
+      const stack = [start];
+      const pixels = [];
+      const adjacentSides = new Set();
+      let touchesCanvasEdge = false;
+      visited[start] = 1;
+
+      while (stack.length > 0) {
+        const current = stack.pop();
+        const currentX = current % png.width;
+        const currentY = Math.floor(current / png.width);
+        pixels.push(current);
+        touchesCanvasEdge ||= currentX === 0 || currentY === 0 || currentX === png.width - 1 || currentY === png.height - 1;
+
+        const neighbors = [
+          [currentX - 1, currentY, 'left'],
+          [currentX + 1, currentY, 'right'],
+          [currentX, currentY - 1, 'top'],
+          [currentX, currentY + 1, 'bottom']
+        ];
+        for (const [nextX, nextY, side] of neighbors) {
+          if (nextX < 0 || nextX >= png.width || nextY < 0 || nextY >= png.height) continue;
+          const next = png.width * nextY + nextX;
+          if (isActiveMaskPixel(png, nextX, nextY)) {
+            if (!visited[next]) {
+              visited[next] = 1;
+              stack.push(next);
+            }
+          } else if (hasActiveArtworkNeighbor(masks, nextX, nextY, mask)) {
+            adjacentSides.add(side);
+          }
+        }
+      }
+
+      if (!touchesCanvasEdge && adjacentSides.size >= 3) {
         pixels.forEach((pixel) => clearMaskPixel(png, pixel));
       }
     }
@@ -329,9 +373,20 @@ export async function createMasksForPalette(imagePath, palette, outputDir, optio
     }
   }
 
+  const masksWithEnclosedBackground = [];
   for (const mask of masks) {
-    cleanupEdgeBackgroundComponents(mask.png, mask, options);
+    if (cleanupEdgeBackgroundComponents(mask.png, mask, options)) {
+      masksWithEnclosedBackground.push(mask);
+    }
     cleanupMaskNoise(mask.png);
+  }
+
+  for (const mask of masksWithEnclosedBackground) {
+    cleanupEnclosedBackgroundMask(mask, masks);
+    cleanupMaskNoise(mask.png);
+  }
+
+  for (const mask of masks) {
     await writePng(mask.png, mask.filePath);
     delete mask.png;
   }
