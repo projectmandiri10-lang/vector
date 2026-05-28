@@ -212,6 +212,32 @@ function touchesCanvas(bounds, width, height) {
   return bounds.x <= tolerance && bounds.y <= tolerance && bounds.maxX >= width - tolerance && bounds.maxY >= height - tolerance;
 }
 
+function touchesEdgeCount(bounds, width, height) {
+  const tolerance = 2;
+  return [
+    bounds.x <= tolerance,
+    bounds.y <= tolerance,
+    bounds.maxX >= width - tolerance,
+    bounds.maxY >= height - tolerance
+  ].filter(Boolean).length;
+}
+
+function isEdgeDominantBackground(color, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const boundsArea = Math.max(1, color.bounds.width * color.bounds.height);
+  const edgeCount = touchesEdgeCount(color.bounds, width, height);
+  const canvasCoverage = color.count / totalPixels;
+  const boundsCoverage = boundsArea / totalPixels;
+
+  return edgeCount >= 2 && canvasCoverage >= 0.03 && boundsCoverage >= 0.25;
+}
+
+function backgroundColors(colors, width, height) {
+  const candidates = colors.filter((color) => touchesCanvas(color.bounds, width, height) || isEdgeDominantBackground(color, width, height));
+  if (candidates.length === 0 || candidates.length >= colors.length) return [];
+  return candidates.sort((left, right) => right.count - left.count);
+}
+
 function createFilmPlan(colors, width, height, settings = {}) {
   if (settings.includeBackgroundInFilmSize) {
     return {
@@ -221,16 +247,16 @@ function createFilmPlan(colors, width, height, settings = {}) {
     };
   }
 
-  const backgroundColor = [...colors]
-    .filter((color) => touchesCanvas(color.bounds, width, height))
-    .sort((left, right) => right.count - left.count)[0];
-  const filtered = backgroundColor ? colors.filter((color) => color.index !== backgroundColor.index) : colors;
+  const backgroundCandidates = backgroundColors(colors, width, height);
+  const backgroundIndexes = new Set(backgroundCandidates.map((color) => color.index));
+  const filtered = backgroundIndexes.size > 0 ? colors.filter((color) => !backgroundIndexes.has(color.index)) : colors;
   const effectiveColors = filtered.length > 0 ? filtered : colors;
 
   return {
     colors: effectiveColors,
     bounds: mergeBounds(effectiveColors, width, height),
-    backgroundColor: backgroundColor || null
+    backgroundColor: backgroundCandidates[0] || null,
+    backgroundColors: backgroundCandidates
   };
 }
 

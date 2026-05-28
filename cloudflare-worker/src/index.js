@@ -117,6 +117,89 @@ function jobIsDeleted(job = {}) {
   return Boolean(job?.deleted_at);
 }
 
+function isMissingJobsPublishColumnsError(error) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /(is_example_public|example_published_at|deleted_at)/i.test(message) && /(jobs|column|schema cache)/i.test(message);
+}
+
+function withLegacyJobPublishDefaults(rows = []) {
+  return (rows || []).map((row) => ({
+    ...row,
+    is_example_public: row?.is_example_public === true,
+    example_published_at: row?.example_published_at || null,
+    deleted_at: row?.deleted_at || null
+  }));
+}
+
+async function queryJobsWithPublishFallback(env, primaryPath, fallbackPath) {
+  try {
+    return await supabaseFetch(env, primaryPath, {});
+  } catch (error) {
+    if (!isMissingJobsPublishColumnsError(error) || !fallbackPath) throw error;
+    const legacyRows = await supabaseFetch(env, fallbackPath, {});
+    return withLegacyJobPublishDefaults(legacyRows);
+  }
+}
+
+async function getJobByIdWithPublishFallback(env, jobId, baseSelect, fallbackSelect = baseSelect) {
+  const primaryPath = `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=${baseSelect}&limit=1`;
+  const fallbackPath = `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=${fallbackSelect}&limit=1`;
+  const rows = await queryJobsWithPublishFallback(env, primaryPath, fallbackPath);
+  return rows?.[0] || null;
+}
+
+async function patchJobPublishState(env, jobId, patch, fallbackJob) {
+  try {
+    const rows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=*`, {
+      method: 'PATCH',
+      prefer: 'return=representation',
+      body: patch
+    });
+    return {
+      job: rows?.[0] || { ...fallbackJob, ...patch },
+      usedLegacyFallback: false
+    };
+  } catch (error) {
+    if (!isMissingJobsPublishColumnsError(error)) throw error;
+    return {
+      job: {
+        ...fallbackJob,
+        ...patch
+      },
+      usedLegacyFallback: true
+    };
+  }
+}
+
+async function softDeleteJobWithFallback(env, jobId, deletedAt, fallbackJob) {
+  try {
+    const rows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=*`, {
+      method: 'PATCH',
+      prefer: 'return=representation',
+      body: {
+        deleted_at: deletedAt,
+        is_example_public: false,
+        example_published_at: null
+      }
+    });
+    return {
+      job: rows?.[0] || { ...fallbackJob, deleted_at: deletedAt, is_example_public: false, example_published_at: null },
+      usedLegacyFallback: false
+    };
+  } catch (error) {
+    if (!isMissingJobsPublishColumnsError(error)) throw error;
+    return {
+      job: {
+        ...fallbackJob,
+        deleted_at: deletedAt,
+        is_example_public: false,
+        example_published_at: null
+      },
+      usedLegacyFallback: true
+    };
+  }
+}
+
 function buildLegacyExampleSettingEntry(env, job, artifacts) {
   const resultPreviewUrl = artifacts?.files?.fullPng || (artifacts?.resultPreviewPath ? examplePublicUrl(env, artifacts.resultPreviewPath) : '');
   const sourcePreviewUrl = artifacts?.sourcePreviewPath ? examplePublicUrl(env, artifacts.sourcePreviewPath) : '';
@@ -162,6 +245,50 @@ async function clearLegacyExampleSettingIfMatches(env, job) {
     description: 'Contoh gambar aktif untuk sticker dan sablon'
   });
   return nextExamples;
+}
+
+async function listLegacyPublishedExampleJobs(env) {
+  const exampleSetting = await getAppSetting(env, 'example_jobs');
+  const currentExamples = normalizeExampleJobsSetting(exampleSetting?.value);
+  const entries = Object.values(currentExamples).filter((entry) => entry?.jobId);
+  if (entries.length === 0) return [];
+
+  const jobIds = [...new Set(entries.map((entry) => entry.jobId).filter(Boolean))];
+  const jobRows =
+    jobIds.length > 0
+      ? await supabaseFetch(
+          env,
+          `/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at&id=in.(${jobIds.join(',')})&status=eq.done&order=created_at.desc&limit=50`,
+          {}
+        )
+      : [];
+  const jobsById = new Map((jobRows || []).map((job) => [job.id, job]));
+
+  return entries
+    .map((entry) => {
+      const job = jobsById.get(entry.jobId);
+      if (!job) return null;
+      if (!hasCompleteExampleArtifacts(job.manifest, job.production_type)) return null;
+
+      const artifacts = getExampleArtifactsFromManifest(job.manifest);
+      return {
+        jobId: job.id,
+        projectName: entry.projectName || artifacts?.projectName || job.project_name,
+        productionType: entry.productionType || job.production_type,
+        inputMode: entry.inputMode || artifacts?.inputMode || job.input_mode,
+        sourcePreviewUrl: entry.sourcePreviewUrl || (artifacts?.sourcePreviewPath ? examplePublicUrl(env, artifacts.sourcePreviewPath) : ''),
+        resultPreviewUrl: entry.resultPreviewUrl || entry.imageUrl || artifacts?.files?.fullPng || '',
+        files: Object.keys(entry.files || {}).length > 0 ? entry.files : artifacts?.files || {},
+        separations: Array.isArray(entry.separations) && entry.separations.length > 0 ? entry.separations : artifacts?.separations || [],
+        settings: entry.settings || artifacts?.settings || job.settings || {},
+        createdAt: job.created_at,
+        updatedAt: entry.updatedAt || artifacts?.updatedAt || job.created_at,
+        ownerId: job.user_id,
+        isExamplePublic: true
+      };
+    })
+    .filter(Boolean)
+    .sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
 }
 
 function toExampleFeedJob(env, job) {
@@ -641,14 +768,16 @@ async function requestRetouchedImage(env, image, settings, ledgerId) {
 
 export function buildAiPrompt(settings) {
   return [
-    'Faithfully redraw the uploaded image as a clean flat vector-style illustration for sticker and manual screen printing.',
-    'Preserve composition, text, proportions, visible colors, and dark backgrounds.',
-    'Use solid flat colors only. No gradients, no shadows, no texture, no blur.',
-    'Make the outermost artwork edges smooth, clean, closed, continuous, and easy to trace into vector shapes.',
-    'Avoid jagged outer contours, wavy borders, accidental rough corners, broken outlines, and noisy edge artifacts.',
+    'Faithfully redraw only the actual artwork from the uploaded photo as a clean flat vector-style illustration for sticker and manual screen printing.',
+    'Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.',
+    'Do not preserve photographic background, lighting gradients, glow, shadow, paper texture, table color, or empty canvas outside the design. Make all non-artwork outside the silhouette pure white or transparent-looking and non-printing.',
+    'Preserve composition, text, proportions, important visible colors, and deliberate design shapes. Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.',
+    'Use solid flat colors only. No gradients, no shadows, no texture, no blur, no halftone, no noisy edge pixels.',
+    'Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges.',
+    'Avoid jagged outer contours, wavy borders, accidental rough corners, broken outlines, fringing, glow, anti-aliased halos, and noisy edge artifacts.',
     settings.productionType === 'sablon'
-      ? 'Optimize for clean spot-color screen print separation with crisp outer boundaries.'
-      : 'Optimize for full-color sticker output with crisp smooth edges suitable for vector tracing.'
+      ? 'Optimize for clean spot-color screen print separation. Every color region must be intentional printable artwork; do not create any separate film for the photo background or lighting gradient.'
+      : 'Optimize for full-color sticker output with crisp smooth edges suitable for vector tracing and cutline generation.'
   ].join('\n\n');
 }
 
@@ -658,12 +787,12 @@ async function handleJobArtifactsUpload(env, request, jobId) {
     throw new Error('Hanya superadmin yang boleh mengunggah artefak contoh.');
   }
 
-  const rows = await supabaseFetch(
+  const job = await getJobByIdWithPublishFallback(
     env,
-    `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,deleted_at&limit=1`,
-    {}
+    jobId,
+    'id,user_id,project_name,input_mode,production_type,status,settings,manifest,deleted_at',
+    'id,user_id,project_name,input_mode,production_type,status,settings,manifest'
   );
-  const job = rows?.[0];
   if (!job) throw new Error('Job tidak ditemukan.');
   if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
   if (job.user_id !== user.id) throw new Error('Hanya job milik Anda sendiri yang boleh dijadikan contoh.');
@@ -952,7 +1081,11 @@ async function handleAdminOverview(env, request) {
   await requireAdmin(env, request);
   const [users, jobs, payments, ledger] = await Promise.all([
     supabaseFetch(env, '/rest/v1/profiles?select=id,is_active,is_unlimited,deleted_at', {}),
-    supabaseFetch(env, `/rest/v1/jobs?select=id,price_idr,production_type,input_mode,created_at&${notDeletedQuery()}&order=created_at.desc&limit=500`, {}),
+    queryJobsWithPublishFallback(
+      env,
+      `/rest/v1/jobs?select=id,price_idr,production_type,input_mode,created_at,deleted_at&${notDeletedQuery()}&order=created_at.desc&limit=500`,
+      '/rest/v1/jobs?select=id,price_idr,production_type,input_mode,created_at&order=created_at.desc&limit=500'
+    ),
     supabaseFetch(env, '/rest/v1/manual_payments?select=id,status,amount_idr,created_at&order=created_at.desc&limit=500', {}),
     supabaseFetch(env, '/rest/v1/credit_ledger?select=amount_idr,kind,reason,created_at&order=created_at.desc&limit=500', {})
   ]);
@@ -978,15 +1111,16 @@ async function handleAdminOverview(env, request) {
 
 async function handleAdminJobs(env, request) {
   await requireAdmin(env, request);
-  const [users, jobs] = await Promise.all([
+  const [users, jobs, exampleSetting] = await Promise.all([
     supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
-    supabaseFetch(
+    queryJobsWithPublishFallback(
       env,
       `/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at,manifest,is_example_public,example_published_at,deleted_at&${notDeletedQuery()}&order=created_at.desc&limit=100`,
-      {}
-    )
+      '/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,price_idr,separation_film_count,created_at,manifest&order=created_at.desc&limit=100'
+    ),
+    getAppSetting(env, 'example_jobs')
   ]);
-  const decorated = decorateAdminJobs(jobs, users);
+  const decorated = decorateAdminJobs(jobs, users, exampleSetting?.value);
   return json({
     jobs: decorated.map(({ manifest, ...job }) => job)
   });
@@ -994,23 +1128,38 @@ async function handleAdminJobs(env, request) {
 
 async function handleExampleJobs(env, request) {
   await requireUser(env, request);
-  const [profiles, jobs] = await Promise.all([
-    supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
-    supabaseFetch(
-      env,
-      `/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at,is_example_public,example_published_at,deleted_at&is_example_public=eq.true&status=eq.done&${notDeletedQuery()}&order=created_at.desc&limit=200`,
-      {}
-    )
-  ]);
+  let profiles = [];
+  let jobs = [];
+  try {
+    [profiles, jobs] = await Promise.all([
+      supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {}),
+      queryJobsWithPublishFallback(
+        env,
+        `/rest/v1/jobs?select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at,is_example_public,example_published_at,deleted_at&is_example_public=eq.true&status=eq.done&${notDeletedQuery()}&order=created_at.desc&limit=200`,
+        null
+      )
+    ]);
+  } catch (error) {
+    if (!isMissingJobsPublishColumnsError(error)) throw error;
+    return json({ exampleJobs: await listLegacyPublishedExampleJobs(env) });
+  }
 
   const superuserIds = new Set(profiles.filter((profile) => profile.role === 'superuser').map((profile) => profile.id));
   const exampleJobs = jobs
     .filter((job) => superuserIds.has(job.user_id))
     .map((job) => toExampleFeedJob(env, job))
-    .filter(Boolean)
-    .sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0));
+    .filter(Boolean);
+  const legacyExampleJobs = await listLegacyPublishedExampleJobs(env);
+  const mergedExampleJobs = new Map(exampleJobs.map((job) => [job.jobId, job]));
+  legacyExampleJobs.forEach((job) => {
+    if (!mergedExampleJobs.has(job.jobId)) {
+      mergedExampleJobs.set(job.jobId, job);
+    }
+  });
 
-  return json({ exampleJobs });
+  return json({
+    exampleJobs: [...mergedExampleJobs.values()].sort((left, right) => new Date(right.updatedAt || right.createdAt || 0) - new Date(left.updatedAt || left.createdAt || 0))
+  });
 }
 
 async function handleAdminPayments(env, request) {
@@ -1085,16 +1234,16 @@ async function handleAdminSettings(env, request) {
 
 async function handleSetExampleJob(env, request, jobId) {
   await requireAdmin(env, request);
-  const [jobRows, profiles] = await Promise.all([
-    supabaseFetch(
+  const [job, profiles] = await Promise.all([
+    getJobByIdWithPublishFallback(
       env,
-      `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at&limit=1`,
-      {}
+      jobId,
+      'id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at',
+      'id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at'
     ),
     supabaseFetch(env, '/rest/v1/profiles?select=id,email,role', {})
   ]);
 
-  const job = jobRows?.[0];
   if (!job) throw new Error('Job tidak ditemukan.');
   if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
   if (job.status !== 'done') throw new Error('Hanya job selesai yang bisa dijadikan contoh.');
@@ -1108,15 +1257,16 @@ async function handleSetExampleJob(env, request, jobId) {
 
   const artifacts = getExampleArtifactsFromManifest(job.manifest);
   const publishedAt = formatDate(new Date());
-  const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
-    method: 'PATCH',
-    prefer: 'return=representation',
-    body: {
+  const publishResult = await patchJobPublishState(
+    env,
+    job.id,
+    {
       is_example_public: true,
       example_published_at: publishedAt
-    }
-  });
-  const updatedJob = updatedRows?.[0] || { ...job, is_example_public: true, example_published_at: publishedAt };
+    },
+    job
+  );
+  const updatedJob = publishResult.job;
   const nextExamples = await syncLegacyExampleSetting(env, updatedJob, artifacts);
 
   return json({
@@ -1130,47 +1280,48 @@ async function handleSetExampleJob(env, request, jobId) {
 
 async function handleUnsetExampleJob(env, request, jobId) {
   await requireAdmin(env, request);
-  const [jobRows, profiles] = await Promise.all([
-    supabaseFetch(
+  const [job, profiles] = await Promise.all([
+    getJobByIdWithPublishFallback(
       env,
-      `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at&limit=1`,
-      {}
+      jobId,
+      'id,user_id,project_name,input_mode,production_type,status,settings,manifest,is_example_public,example_published_at,deleted_at,created_at',
+      'id,user_id,project_name,input_mode,production_type,status,settings,manifest,created_at'
     ),
     supabaseFetch(env, '/rest/v1/profiles?select=id,role', {})
   ]);
 
-  const job = jobRows?.[0];
   if (!job) throw new Error('Job tidak ditemukan.');
   if (jobIsDeleted(job)) throw new Error('Job ini sudah dihapus.');
 
   const owner = profiles.find((profile) => profile.id === job.user_id);
   if (!owner || owner.role !== 'superuser') throw new Error('Hanya job milik superadmin yang bisa dicabut dari contoh.');
 
-  const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
-    method: 'PATCH',
-    prefer: 'return=representation',
-    body: {
+  const publishResult = await patchJobPublishState(
+    env,
+    job.id,
+    {
       is_example_public: false,
       example_published_at: null
-    }
-  });
+    },
+    job
+  );
   await clearLegacyExampleSettingIfMatches(env, job);
 
   return json({
     jobId: job.id,
     isExamplePublic: false,
-    job: updatedRows?.[0] || { ...job, is_example_public: false, example_published_at: null }
+    job: publishResult.job
   });
 }
 
 async function handleDeleteJob(env, request, jobId) {
   const { user } = await requireUser(env, request);
-  const jobRows = await supabaseFetch(
+  const job = await getJobByIdWithPublishFallback(
     env,
-    `/rest/v1/jobs?id=eq.${encodeURIComponent(jobId)}&select=id,user_id,production_type,status,manifest,is_example_public,example_published_at,deleted_at&limit=1`,
-    {}
+    jobId,
+    'id,user_id,production_type,status,manifest,is_example_public,example_published_at,deleted_at',
+    'id,user_id,production_type,status,manifest'
   );
-  const job = jobRows?.[0];
   if (!job) throw new Error('Job tidak ditemukan.');
   if (job.user_id !== user.id) throw new Error('Hanya pemilik job yang boleh menghapus job ini.');
   const hasExampleArtifacts = Boolean(getExampleArtifactsFromManifest(job.manifest));
@@ -1183,21 +1334,14 @@ async function handleDeleteJob(env, request, jobId) {
   }
 
   const deletedAt = formatDate(new Date());
-  const updatedRows = await supabaseFetch(env, `/rest/v1/jobs?id=eq.${encodeURIComponent(job.id)}&select=*`, {
-    method: 'PATCH',
-    prefer: 'return=representation',
-    body: {
-      deleted_at: deletedAt,
-      is_example_public: false,
-      example_published_at: null
-    }
-  });
+  const deleteResult = await softDeleteJobWithFallback(env, job.id, deletedAt, job);
 
   return json({
     jobId: job.id,
     deleted: true,
     deletedAt,
-    job: updatedRows?.[0] || { ...job, deleted_at: deletedAt, is_example_public: false, example_published_at: null }
+    metadataDeleted: deleteResult.usedLegacyFallback === false,
+    job: deleteResult.job
   });
 }
 

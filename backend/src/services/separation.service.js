@@ -73,6 +73,29 @@ function touchesCanvas(bounds, width, height) {
   return bounds.x <= tolerance && bounds.y <= tolerance && bounds.maxX >= width - tolerance && bounds.maxY >= height - tolerance;
 }
 
+function touchesEdgeCount(bounds, width, height) {
+  const tolerance = 2;
+  return [
+    bounds.x <= tolerance,
+    bounds.y <= tolerance,
+    bounds.maxX >= width - tolerance,
+    bounds.maxY >= height - tolerance
+  ].filter(Boolean).length;
+}
+
+function isEdgeDominantBackground(color, width, height) {
+  const totalArea = Math.max(1, width * height);
+  const boundsArea = Math.max(1, color.bounds.width * color.bounds.height);
+  const edgeCount = touchesEdgeCount(color.bounds, width, height);
+  return edgeCount >= 2 && boundsArea / totalArea >= 0.25;
+}
+
+function backgroundColors(colors, width, height) {
+  const candidates = colors.filter((color) => touchesCanvas(color.bounds, width, height) || isEdgeDominantBackground(color, width, height));
+  if (candidates.length === 0 || candidates.length >= colors.length) return [];
+  return candidates.sort((left, right) => right.bounds.width * right.bounds.height - left.bounds.width * left.bounds.height);
+}
+
 export function createFilmPlan({ pathsByColor, width, height, settings = {} }) {
   const fullBounds = fullCanvasBounds(width, height);
   const includeBackground = settings.includeBackgroundInFilmSize === true;
@@ -91,16 +114,16 @@ export function createFilmPlan({ pathsByColor, width, height, settings = {} }) {
     };
   }
 
-  const backgroundColor = colors
-    .filter((color) => touchesCanvas(color.bounds, width, height))
-    .sort((a, b) => b.bounds.width * b.bounds.height - a.bounds.width * a.bounds.height)[0];
-  const printableColors = backgroundColor ? colors.filter((color) => color.index !== backgroundColor.index) : colors;
+  const backgroundCandidates = backgroundColors(colors, width, height);
+  const backgroundIndexes = new Set(backgroundCandidates.map((color) => color.index));
+  const printableColors = backgroundIndexes.size > 0 ? colors.filter((color) => !backgroundIndexes.has(color.index)) : colors;
   const effectiveColors = printableColors.length > 0 ? printableColors : colors;
 
   return {
     colors: effectiveColors,
     bounds: mergeBounds(effectiveColors.map((color) => color.bounds)) || fullBounds,
-    backgroundColor: backgroundColor || null
+    backgroundColor: backgroundCandidates[0] || null,
+    backgroundColors: backgroundCandidates
   };
 }
 

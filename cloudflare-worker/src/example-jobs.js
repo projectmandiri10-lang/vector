@@ -146,19 +146,21 @@ export function updateExampleJobsSetting(currentValue, productionType, entry) {
   return next;
 }
 
-export function decorateAdminJobs(jobs, profiles) {
+export function decorateAdminJobs(jobs, profiles, exampleJobsValue) {
   const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+  const currentExamples = normalizeExampleJobsSetting(exampleJobsValue);
   return jobs.map((job) => {
     const owner = profilesById.get(job.user_id) || {};
     const exampleArtifacts = getExampleArtifactsFromManifest(job.manifest);
     const examplePublished = isPublishedExample(job);
+    const legacyExample = currentExamples[job.production_type]?.jobId === job.id;
     return {
       ...job,
       user_email: owner.email || '',
       owner_role: owner.role || 'user',
       can_set_as_example: job.status === 'done' && owner.role === 'superuser' && hasCompleteExampleArtifacts(job.manifest, job.production_type),
-      can_unset_example: examplePublished,
-      is_active_example: examplePublished,
+      can_unset_example: examplePublished || legacyExample,
+      is_active_example: examplePublished || legacyExample,
       is_example_public: examplePublished,
       example_source_path: getExampleSourcePathFromManifest(job.manifest),
       has_example_artifacts: Boolean(exampleArtifacts)

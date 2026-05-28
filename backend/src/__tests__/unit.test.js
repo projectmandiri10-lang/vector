@@ -31,13 +31,13 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
     whiteAsBackground: false
   });
 
-  assert.match(prompt, /Faithfully redraw the uploaded image/);
+  assert.match(prompt, /Faithfully redraw only the actual artwork/);
   assert.match(prompt, /Preserve all important visible colors/);
-  assert.match(prompt, /Do not change a dark background to white/);
+  assert.match(prompt, /Separate the real design from camera background/);
   assert.match(prompt, /Treat white as a real printable artwork color/);
   assert.match(prompt, /Optimize for manual screen printing/);
   assert.match(prompt, /approximately 4 solid colors as a target/);
-  assert.match(prompt, /outermost artwork edges smooth, closed, continuous/);
+  assert.match(prompt, /outermost artwork silhouette smooth, clean, closed, continuous/);
 });
 
 test('standard prompt prioritizes faithful color matching', () => {
@@ -49,7 +49,7 @@ test('standard prompt prioritizes faithful color matching', () => {
   });
 
   assert.match(prompt, /prioritize accurate color matching/);
-  assert.match(prompt, /Preserve any non-white background color/);
+  assert.match(prompt, /Treat empty background as non-printing/);
   assert.match(prompt, /Avoid jagged outer contours, wavy borders/);
 });
 
@@ -255,6 +255,45 @@ test('film plan excludes full canvas background by default and keeps legacy layo
       height: fullCanvas.bounds.height
     },
     { x: 0, y: 0, width: 200, height: 100 }
+  );
+});
+
+test('film plan excludes multiple edge background bands from light gradients', () => {
+  const pathsByColor = [
+    {
+      index: 1,
+      hex: '#EFECE6',
+      paths: ['M0 0 L200 0 L200 55 L0 55 Z']
+    },
+    {
+      index: 2,
+      hex: '#DCD7CF',
+      paths: ['M0 45 L200 45 L200 100 L0 100 Z']
+    },
+    {
+      index: 3,
+      hex: '#111111',
+      paths: ['M70 30 L130 30 L130 80 L70 80 Z']
+    }
+  ];
+
+  const cropped = createFilmPlan({ pathsByColor, width: 200, height: 100, settings: {} });
+  assert.deepEqual(
+    cropped.colors.map((color) => color.index),
+    [3]
+  );
+  assert.deepEqual(
+    cropped.backgroundColors.map((color) => color.index),
+    [1, 2]
+  );
+  assert.deepEqual(
+    {
+      x: cropped.bounds.x,
+      y: cropped.bounds.y,
+      width: cropped.bounds.width,
+      height: cropped.bounds.height
+    },
+    { x: 70, y: 30, width: 60, height: 50 }
   );
 });
 

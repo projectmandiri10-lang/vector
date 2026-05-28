@@ -1,14 +1,15 @@
 import fs from 'fs-extra';
 import { editImageWithGPTImage2 } from './litellm.service.js';
 
-const basePrompt = `Faithfully redraw the uploaded image as a clean flat vector-style illustration suitable for screen printing, sticker production, and automatic vector tracing.
+const basePrompt = `Faithfully redraw only the actual artwork from the uploaded image as a clean flat vector-style illustration suitable for screen printing, sticker production, and automatic vector tracing.
 
 This is a faithful redraw and cleanup task, not a redesign.
 Preserve the main shape, composition, proportions, layout, text, letters, symbols, and recognizable design from the uploaded image.
-Preserve all important visible colors from the uploaded image, including dark or black backgrounds, colored accents, text colors, and small color regions.
+Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.
+Preserve all important visible colors from the actual artwork, including dark or black intentional shapes, colored accents, text colors, and small color regions.
 Keep each original color in the same visual region as the source image.
 Do not recolor the artwork.
-Do not change a dark background to white.
+Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.
 Do not remove colored accents.
 Do not omit readable text or brand-like lettering if present.
 Simplify small details while keeping the design recognizable.
@@ -18,23 +19,26 @@ No shadows.
 No texture.
 No blur.
 No photo noise.
+No photographic lighting gradient.
+No paper, table, wall, camera background, glow, or cast shadow outside the artwork.
 No realistic rendering.
 No unnecessary new elements.
 No complex background.
 
 Use clean edges, high contrast, smooth shapes, and clearly separated color regions.
-Make the outermost artwork edges smooth, closed, continuous, and easy to trace into vector shapes.
-Avoid jagged outer contours, wavy borders, broken outlines, and rough noisy edge artifacts.
+Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes.
+Use rounded, intentional contours instead of rough pixel-like edges.
+Avoid jagged outer contours, wavy borders, broken outlines, fringing, glow, anti-aliased halos, and rough noisy edge artifacts.
 Make the result suitable for vector tracing and spot color separation.
 Keep colors limited, distinct, and easy to separate.
 The final image should look like a clean professional redraw ready for sticker printing or screen printing.`;
 
 function backgroundInstruction(settings) {
   if (settings.whiteAsBackground) {
-    return 'If the uploaded image has a white or near-white empty background, it may be treated as background. Preserve any non-white background color, including black or dark backgrounds, as part of the artwork.';
+    return 'Treat empty background as non-printing. Replace white, near-white, light gray, colored paper, table, shadows, glare, and uneven lighting gradients outside the artwork with clean pure white. Preserve a dark or colored background only if it is an intentional bounded design shape.';
   }
 
-  return 'Treat white as a real printable artwork color when it appears in the design. Preserve black, dark, white, and colored regions from the uploaded image as visible flat colors.';
+  return 'Treat white as a real printable artwork color when it appears inside the design. Preserve black, dark, white, and colored artwork regions as visible flat colors, but still remove external photo background, lighting gradients, paper, table, and shadows outside the artwork.';
 }
 
 export function buildRedrawPrompt(settings) {
@@ -54,7 +58,7 @@ export function buildRedrawPrompt(settings) {
 
   if (settings.productionType === 'sablon') {
     lines.push(
-      'Optimize for manual screen printing. Use spot-color style flat color areas. Avoid gradients, tiny details, halftone textures, and complicated shapes. Make each color region clean and separable for film output, with a smooth outer silhouette.'
+      'Optimize for manual screen printing. Use spot-color style flat color areas. Avoid gradients, tiny details, halftone textures, and complicated shapes. Make each color region clean and separable for film output, with a smooth outer silhouette. Do not create any separate film color for the photo background or lighting gradient.'
     );
   }
 
@@ -66,7 +70,7 @@ export function buildRedrawPrompt(settings) {
 
   if (settings.colorLimitMode !== 'auto' && settings.maxColors) {
     lines.push(
-      `Use approximately ${settings.maxColors} solid colors as a target for simplifying close color variations. Do not drop distinct important source colors; include the real background color if it is visibly part of the uploaded design.`
+      `Use approximately ${settings.maxColors} solid colors as a target for simplifying close color variations. Do not drop distinct important artwork colors; include a background color only if it is a deliberate bounded part of the uploaded design, never if it is just photo lighting or empty backdrop.`
     );
   }
 

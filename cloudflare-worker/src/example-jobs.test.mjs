@@ -86,7 +86,16 @@ test('decorateAdminJobs marks superadmin jobs with full artifact bundle as eligi
     }
   ];
 
-  const decorated = decorateAdminJobs(jobs, profiles);
+  const decorated = decorateAdminJobs(jobs, profiles, {
+    sticker: {
+      jobId: 'job-1',
+      projectName: 'Contoh sticker',
+      productionType: 'sticker',
+      resultPreviewUrl: 'https://example.com/full.png',
+      files: { fullPng: 'https://example.com/full.png' },
+      updatedAt: '2026-05-28T00:00:00.000Z'
+    }
+  });
 
   assert.equal(decorated[0].user_email, 'boss@example.com');
   assert.equal(decorated[0].can_set_as_example, true);

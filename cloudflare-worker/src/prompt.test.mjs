@@ -5,9 +5,11 @@ import { buildAiPrompt } from './index.js';
 test('buildAiPrompt emphasizes smooth outer edges and faithful colors', () => {
   const prompt = buildAiPrompt({ productionType: 'sablon' });
 
-  assert.match(prompt, /Faithfully redraw the uploaded image/);
-  assert.match(prompt, /Preserve composition, text, proportions, visible colors, and dark backgrounds/);
-  assert.match(prompt, /outermost artwork edges smooth, clean, closed, continuous/);
+  assert.match(prompt, /Faithfully redraw only the actual artwork/);
+  assert.match(prompt, /Separate the real design from camera background/);
+  assert.match(prompt, /Do not preserve photographic background, lighting gradients/);
+  assert.match(prompt, /Preserve a dark or colored background only when it is clearly an intentional bounded shape/);
+  assert.match(prompt, /outermost artwork silhouette smooth, clean, closed, continuous/);
   assert.match(prompt, /Avoid jagged outer contours, wavy borders/);
-  assert.match(prompt, /spot-color screen print separation with crisp outer boundaries/);
+  assert.match(prompt, /do not create any separate film for the photo background or lighting gradient/);
 });

@@ -286,22 +286,23 @@ export default function AdminPanel({ session, enabled }) {
   }
 
   async function toggleJobExample(job) {
+    const isPublished = job.is_example_public || job.is_active_example;
     setIsBusy(true);
     setMessage('');
     try {
-      if (job.is_example_public) {
+      if (isPublished) {
         await unsetAdminJobExample(job.id, accessToken);
       } else {
         await setAdminJobExample(job.id, accessToken);
       }
       await loadAdminData();
       setMessage(
-        job.is_example_public
+        isPublished
           ? `Publikasi contoh untuk job ${job.production_type === 'sablon' ? 'sablon' : 'sticker'} berhasil dicabut.`
           : `Job ${job.production_type === 'sablon' ? 'sablon' : 'sticker'} berhasil dipublish sebagai contoh.`
       );
     } catch (error) {
-      setMessage(toUserApiError(error, job.is_example_public ? 'Gagal mencabut contoh job.' : 'Gagal menjadikan job sebagai contoh.').message);
+      setMessage(toUserApiError(error, isPublished ? 'Gagal mencabut contoh job.' : 'Gagal menjadikan job sebagai contoh.').message);
     } finally {
       setIsBusy(false);
     }
@@ -688,8 +689,11 @@ export default function AdminPanel({ session, enabled }) {
                   <td className="py-2 pr-3">{formatRupiah(job.price_idr || 0)}</td>
                   <td className="py-2 pr-3"><StatusBadge status={job.status} /></td>
                   <td className="py-2 pr-3">
+                    {(() => {
+                      const isPublished = job.is_example_public || job.is_active_example;
+                      return (
                     <div className="flex flex-wrap items-center gap-2">
-                      {job.is_active_example && (
+                      {isPublished && (
                         <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-xs font-semibold text-spruce">
                           <Star className="h-3.5 w-3.5" aria-hidden="true" />
                           Contoh dipublish
@@ -697,11 +701,11 @@ export default function AdminPanel({ session, enabled }) {
                       )}
                       <button
                         type="button"
-                        disabled={isBusy || (!job.is_example_public && !job.can_set_as_example)}
+                        disabled={isBusy || (!isPublished && !job.can_set_as_example)}
                         onClick={() => toggleJobExample(job)}
                         className="inline-flex min-h-8 items-center justify-center gap-1 border border-spruce bg-white px-2 py-1 text-xs font-semibold text-spruce disabled:cursor-not-allowed disabled:border-gray-300 disabled:text-gray-400"
                         title={
-                          job.is_example_public
+                          isPublished
                             ? 'Cabut job ini dari feed contoh user.'
                             : job.can_set_as_example
                               ? 'Publish job ini ke feed contoh user.'
@@ -709,9 +713,11 @@ export default function AdminPanel({ session, enabled }) {
                         }
                       >
                         <Star className="h-3.5 w-3.5" aria-hidden="true" />
-                        {job.is_example_public ? 'Cabut contoh' : 'Publish contoh'}
+                        {isPublished ? 'Cabut contoh' : 'Publish contoh'}
                       </button>
                     </div>
+                      );
+                    })()}
                   </td>
                 </tr>
               ))}
