@@ -25,7 +25,7 @@ app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     service: 'ai-redraw-vector-backend',
-    model: process.env.AI_IMAGE_MODEL || 'gpt-image-2'
+    model: process.env.GEMINI_IMAGE_MODEL || process.env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview'
   });
 });
 

@@ -3,14 +3,14 @@ main = "src/index.js"
 compatibility_date = "2026-05-26"
 
 [vars]
-AI_IMAGE_MODEL = "gpt-image-2"
-LITELLM_IMAGE_MODEL = "openai/gpt-image-2"
+GEMINI_ANALYSIS_MODEL = "gemini-3.1-pro-preview"
+GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
+GEMINI_IMAGE_SIZE = "2K"
 SUPABASE_URL = "https://aemnvrxpptessfxaefqe.supabase.co"
-LITELLM_BASE_URL = "https://litellm.koboi2026.biz.id/v1"
 
 [secrets]
-required = ["SUPABASE_SERVICE_ROLE_KEY", "LITELLM_SECRET_KEY"]
+required = ["SUPABASE_SERVICE_ROLE_KEY", "GEMINI_API_KEY"]
 
 # Set required secrets before deploy:
 # wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-# wrangler secret put LITELLM_SECRET_KEY
+# wrangler secret put GEMINI_API_KEY

@@ -1,5 +1,5 @@
 import fs from 'fs-extra';
-import { editImageWithGPTImage2 } from './litellm.service.js';
+import { editImageWithGemini } from './gemini.service.js';
 
 const basePrompt = `Faithfully redraw only the actual artwork from the uploaded image as a fresh clean cartoon/vector illustration suitable for screen printing, sticker production, and automatic vector tracing.
 
@@ -99,10 +99,10 @@ export async function redrawWithAI(inputImagePath, outputPath, settings) {
   }
 
   const prompt = buildRedrawPrompt(settings);
-  const imageBuffer = await editImageWithGPTImage2(inputImagePath, prompt, {
-    model: process.env.AI_IMAGE_MODEL || 'gpt-image-2',
+  const imageBuffer = await editImageWithGemini(inputImagePath, prompt, {
+    model: process.env.GEMINI_IMAGE_MODEL || process.env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview',
     quality: qualityToImageOption(settings.aiQuality),
-    size: '1024x1024'
+    size: process.env.GEMINI_IMAGE_SIZE || '2K'
   });
 
   await fs.writeFile(outputPath, imageBuffer);

@@ -116,23 +116,24 @@ VITE_GOOGLE_OAUTH_REDIRECT_TO=http://localhost:5173
 
 `GOOGLE_OAUTH_CLIENT_SECRET` jangan dimasukkan ke Cloudflare Pages/frontend. Secret tersebut cukup disimpan di Supabase Google provider dan catatan `.env` lokal.
 
-## 3. Siapkan LiteLLM atau OpenAI-Compatible Image API
+## 3. Siapkan Gemini API
 
-Worker memakai endpoint LiteLLM:
+Worker memakai Gemini API langsung:
 
 ```text
-POST {LITELLM_BASE_URL}/v1/images/edits
+POST https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent
 ```
 
 Env yang dibutuhkan:
 
 ```text
-LITELLM_BASE_URL=https://domain-litellm-anda
-LITELLM_SECRET_KEY=sk-...
-AI_IMAGE_MODEL=gpt-image-2
+GEMINI_API_KEY=...
+GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview
+GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
+GEMINI_IMAGE_SIZE=2K
 ```
 
-Catatan: file AI hanya transit dari browser ke Worker lalu ke provider AI. Aplikasi tidak menyimpan file permanen di server.
+Catatan: file gambar ulang hanya transit dari browser ke Worker lalu ke Gemini API. Aplikasi tidak menyimpan file permanen di server.
 
 ## 4. Deploy Cloudflare Worker API
 
@@ -178,7 +179,7 @@ Jika Cloudflare tidak mengizinkan `Build command` kosong, isi:
 npm ci
 ```
 
-Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, atau token LiteLLM. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/LiteLLM diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
+Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, atau `GEMINI_API_KEY`. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/Gemini diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
 
 Nama Worker harus sama dengan `name` di `cloudflare-worker/wrangler.toml`, yaitu `design-mudah`.
 
@@ -189,18 +190,16 @@ Masih di folder `cloudflare-worker`, set secrets satu per satu:
 ```powershell
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put LITELLM_BASE_URL
-npx wrangler secret put LITELLM_SECRET_KEY
+npx wrangler secret put GEMINI_API_KEY
 ```
 
 Saat terminal meminta value:
 
 - `SUPABASE_URL`: isi `https://PROJECT-REF.supabase.co`
 - `SUPABASE_SERVICE_ROLE_KEY`: isi service role key dari Supabase `Project Settings > API`
-- `LITELLM_BASE_URL`: isi URL LiteLLM, contoh `https://litellm.domain-anda.com` atau `https://litellm.domain-anda.com/v1`
-- `LITELLM_SECRET_KEY`: isi secret key LiteLLM
+- `GEMINI_API_KEY`: isi API key dari Google AI Studio.
 
-`AI_IMAGE_MODEL` sudah ada di `cloudflare-worker/wrangler.toml` sebagai non-secret var. Default-nya `gpt-image-2`.
+`GEMINI_IMAGE_MODEL` sudah ada di `cloudflare-worker/wrangler.toml` sebagai non-secret var. Default-nya `gemini-3.1-flash-image-preview`. Untuk kualitas lebih tinggi, bisa diganti ke `gemini-3-pro-image-preview`.
 
 ### 4.3 Deploy Worker
 
@@ -419,10 +418,9 @@ Saldo tidak terbaca:
 
 AI redraw gagal:
 
-- Cek `LITELLM_BASE_URL`.
-- Cek `LITELLM_SECRET_KEY`.
-- Cek model `gpt-image-2`.
-- Cek LiteLLM mendukung endpoint `/v1/images/edits`.
+- Cek Worker secret `GEMINI_API_KEY`.
+- Cek model `GEMINI_IMAGE_MODEL`.
+- Cek akun Gemini API punya akses ke image generation.
 
 Admin tidak muncul:
 

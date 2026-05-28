@@ -57,11 +57,6 @@ function bearerToken(request) {
   return header.startsWith('Bearer ') ? header.slice(7) : '';
 }
 
-function litellmImagesUrl(env) {
-  const baseUrl = requireEnvValue(env, 'LITELLM_BASE_URL').replace(/\/+$/, '').replace(/\/v1$/, '');
-  return `${baseUrl}/v1/images/edits`;
-}
-
 function storageBaseUrl(env) {
   return `${supabaseBaseUrl(env)}/storage/v1`;
 }
@@ -88,13 +83,32 @@ function calculateDynamicJobPrice({ inputMode = 'ready_trace', separationFilmCou
 }
 
 function imageModelCandidates(env) {
-  const configured = env.LITELLM_IMAGE_MODEL || env.AI_IMAGE_MODEL || 'gpt-image-2';
+  const configured = env.GEMINI_IMAGE_MODEL || env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
   const candidates = [configured];
 
-  if (configured === 'gpt-image-2') candidates.push('openai/gpt-image-2');
-  if (configured === 'openai/gpt-image-2') candidates.push('gpt-image-2');
+  if (configured === 'imagen-3.0-generate-002') {
+    candidates.push('gemini-3.1-flash-image-preview');
+  }
 
   return [...new Set(candidates)];
+}
+
+function geminiBaseUrl(env) {
+  return (env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
+  }
+  return btoa(binary);
+}
+
+function findGeminiInlineImage(payload) {
+  const parts = payload?.candidates?.flatMap((candidate) => candidate?.content?.parts || []) || payload?.parts || [];
+  return parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
 }
 
 function examplePublicUrl(env, path) {
@@ -359,8 +373,8 @@ function handleHealth(env) {
     config: {
       supabaseUrl: hasEnvValue(env, 'SUPABASE_URL'),
       supabaseServiceRoleKey: hasEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY'),
-      litellmBaseUrl: hasEnvValue(env, 'LITELLM_BASE_URL'),
-      litellmSecretKey: hasEnvValue(env, 'LITELLM_SECRET_KEY'),
+      geminiApiKey: hasEnvValue(env, 'GEMINI_API_KEY'),
+      geminiAnalysisModel: env.GEMINI_ANALYSIS_MODEL || 'gemini-3.1-pro-preview',
       imageModels: imageModelCandidates(env)
     },
     endpoints: [
@@ -733,30 +747,61 @@ async function handleAiRedraw(env, request) {
 
 async function requestRetouchedImage(env, image, settings, ledgerId) {
   const errors = [];
+  const imageBytes = new Uint8Array(await image.arrayBuffer());
+  const imageBase64 = bytesToBase64(imageBytes);
+  const mimeType = image.type || 'image/png';
+  const prompt = buildAiPrompt(settings);
+  const apiKey = requireEnvValue(env, 'GEMINI_API_KEY');
 
   for (const model of imageModelCandidates(env)) {
-    const aiForm = new FormData();
-    aiForm.append('image', image, image.name || 'input.png');
-    aiForm.append('prompt', buildAiPrompt(settings));
-    aiForm.append('model', model);
-    aiForm.append('size', '1024x1024');
-
-    const response = await fetch(litellmImagesUrl(env), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${requireEnvValue(env, 'LITELLM_SECRET_KEY')}`
-      },
-      body: aiForm
-    });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      errors.push(`${model}: ${data?.error?.message || 'Gambar ulang gagal.'}`);
+    if (model.startsWith('imagen-')) {
+      errors.push(`${model}: Imagen tidak mendukung redraw dari gambar upload melalui endpoint Gemini ini; memakai model image Gemini sebagai fallback.`);
       continue;
     }
 
-    const b64 = data?.data?.[0]?.b64_json;
+    const response = await fetch(`${geminiBaseUrl(env)}/models/${model}:generateContent`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              { text: prompt },
+              {
+                inline_data: {
+                  mime_type: mimeType,
+                  data: imageBase64
+                }
+              }
+            ]
+          }
+        ],
+        generationConfig: {
+          responseModalities: ['IMAGE'],
+          responseFormat: {
+            image: {
+              aspectRatio: '1:1',
+              imageSize: env.GEMINI_IMAGE_SIZE || '2K'
+            }
+          }
+        }
+      })
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      errors.push(`${model}: ${data?.error?.message || data?.message || 'Gambar ulang gagal.'}`);
+      continue;
+    }
+
+    const imagePart = findGeminiInlineImage(data);
+    const b64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data;
     if (!b64) {
-      errors.push(`${model}: Layanan gambar ulang tidak mengembalikan gambar.`);
+      const text = data?.candidates?.flatMap((candidate) => candidate?.content?.parts || []).find((part) => part?.text)?.text;
+      errors.push(`${model}: Gemini tidak mengembalikan gambar.${text ? ` Respons teks: ${text}` : ''}`);
       continue;
     }
 

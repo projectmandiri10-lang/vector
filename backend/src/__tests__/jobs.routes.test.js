@@ -12,7 +12,7 @@ process.env.NODE_ENV = 'test';
 process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
-process.env.AI_IMAGE_MODEL = 'gpt-image-2';
+process.env.GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 
 const { app } = await import('../server.js');
 const { ensureJobDir, safeJobPath, writeJobMeta } = await import('../utils/file.js');
