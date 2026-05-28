@@ -267,6 +267,15 @@ function shouldRemoveEdgeComponent(component, color, width, height) {
   return component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
 }
 
+function shouldRemoveColorEverywhere(component, color, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const coverage = component.count / totalPixels;
+  const boundsCoverage = (component.width * component.height) / totalPixels;
+  const lowChroma = colorChroma(color) <= 36;
+  const broadEdgeBackground = component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
+  return broadEdgeBackground || (lowChroma && component.edgeCount >= 3 && boundsCoverage >= 0.18);
+}
+
 function removeEdgeConnectedBackground(assignments, palette, width, height, settings = {}) {
   if (settings.includeBackgroundInFilmSize) {
     return {
@@ -278,6 +287,7 @@ function removeEdgeConnectedBackground(assignments, palette, width, height, sett
   const output = new Int16Array(assignments);
   const visited = new Uint8Array(assignments.length);
   const edgeStarts = [];
+  const backgroundColorIndexes = new Set();
 
   for (let x = 0; x < width; x += 1) {
     edgeStarts.push(x, width * (height - 1) + x);
@@ -339,6 +349,15 @@ function removeEdgeConnectedBackground(assignments, palette, width, height, sett
       pixels.forEach((pixel) => {
         output[pixel] = -1;
       });
+      if (shouldRemoveColorEverywhere(component, color, width, height)) {
+        backgroundColorIndexes.add(colorIndex);
+      }
+    }
+  }
+
+  if (backgroundColorIndexes.size > 0) {
+    for (let index = 0; index < output.length; index += 1) {
+      if (backgroundColorIndexes.has(output[index])) output[index] = -1;
     }
   }
 
@@ -579,6 +598,15 @@ function boundaryPaths(binary, width, height) {
   return paths.join('');
 }
 
+function pathFromAssignments(assignments, width, height, activeIndexes) {
+  const active = activeIndexes instanceof Set ? activeIndexes : new Set([activeIndexes]);
+  const binary = new Uint8Array(width * height);
+  for (let index = 0; index < assignments.length; index += 1) {
+    if (active.has(assignments[index])) binary[index] = 1;
+  }
+  return boundaryPaths(binary, width, height) || rowRunPath(assignments, width, height, active);
+}
+
 function svgDocument({ width, height, body, label = 'Vector output', physicalWidthCm }) {
   const physicalWidth = physicalWidthCm ? ` width="${physicalWidthCm}cm"` : ` width="${width}"`;
   const physicalHeight = physicalWidthCm ? ` height="${(physicalWidthCm * height) / width}cm"` : ` height="${height}"`;
@@ -591,7 +619,7 @@ ${body}
 function buildFullSvg({ colors, assignments, width, height, settings }) {
   const groups = colors
     .map((color) => {
-      const path = rowRunPath(assignments, width, height, color.index - 1);
+      const path = pathFromAssignments(assignments, width, height, color.index - 1);
       return `<g id="color-${String(color.index).padStart(2, '0')}" data-color="${color.hex}">
 <path d="${path}" fill="${color.hex}" fill-rule="evenodd"/>
 </g>`;
@@ -602,7 +630,7 @@ function buildFullSvg({ colors, assignments, width, height, settings }) {
 
 function buildFilmSvg({ assignments, width, height, settings, activeIndexes, label, bounds }) {
   const artworkBounds = bounds || fullCanvasBounds(width, height);
-  const path = rowRunPath(assignments, width, height, activeIndexes);
+  const path = pathFromAssignments(assignments, width, height, activeIndexes);
   const layout = buildPrintLayout({
     sourceWidth: artworkBounds.width,
     sourceHeight: artworkBounds.height,
@@ -641,7 +669,7 @@ function buildCutlineSvg({ assignments, colors, width, height, settings, bounds 
   const binary = binaryFromAssignments(assignments, width, height, colors);
   const outline = boundaryPaths(dilate(binary, width, height, radiusPx), width, height);
   const fullColor = colors
-    .map((color) => `<path d="${rowRunPath(assignments, width, height, color.index - 1)}" fill="${color.hex}" fill-rule="evenodd"/>`)
+    .map((color) => `<path d="${pathFromAssignments(assignments, width, height, color.index - 1)}" fill="${color.hex}" fill-rule="evenodd"/>`)
     .join('\n');
   const body = `${fullColor}
 <g id="CutContour" data-spot-color="CutContour">

@@ -773,6 +773,7 @@ export function buildAiPrompt(settings) {
     'Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.',
     'Do not preserve photographic background, lighting gradients, glow, shadow, paper texture, table color, or empty canvas outside the design. Make all non-artwork outside the silhouette pure white or transparent-looking and non-printing.',
     'Any broad color or gradient that touches the image border is capture background unless it is a deliberate closed artwork shape with a clear boundary. Do not turn border-touching photo background into a printable color region.',
+    'If the same background is visible through enclosed holes inside letters, logos, counters, boxes, or ring shapes, keep those holes non-printing too; do not fill them as artwork color.',
     'Preserve composition, text, proportions, important visible colors, and deliberate design shapes. Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.',
     'Use solid flat colors only. No gradients, no shadows, no texture, no blur, no halftone, no noisy edge pixels.',
     'Make the outermost artwork silhouette smooth, clean, closed, continuous, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges.',

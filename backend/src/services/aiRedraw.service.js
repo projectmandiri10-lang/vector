@@ -13,6 +13,7 @@ Keep each original color in the same visual region as the source image.
 Do not recolor the artwork.
 Any broad color or gradient that touches the image border is capture background unless it is a deliberate closed artwork shape with a clear boundary.
 Do not turn border-touching photo background into a printable color region.
+If the same background is visible through enclosed holes inside letters, logos, counters, boxes, or ring shapes, keep those holes non-printing too; do not fill them as artwork color.
 Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.
 Do not remove colored accents.
 Do not omit readable text or brand-like lettering if present.

@@ -49,11 +49,30 @@ function shouldRemoveEdgeMaskComponent(component, color, width, height) {
   return component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
 }
 
+function shouldRemoveMaskColorEverywhere(component, color, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const coverage = component.count / totalPixels;
+  const boundsCoverage = (component.width * component.height) / totalPixels;
+  const lowChroma = colorChroma(color) <= 36;
+  const broadEdgeBackground = component.edgeCount >= 2 && (coverage >= 0.01 || boundsCoverage >= 0.22);
+  return broadEdgeBackground || (lowChroma && component.edgeCount >= 3 && boundsCoverage >= 0.18);
+}
+
+function clearAllActiveMaskPixels(png) {
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const pixelIndex = png.width * y + x;
+      if (isActiveMaskPixel(png, x, y)) clearMaskPixel(png, pixelIndex);
+    }
+  }
+}
+
 function cleanupEdgeBackgroundComponents(png, color, options = {}) {
   if (options.includeBackgroundInFilmSize === true) return;
 
   const visited = new Uint8Array(png.width * png.height);
   const edgeStarts = [];
+  let removeColorEverywhere = false;
   for (let x = 0; x < png.width; x += 1) {
     edgeStarts.push(x, png.width * (png.height - 1) + x);
   }
@@ -117,8 +136,11 @@ function cleanupEdgeBackgroundComponents(png, color, options = {}) {
     };
     if (shouldRemoveEdgeMaskComponent(component, color, png.width, png.height)) {
       pixels.forEach((pixel) => clearMaskPixel(png, pixel));
+      removeColorEverywhere ||= shouldRemoveMaskColorEverywhere(component, color, png.width, png.height);
     }
   }
+
+  if (removeColorEverywhere) clearAllActiveMaskPixels(png);
 }
 
 function cleanupMaskNoise(png) {
