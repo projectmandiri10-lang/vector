@@ -99,7 +99,7 @@ export function validateSettings(body = {}) {
   const separateColors = parseBoolean(body.separateColors, defaultSeparate);
   const paperSize = String(body.paperSize || 'A4').toUpperCase() === 'A3' ? 'A3' : 'A4';
   const paperOrientation = String(body.paperOrientation || 'portrait').toLowerCase() === 'landscape' ? 'landscape' : 'portrait';
-  const inputMode = body.inputMode === 'ready_trace' ? 'ready_trace' : 'ai_redraw';
+  const inputMode = body.inputMode === 'ai_redraw' ? 'ai_redraw' : 'ready_trace';
 
   return {
     projectName: String(body.projectName || 'Project Vector').trim().slice(0, 80) || 'Project Vector',

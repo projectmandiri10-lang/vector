@@ -14,7 +14,7 @@ import { commitJob, deleteCloudJob, getBalance, listExampleJobs, quoteJob, reque
 import { createNormalizedImagePreviewBlob } from './lib/imagePreview.js';
 import { deleteHistoryJob, loadHistoryJobs, releaseHistoryJobs, saveHistoryJob } from './lib/localHistoryStore.js';
 import { processImageLocally } from './lib/localProcessor.js';
-import { INPUT_MODE_RETOUCH } from './lib/modes.js';
+import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from './lib/modes.js';
 import { IMAGE_RETOUCH_PRICE_IDR, calculateJobPrice, formatRupiah } from './lib/pricing.js';
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 
@@ -23,7 +23,7 @@ const SUPERUSER_ACCOUNT = ['jho.j80@gm', 'a', 'il.com'].join('');
 const initialSettings = {
   projectName: '',
   productionType: 'sablon',
-  inputMode: INPUT_MODE_RETOUCH,
+  inputMode: INPUT_MODE_READY,
   makeVector: true,
   separateColors: true,
   colorLimitMode: 'auto',

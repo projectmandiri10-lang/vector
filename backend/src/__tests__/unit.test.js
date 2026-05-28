@@ -520,7 +520,7 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(settings.paperOrientation, 'landscape');
   assert.equal(settings.aiQuality, 'standard');
   assert.equal(settings.includeBackgroundInFilmSize, false);
-  assert.equal(settings.inputMode, 'ai_redraw');
+  assert.equal(settings.inputMode, 'ready_trace');
   assert.equal(settings.colorLimitMode, 'auto');
   assert.equal(settings.stickerCutlineEnabled, true);
   assert.equal(settings.stickerCutlineOffsetMm, 2);

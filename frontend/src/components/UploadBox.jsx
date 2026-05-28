@@ -6,16 +6,16 @@ const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
 const modeOptions = [
   {
-    value: INPUT_MODE_RETOUCH,
-    title: 'Gambar perlu digambar ulang',
-    description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.',
-    priceIdr: IMAGE_RETOUCH_PRICE_IDR
+    value: INPUT_MODE_READY,
+    title: 'Gambar siap trace tanpa AI',
+    description: 'Untuk PNG/JPG/WebP yang langsung diproses engine vector, cutline, dan pisah warna tanpa biaya AI.',
+    priceIdr: READY_PROCESS_PRICE_IDR
   },
   {
-    value: INPUT_MODE_READY,
-    title: 'Gambar sudah siap proses',
-    description: 'Untuk PNG/JPG/WebP yang sudah bersih dan ingin langsung diproses sticker atau sablon.',
-    priceIdr: READY_PROCESS_PRICE_IDR
+    value: INPUT_MODE_RETOUCH,
+    title: 'Gambar perlu digambar ulang',
+    description: 'Opsional. Hanya mode ini yang memanggil AI untuk redraw sebelum diproses engine.',
+    priceIdr: IMAGE_RETOUCH_PRICE_IDR
   }
 ];
 
