@@ -1,0 +1,14 @@
+.git
+.env
+.env.local
+.dev.vars
+node_modules
+backend/node_modules
+frontend/node_modules
+cloudflare-worker/node_modules
+frontend/dist
+backend/storage/jobs/*
+!backend/storage/jobs/.gitkeep
+*.log
+backups
+.wrangler
