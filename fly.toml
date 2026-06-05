@@ -1,0 +1,33 @@
+app = "projectmandiri-vectorizer"
+primary_region = "sin"
+
+[build]
+  dockerfile = "Dockerfile.fly"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "8080"
+  STORAGE_DIR = "/tmp/vectorizer-storage"
+  MAX_UPLOAD_MB = "10"
+  UPLOAD_RATE_LIMIT_PER_MINUTE = "3"
+  PREPROCESS_MAX_DIMENSION = "2048"
+  TRACE_THRESHOLD = "180"
+  TRACE_TURD_SIZE = "4"
+  TRACE_OPT_TOLERANCE = "0.18"
+  VERTEX_AI_LOCATION = "us-central1"
+  GEMINI_ANALYSIS_MODEL = "gemini-3-pro-preview"
+  IMAGEN_GENERATION_MODEL = "imagen-3.0-generate-002"
+  AI_REDRAW_PRESET = "quality"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+[[vm]]
+  memory = "2gb"
+  cpu_kind = "shared"
+  cpus = 1
