@@ -90,7 +90,7 @@ function isPublishedExample(job = {}) {
 }
 
 export function isSuperuserProfile(profile, email = '') {
-  return profile?.role === 'superuser' || normalizeEmail(email) === SUPERUSER_EMAIL;
+  return ['superuser', 'superadmin'].includes(profile?.role) || normalizeEmail(email) === SUPERUSER_EMAIL;
 }
 
 export function exampleSourcePath(jobId) {

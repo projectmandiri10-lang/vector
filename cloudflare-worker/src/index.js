@@ -613,7 +613,7 @@ async function requireUser(env, request) {
 
 async function requireAdmin(env, request) {
   const auth = await requireUser(env, request);
-  if (auth.profile.role !== 'superuser' && auth.user.email?.toLowerCase() !== SUPERUSER_EMAIL) {
+  if (!isSuperuserProfile(auth.profile, auth.user.email)) {
     throw new Error('Akses admin ditolak.');
   }
   return auth;

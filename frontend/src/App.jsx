@@ -532,7 +532,7 @@ export default function App() {
   const canSubmit = file && !isBusy && file.size <= 10 * 1024 * 1024 && session;
   const sessionEmail = session?.user?.email?.toLowerCase() || '';
   const isWhitelistedSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
-  const isSuperuser = balance?.profile?.role === 'superuser' || isWhitelistedSuperadmin;
+  const isSuperuser = ['superuser', 'superadmin'].includes(balance?.profile?.role) || isWhitelistedSuperadmin;
 
   async function handleDeleteLibraryJob(item) {
     if (!item?.canDelete) return;

@@ -7,7 +7,7 @@ export default function AccountPanel({ session, balance, balanceError, onRefresh
   const profile = balance?.profile;
   const sessionEmail = session?.user?.email?.toLowerCase() || '';
   const isFallbackSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
-  const isSuperadmin = profile?.role === 'superuser' || (!profile && isFallbackSuperadmin);
+  const isSuperadmin = ['superuser', 'superadmin'].includes(profile?.role) || (!profile && isFallbackSuperadmin);
   const isUnlimited = profile?.is_unlimited ?? isFallbackSuperadmin;
   const balanceLabel = isUnlimited ? 'Unlimited' : formatRupiah(balance?.balance || 0);
 
