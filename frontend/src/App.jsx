@@ -97,11 +97,24 @@ function buildExampleArtifactsFormData({ sourcePreviewBlob, sourceFileName, job 
   return formData;
 }
 
+function getAuthCallbackParams() {
+  return {
+    hashParams: new URLSearchParams(window.location.hash.replace(/^#/, '')),
+    queryParams: new URLSearchParams(window.location.search.replace(/^\?/, ''))
+  };
+}
+
+function cleanAuthCallbackUrl() {
+  if (!window.location.hash && !window.location.search) return;
+  window.history.replaceState({}, document.title, window.location.pathname || '/');
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [settings, setSettings] = useState(initialSettings);
   const [job, setJob] = useState(null);
   const [jobError, setJobError] = useState('');
+  const [authCallbackError, setAuthCallbackError] = useState('');
   const [balanceError, setBalanceError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [session, setSession] = useState(null);
@@ -134,12 +147,71 @@ export default function App() {
 
   useEffect(() => {
     if (!isSupabaseConfigured) return undefined;
-    supabase.auth.getSession().then(({ data }) => setSession(data.session || null));
+    let isMounted = true;
+
+    async function bootstrapAuth() {
+      try {
+        const { hashParams, queryParams } = getAuthCallbackParams();
+        const callbackError =
+          hashParams.get('error_description') ||
+          queryParams.get('error_description') ||
+          hashParams.get('error') ||
+          queryParams.get('error');
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+
+        if (callbackError) {
+          if (isMounted) setAuthCallbackError(callbackError);
+          cleanAuthCallbackUrl();
+          return;
+        }
+
+        if (accessToken && refreshToken) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          cleanAuthCallbackUrl();
+          if (!isMounted) return;
+          if (error) {
+            setAuthCallbackError(error.message || 'Login Google gagal diproses.');
+            return;
+          }
+          setAuthCallbackError('');
+          setSession(data.session || null);
+          if (data.session) setView('app');
+          return;
+        }
+
+        const { data, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
+        if (error) {
+          setAuthCallbackError(error.message || 'Session login tidak bisa dibaca.');
+        } else {
+          setAuthCallbackError('');
+        }
+        setSession(data.session || null);
+        if (data.session) setView('app');
+      } catch (error) {
+        cleanAuthCallbackUrl();
+        if (isMounted) {
+          setAuthCallbackError(error instanceof Error ? error.message : 'Login Google gagal diproses.');
+        }
+      }
+    }
+
+    bootstrapAuth();
     const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      if (nextSession) setView('app');
+      if (nextSession) {
+        setAuthCallbackError('');
+        setView('app');
+      }
     });
-    return () => listener.subscription.unsubscribe();
+    return () => {
+      isMounted = false;
+      listener.subscription.unsubscribe();
+    };
   }, []);
 
   async function refreshBalance(activeSession = session) {
@@ -428,6 +500,13 @@ export default function App() {
             onStart={() => document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' })}
             authPanel={<AuthPanel onSignedIn={setSession} />}
           />
+          {authCallbackError && (
+            <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
+              <p className="border border-red-200 bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+                {authCallbackError}
+              </p>
+            </div>
+          )}
           <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
             <div className="border border-line bg-white p-4 sm:p-5">
               <h2 className="mb-2 text-lg font-bold text-ink">Alur singkat</h2>
