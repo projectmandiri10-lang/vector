@@ -1,6 +1,6 @@
 # Design Mudah Vector untuk Sablon dan Sticker
 
-Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui Gemini API langsung tanpa LiteLLM.
+Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `Gemini director + Imagen 3 painter` di Cloud Run.
 
 ## Mode SaaS Cloudflare + Supabase
 
@@ -13,8 +13,7 @@ Repo ini juga sudah berisi jalur SaaS baru:
 
 Panduan deploy lengkap ada di `DEPLOY_CLOUDFLARE_SUPABASE.md`.
 
-Backend Express di folder `backend/` tetap tersedia sebagai legacy/dev workflow lokal yang memakai filesystem server.
-Backend ini sekarang juga bisa dipaketkan sebagai Google Cloud Run processor untuk trace, cutline, separasi warna, PDF, ZIP, dan registration mark. Panduan lengkap ada di `DEPLOY_GOOGLE_CLOUD_RUN.md`.
+Backend Express di folder `backend/` tetap tersedia untuk workflow lokal dan sekarang menjadi processor Cloud Run untuk redraw hybrid, trace, cutline, separasi warna, PDF, ZIP, dan registration mark. Panduan lengkap ada di `DEPLOY_GOOGLE_CLOUD_RUN.md`.
 
 ## 1. Install Backend
 
@@ -27,30 +26,36 @@ npm run dev
 
 `npm run dev` menjalankan backend tanpa file watcher agar proses AI/vector tidak terputus saat backend menulis file hasil ke storage. Jika perlu watcher untuk edit kode backend, gunakan `npm run dev:watch`.
 
-Backend bisa membaca `.env` dari root project atau `backend/.env`. Jika memakai gambar ulang melalui Gemini API, isi minimalnya:
+Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid di Cloud Run/Vertex AI, isi minimalnya:
 
 ```env
-GEMINI_API_KEY=isi_api_key_gemini_anda
-GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview
-GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
-GEMINI_IMAGE_SIZE=2K
+VERTEX_AI_PROJECT=project-id-anda
+VERTEX_AI_LOCATION=us-central1
+GEMINI_ANALYSIS_MODEL=gemini-3-pro-preview
+IMAGEN_GENERATION_MODEL=imagen-3.0-generate-002
+AI_REDRAW_PRESET=quality
 ```
 
-Untuk kualitas lebih tinggi, `GEMINI_IMAGE_MODEL` bisa diganti ke `gemini-3-pro-image-preview`.
+Autentikasi lokal memakai Application Default Credentials dari Google Cloud CLI:
+
+```bash
+gcloud auth application-default login
+```
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
 ```env
 PORT=3001
-GEMINI_API_KEY=isi_api_key_gemini_anda
-GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview
-GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
-GEMINI_IMAGE_SIZE=2K
+VERTEX_AI_PROJECT=project-id-anda
+VERTEX_AI_LOCATION=us-central1
+GEMINI_ANALYSIS_MODEL=gemini-3-pro-preview
+IMAGEN_GENERATION_MODEL=imagen-3.0-generate-002
+AI_REDRAW_PRESET=quality
 STORAGE_DIR=./storage
 MAX_UPLOAD_MB=10
 ```
 
-`GEMINI_API_KEY` hanya dipakai saat user memilih mode gambar ulang. Mode gambar siap proses tetap memakai engine vector lokal/backend tanpa memanggil model gambar.
+Mode gambar siap proses tetap memakai engine vector lokal/backend tanpa memanggil model AI. Detail arsitektur redraw ada di `HYBRID_REDRAW_POLICY.md`.
 
 ## 2. Install Frontend
 

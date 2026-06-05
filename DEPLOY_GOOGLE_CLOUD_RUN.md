@@ -13,8 +13,8 @@ Referensi resmi yang dipakai:
 ```text
 User Browser
   -> Cloudflare Pages frontend: https://designmudah.pages.dev
-  -> Cloudflare Worker API: login, credit, admin, contoh job, Gemini redraw
-  -> Google Cloud Run processor: trace, cutline, separasi warna, PDF, ZIP, registration mark
+  -> Cloudflare Worker API: login, credit, admin, contoh job, dan proxy redraw
+  -> Google Cloud Run processor: Gemini director, Imagen 3 painter, trace, cutline, separasi warna, PDF, ZIP, registration mark
   -> Supabase: auth, credit, metadata, bucket contoh
 ```
 
@@ -42,23 +42,22 @@ Yang tidak ikut backup: `.dev.vars`, `.env`, `.wrangler/`, dan `node_modules/`.
 
 ## 3. Bukti AI Hanya Redraw
 
-Backend Cloud Run memakai route lama `POST /api/jobs`, tetapi alurnya berbeda menurut `inputMode`:
+Pipeline redraw sekarang tetap:
 
-- `inputMode=ready_trace`: backend menyalin hasil preprocess ke `trace-source.png`, lalu langsung trace/cutline/separasi. Gemini tidak dipanggil.
-- `inputMode=ai_redraw`: backend memanggil Gemini sekali untuk membuat `ai-redraw.png`, lalu file hasil redraw itu dipakai oleh engine trace/cutline/separasi.
+- Worker `/api/image-retouch` hanya memeriksa auth dan credit, lalu meneruskan upload ke Cloud Run.
+- Cloud Run route internal `POST /api/redraw/hybrid` melakukan:
+  - preprocess Node heuristic
+  - analisis desain dengan Gemini
+  - generasi ulang dari nol dengan Imagen 3
+- Setelah PNG redraw jadi, trace/cutline/separasi warna tetap dikerjakan engine deterministik.
 
-Di frontend SaaS saat ini, alur lebih hemat credit:
-
-- Gambar ulang tetap lewat Worker `/api/image-retouch`.
-- Setelah redraw, engine lokal/browser atau Cloud Run processor bisa diberi file redraw sebagai sumber trace.
-- Jadi backend tidak perlu memakai AI untuk separasi warna, registration mark, cutting sticker, ZIP, atau PDF.
-
-Health endpoint backend juga menampilkan:
+Health endpoint backend sekarang menampilkan:
 
 ```json
 {
-  "redrawProvider": "gemini",
-  "redrawScope": "only when inputMode=ai_redraw"
+  "redrawProvider": "vertex_hybrid_imagen3",
+  "redrawPreset": "quality",
+  "redrawScope": "worker /api/image-retouch and backend /api/jobs inputMode=ai_redraw"
 }
 ```
 
@@ -108,12 +107,19 @@ gcloud artifacts repositories create $REPOSITORY `
 
 Jika repository sudah ada, command ini boleh dilewati.
 
-## 6. Simpan Secret
+## 6. Auth dan Secret
 
-Simpan Gemini API key:
+Untuk Cloud Run, akses Vertex AI memakai service account Cloud Run lewat Application Default Credentials. Jadi Anda tidak perlu menyimpan `GEMINI_API_KEY` di Cloud Run.
+
+Pastikan service account runtime punya izin minimal:
 
 ```powershell
-Write-Output "GEMINI_API_KEY_ANDA" | gcloud secrets create gemini-api-key --data-file=-
+$PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
+$RUNTIME_SA = "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
+
+gcloud projects add-iam-policy-binding $PROJECT_ID `
+  --member="serviceAccount:$RUNTIME_SA" `
+  --role="roles/aiplatform.user"
 ```
 
 Buat secret internal antara Worker dan Cloud Run:
@@ -123,16 +129,9 @@ $PROCESSOR_KEY = [guid]::NewGuid().ToString("N")
 Write-Output $PROCESSOR_KEY | gcloud secrets create processor-api-key --data-file=-
 ```
 
-Berikan akses secret ke runtime service account Cloud Run:
+Berikan akses secret processor ke runtime service account Cloud Run:
 
 ```powershell
-$PROJECT_NUMBER = gcloud projects describe $PROJECT_ID --format="value(projectNumber)"
-$RUNTIME_SA = "$PROJECT_NUMBER-compute@developer.gserviceaccount.com"
-
-gcloud secrets add-iam-policy-binding gemini-api-key `
-  --member="serviceAccount:$RUNTIME_SA" `
-  --role="roles/secretmanager.secretAccessor"
-
 gcloud secrets add-iam-policy-binding processor-api-key `
   --member="serviceAccount:$RUNTIME_SA" `
   --role="roles/secretmanager.secretAccessor"

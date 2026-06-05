@@ -12,7 +12,8 @@ process.env.NODE_ENV = 'test';
 process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
-process.env.GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+process.env.VERTEX_AI_PROJECT = 'test-project';
+process.env.VERTEX_AI_LOCATION = 'us-central1';
 
 const { app } = await import('../server.js');
 const { ensureJobDir, safeJobPath, writeJobMeta } = await import('../utils/file.js');
@@ -129,6 +130,37 @@ test('processor API key protects job routes when configured', async () => {
 
     const accepted = await request(app).get('/api/jobs').set('x-processor-api-key', 'test-processor-key');
     assert.equal(accepted.status, 200);
+  } finally {
+    delete process.env.PROCESSOR_API_KEY;
+  }
+});
+
+test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', async () => {
+  process.env.PROCESSOR_API_KEY = 'test-processor-key';
+
+  try {
+    const response = await request(app)
+      .post('/api/redraw/hybrid')
+      .set('x-processor-api-key', 'test-processor-key')
+      .field(
+        'settings',
+        JSON.stringify({
+          projectName: 'Hybrid Test',
+          productionType: 'sablon',
+          inputMode: 'ai_redraw',
+          colorLimitMode: 'manual',
+          maxColors: 3,
+          whiteAsBackground: true
+        })
+      )
+      .attach('image', makePngBuffer(), {
+        filename: 'logo.png',
+        contentType: 'image/png'
+      });
+
+    assert.equal(response.status, 200);
+    assert.match(response.headers['content-type'], /image\/png/);
+    assert.ok(response.headers['x-ai-redraw-metadata']);
   } finally {
     delete process.env.PROCESSOR_API_KEY;
   }

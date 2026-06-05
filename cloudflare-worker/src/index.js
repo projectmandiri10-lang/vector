@@ -8,6 +8,7 @@ import {
   normalizeExampleJobsSetting,
   updateExampleJobsSetting
 } from './example-jobs.js';
+import { HYBRID_REDRAW_PRESETS, normalizeHybridRedrawConfig } from '../../shared/hybridRedrawConfig.js';
 
 const DEFAULT_PRICING = {
   ready_trace: 1000,
@@ -15,41 +16,11 @@ const DEFAULT_PRICING = {
   separation_film: 1000
 };
 
-const AI_REDRAW_MODEL_PRESETS = {
-  budget: {
-    mode: 'budget',
-    label: 'Hemat',
-    model: 'gemini-2.5-flash-image',
-    imageSize: '1K',
-    estimatedUsdPerImage: 0.039
-  },
-  standard: {
-    mode: 'standard',
-    label: 'Standar',
-    model: 'gemini-3.1-flash-image-preview',
-    imageSize: '1K',
-    estimatedUsdPerImage: 0.067
-  },
-  quality: {
-    mode: 'quality',
-    label: 'Kualitas',
-    model: 'gemini-3.1-flash-image-preview',
-    imageSize: '2K',
-    estimatedUsdPerImage: 0.101
-  },
-  premium: {
-    mode: 'premium',
-    label: 'Premium',
-    model: 'gemini-3-pro-image-preview',
-    imageSize: '2K',
-    estimatedUsdPerImage: 0.134
-  }
-};
-
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,POST,DELETE,OPTIONS',
-  'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Processor-API-Key'
+  'Access-Control-Allow-Headers': 'Authorization,Content-Type,X-Processor-API-Key',
+  'Access-Control-Expose-Headers': 'X-AI-Ledger-Id,X-AI-Redraw-Metadata'
 };
 
 function requireEnvValue(env, key) {
@@ -117,51 +88,8 @@ function calculateDynamicJobPrice({ inputMode = 'ready_trace', separationFilmCou
   return basePrice + Math.max(0, Number(separationFilmCount) || 0) * pricing.separation_film;
 }
 
-function normalizeAiRedrawModelConfig(value = {}, env = {}) {
-  const input = value && typeof value === 'object' ? value : {};
-  const preset = AI_REDRAW_MODEL_PRESETS[input.mode] || null;
-  const defaultPreset = AI_REDRAW_MODEL_PRESETS.quality;
-  const configuredModel = input.model || preset?.model || env.GEMINI_IMAGE_MODEL || env.AI_IMAGE_MODEL || defaultPreset.model;
-  const configuredSize = String(input.imageSize || preset?.imageSize || env.GEMINI_IMAGE_SIZE || defaultPreset.imageSize).toUpperCase();
-  const imageSize = ['1K', '2K', '4K'].includes(configuredSize) ? configuredSize : defaultPreset.imageSize;
-
-  return {
-    mode: input.mode || preset?.mode || 'custom',
-    label: input.label || preset?.label || 'Custom',
-    model: configuredModel,
-    imageSize,
-    estimatedUsdPerImage:
-      Number(input.estimatedUsdPerImage) || preset?.estimatedUsdPerImage || defaultPreset.estimatedUsdPerImage
-  };
-}
-
-function imageModelCandidates(env, configuredModel) {
-  const configured = configuredModel || env.GEMINI_IMAGE_MODEL || env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview';
-  const candidates = [configured];
-
-  if (configured === 'imagen-3.0-generate-002') {
-    candidates.push('gemini-3.1-flash-image-preview');
-  }
-
-  return [...new Set(candidates)];
-}
-
-function geminiBaseUrl(env) {
-  return (env.GEMINI_BASE_URL || 'https://generativelanguage.googleapis.com/v1beta').replace(/\/+$/, '');
-}
-
-function bytesToBase64(bytes) {
-  let binary = '';
-  const chunkSize = 0x8000;
-  for (let index = 0; index < bytes.length; index += chunkSize) {
-    binary += String.fromCharCode(...bytes.subarray(index, index + chunkSize));
-  }
-  return btoa(binary);
-}
-
-function findGeminiInlineImage(payload) {
-  const parts = payload?.candidates?.flatMap((candidate) => candidate?.content?.parts || []) || payload?.parts || [];
-  return parts.find((part) => part?.inlineData?.data || part?.inline_data?.data);
+export function normalizeAiRedrawModelConfig(value = {}, env = {}) {
+  return normalizeHybridRedrawConfig(value, env);
 }
 
 function examplePublicUrl(env, path) {
@@ -404,6 +332,7 @@ function normalizeArtifactManifestInput(value, fallback = {}) {
     productionType: typeof input.productionType === 'string' ? input.productionType : fallback.productionType || 'sticker',
     inputMode: typeof input.inputMode === 'string' ? input.inputMode : fallback.inputMode || 'ready_trace',
     settings: input.settings && typeof input.settings === 'object' ? input.settings : fallback.settings || {},
+    aiRedraw: input.aiRedraw && typeof input.aiRedraw === 'object' ? input.aiRedraw : fallback.aiRedraw || null,
     sourceFileName: typeof input.sourceFileName === 'string' ? input.sourceFileName : '',
     createdAt: typeof input.createdAt === 'string' ? input.createdAt : '',
     updatedAt: typeof input.updatedAt === 'string' ? input.updatedAt : '',
@@ -426,12 +355,10 @@ function handleHealth(env) {
     config: {
       supabaseUrl: hasEnvValue(env, 'SUPABASE_URL'),
       supabaseServiceRoleKey: hasEnvValue(env, 'SUPABASE_SERVICE_ROLE_KEY'),
-      geminiApiKey: hasEnvValue(env, 'GEMINI_API_KEY'),
-      geminiAnalysisModel: env.GEMINI_ANALYSIS_MODEL || 'gemini-3.1-pro-preview',
-      imageModels: imageModelCandidates(env),
-      defaultAiRedrawModel: normalizeAiRedrawModelConfig({}, env),
       processorBaseUrl: hasEnvValue(env, 'PROCESSOR_BASE_URL'),
-      processorApiKey: hasEnvValue(env, 'PROCESSOR_API_KEY')
+      processorApiKey: hasEnvValue(env, 'PROCESSOR_API_KEY'),
+      defaultAiRedrawModel: normalizeAiRedrawModelConfig({}, env),
+      redrawPipeline: 'worker_auth_credit_to_cloud_run_hybrid'
     },
     endpoints: [
       'GET /api/me/balance',
@@ -802,15 +729,33 @@ async function handleAiRedraw(env, request) {
     });
   }
 
-  const { b64, ledgerId } = await requestRetouchedImage(env, image, settings, ledger?.id || '');
-  const bytes = Uint8Array.from(atob(b64), (char) => char.charCodeAt(0));
-  return new Response(bytes, {
-    headers: {
-      ...corsHeaders,
-      'Content-Type': 'image/png',
-      'X-AI-Ledger-Id': ledgerId
+  try {
+    const upstream = await requestHybridRetouchedImage(env, image, settings);
+    const responseHeaders = new Headers(upstream.headers);
+    Object.entries(corsHeaders).forEach(([key, value]) => responseHeaders.set(key, value));
+    responseHeaders.set('X-AI-Ledger-Id', ledger?.id || '');
+    return new Response(upstream.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: responseHeaders
+    });
+  } catch (error) {
+    if (ledger?.id) {
+      await insertLedger(env, {
+        userId: user.id,
+        amountIdr: pricing.ai_redraw,
+        kind: 'credit',
+        reason: 'ai_redraw_refund',
+        referenceId: ledger.id,
+        metadata: {
+          inputMode: settings.inputMode,
+          productionType: settings.productionType,
+          refundedLedgerId: ledger.id
+        }
+      });
     }
-  });
+    throw error;
+  }
 }
 
 async function handleProcessorProxy(env, request, processorPath) {
@@ -839,110 +784,36 @@ async function handleProcessorProxy(env, request, processorPath) {
   });
 }
 
-async function requestRetouchedImage(env, image, settings, ledgerId) {
-  const errors = [];
-  const imageBytes = new Uint8Array(await image.arrayBuffer());
-  const imageBase64 = bytesToBase64(imageBytes);
-  const mimeType = image.type || 'image/png';
-  const prompt = buildAiPrompt(settings);
-  const apiKey = requireEnvValue(env, 'GEMINI_API_KEY');
+async function requestHybridRetouchedImage(env, image, settings) {
   const aiModelConfig = await getAiRedrawModelConfig(env);
+  const formData = new FormData();
+  formData.append('image', image, image.name || 'upload.png');
+  formData.append(
+    'settings',
+    JSON.stringify({
+      ...settings,
+      aiRedrawModel: aiModelConfig
+    })
+  );
 
-  for (const model of imageModelCandidates(env, aiModelConfig.model)) {
-    if (model.startsWith('imagen-')) {
-      errors.push(`${model}: Imagen tidak mendukung redraw dari gambar upload melalui endpoint Gemini ini; memakai model image Gemini sebagai fallback.`);
-      continue;
-    }
+  const response = await fetch(`${processorBaseUrl(env)}/api/redraw/hybrid`, {
+    method: 'POST',
+    headers: {
+      'x-processor-api-key': requireEnvValue(env, 'PROCESSOR_API_KEY')
+    },
+    body: formData
+  });
 
-    const response = await fetch(`${geminiBaseUrl(env)}/models/${model}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              { text: prompt },
-              {
-                inline_data: {
-                  mime_type: mimeType,
-                  data: imageBase64
-                }
-              }
-            ]
-          }
-        ],
-        generationConfig: {
-          responseModalities: ['IMAGE'],
-          responseFormat: {
-            image: {
-              aspectRatio: '1:1',
-              imageSize: aiModelConfig.imageSize
-            }
-          }
-        }
-      })
-    });
+  if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      errors.push(`${model}: ${data?.error?.message || data?.message || 'Gambar ulang gagal.'}`);
-      continue;
-    }
-
-    const imagePart = findGeminiInlineImage(data);
-    const b64 = imagePart?.inlineData?.data || imagePart?.inline_data?.data;
-    if (!b64) {
-      const text = data?.candidates?.flatMap((candidate) => candidate?.content?.parts || []).find((part) => part?.text)?.text;
-      errors.push(`${model}: Gemini tidak mengembalikan gambar.${text ? ` Respons teks: ${text}` : ''}`);
-      continue;
-    }
-
-    return { b64, ledgerId };
+    throw new Error(data?.error || 'Gambar ulang hybrid gagal diproses.');
   }
 
-  throw new Error(`Gambar ulang gagal. ${errors.join(' | ')}`);
+  return response;
 }
 
 export function getAiRedrawModelPresets() {
-  return AI_REDRAW_MODEL_PRESETS;
-}
-
-export function buildAiPrompt(settings) {
-  const lines = [
-    'Faithfully redraw only the actual artwork from the uploaded photo as a fresh clean cartoon/vector illustration for sticker and manual screen printing.',
-    'This is a true redraw from shapes and colors, not pixel repair, not upscaling, not sharpening, and not automatic photo cleanup. Rebuild the artwork with smooth intentional vector-like shapes.',
-    'Treat the uploaded image as a reference photo. Separate the real design from camera background, paper, table, shadows, glare, uneven lighting, light gradients, blur, compression noise, and dirt.',
-    'Do not preserve photographic background, lighting gradients, glow, shadow, paper texture, table color, or empty canvas outside the design. Make all non-artwork outside the silhouette pure white or transparent-looking and non-printing.',
-    'Any broad color or gradient that touches the image border is capture background unless it is a deliberate closed artwork shape with a clear boundary. Do not turn border-touching photo background into a printable color region.',
-    'Identify the background color family from the outer border and image corners. Remove every color that is the same as, or visually close to, that background color family, even when it appears inside enclosed holes. Do not leave a rectangular background layer.',
-    'Return isolated artwork on a transparent background if alpha is supported. If transparency is not supported, use pure #FFFFFF only for empty non-printing space with no colored halo or off-white fringe.',
-    'If the same background is visible through enclosed holes inside letters, logos, counters, boxes, or ring shapes, keep those holes non-printing too; do not fill them as artwork color.',
-    'Preserve composition, text, proportions, important visible colors, and deliberate design shapes. Preserve a dark or colored background only when it is clearly an intentional bounded shape inside the artwork, not a photo backdrop.',
-    'Use solid flat colors only. No gradients, no shadows, no texture, no blur, no halftone, no noisy edge pixels.',
-    'Make the outermost artwork silhouette smooth, clean, closed, continuous, high-density, anti-aliased, and easy to trace into vector shapes. Use rounded, intentional contours instead of rough pixel-like edges or stair-stepped low-resolution pixels.',
-    'For text and logos, redraw the letterforms as clean bold shapes with smooth contours. Do not preserve pixel damage, rough source edges, gray anti-alias dust, or lighting artifacts.',
-    'Avoid jagged outer contours, wavy borders, accidental rough corners, broken outlines, fringing, glow, anti-aliased halos, and noisy edge artifacts.',
-    settings.productionType === 'sablon'
-      ? 'Optimize for clean spot-color screen print separation. Every color region must be intentional printable artwork; do not create any separate film for the photo background or lighting gradient.'
-      : 'Optimize for full-color sticker output with crisp smooth edges suitable for vector tracing and cutline generation.'
-  ];
-
-  if (settings.whiteAsBackground) {
-    lines.push('Treat white, near-white, pale gray, paper, glare, and empty outside area as non-printing background. Internal white only stays if it is clearly enclosed inside the actual artwork.');
-  } else {
-    lines.push('White may be a printable artwork color only inside real letters or bounded design shapes. Still remove outside paper, lighting, wall, table, and photo backdrop completely.');
-  }
-
-  if (settings.colorLimitMode === 'manual' && settings.maxColors) {
-    lines.push(`Target at most ${settings.maxColors} printable spot colors, excluding the non-printing background. Merge only redundant shading or lighting artifacts; do not count the removed photo background as one of the colors.`);
-  } else {
-    lines.push('Automatically choose only intentional flat artwork colors. Reject background gradients, shadows, and camera lighting as colors.');
-  }
-
-  return lines.join('\n\n');
+  return HYBRID_REDRAW_PRESETS;
 }
 
 async function handleJobArtifactsUpload(env, request, jobId) {
@@ -974,7 +845,8 @@ async function handleJobArtifactsUpload(env, request, jobId) {
     projectName: manifestInput.projectName || job.project_name,
     productionType: job.production_type,
     inputMode: job.input_mode,
-    settings: manifestInput.settings || job.settings || {}
+    settings: manifestInput.settings || job.settings || {},
+    aiRedraw: manifestInput.aiRedraw || job.manifest?.aiRedraw || null
   };
 
   const sourcePreview = requireFormFile(form, 'sourcePreview', 'Preview gambar awal wajib diunggah.');
@@ -1057,6 +929,7 @@ async function handleJobArtifactsUpload(env, request, jobId) {
     productionType: manifest.productionType,
     inputMode: manifest.inputMode,
     settings: manifest.settings || {},
+    aiRedraw: manifest.aiRedraw || null,
     sourcePreviewPath,
     resultPreviewPath,
     manifestPath,
@@ -1382,12 +1255,13 @@ async function handleAdminSettings(env, request) {
 
   const body = await readJson(request);
   if (!body.key) throw new Error('Key setting wajib diisi.');
+  const normalizedValue = body.key === 'ai_redraw_model' ? normalizeAiRedrawModelConfig(body.value, env) : body.value || {};
   const rows = await supabaseFetch(env, '/rest/v1/app_settings?select=*', {
     method: 'POST',
     prefer: 'resolution=merge-duplicates,return=representation',
     body: {
       key: body.key,
-      value: body.value || {},
+      value: normalizedValue,
       is_public: body.isPublic !== false,
       description: body.description || '',
       updated_at: formatDate(new Date())

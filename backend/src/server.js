@@ -3,8 +3,10 @@ import cors from 'cors';
 import express from 'express';
 import helmet from 'helmet';
 import { pathToFileURL } from 'node:url';
+import { normalizeHybridRedrawConfig } from '../../shared/hybridRedrawConfig.js';
 import { processorAuth, processorAuthEnabled } from './middleware/processorAuth.js';
 import jobsRouter from './routes/jobs.routes.js';
+import redrawRouter from './routes/redraw.routes.js';
 import { cleanupOldJobs, ensureStorage, markInterruptedJobsFailed } from './utils/file.js';
 
 export const app = express();
@@ -23,6 +25,7 @@ app.use(
 app.use(express.json({ limit: '1mb' }));
 
 app.get('/api/health', (_req, res) => {
+  const redrawConfig = normalizeHybridRedrawConfig({}, process.env);
   res.json({
     ok: true,
     service: 'ai-redraw-vector-backend',
@@ -35,13 +38,17 @@ app.get('/api/health', (_req, res) => {
       turdSize: Number.parseFloat(process.env.TRACE_TURD_SIZE || '4'),
       optTolerance: Number.parseFloat(process.env.TRACE_OPT_TOLERANCE || '0.18')
     },
-    redrawProvider: 'gemini',
-    redrawModel: process.env.GEMINI_IMAGE_MODEL || process.env.AI_IMAGE_MODEL || 'gemini-3.1-flash-image-preview',
-    redrawScope: 'only when inputMode=ai_redraw'
+    redrawProvider: redrawConfig.provider,
+    redrawAnalysisModel: redrawConfig.analysisModel,
+    redrawGenerationModel: redrawConfig.generationModel,
+    redrawPreset: redrawConfig.preset,
+    redrawPreprocess: redrawConfig.preprocess,
+    redrawScope: 'worker /api/image-retouch and backend /api/jobs inputMode=ai_redraw'
   });
 });
 
 app.use('/api/jobs', processorAuth, jobsRouter);
+app.use('/api/redraw', processorAuth, redrawRouter);
 
 app.use((err, _req, res, _next) => {
   const status = err.status || err.statusCode || 500;

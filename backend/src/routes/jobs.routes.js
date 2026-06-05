@@ -4,7 +4,7 @@ import fs from 'fs-extra';
 import multer from 'multer';
 import path from 'node:path';
 import { v4 as uuidv4 } from 'uuid';
-import { buildRedrawPrompt, redrawWithAI } from '../services/aiRedraw.service.js';
+import { redrawWithAI } from '../services/aiRedraw.service.js';
 import { exportSvgToPdf, exportSvgToPng } from '../services/export.service.js';
 import { preprocessUploadedImage } from '../services/preprocess.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
@@ -218,7 +218,7 @@ async function processJob(jobId, uploadedBuffer) {
     const input = await preprocessUploadedImage(uploadedBuffer, jobDir);
 
     let sourceImagePath = input.cleanInputPath;
-    let prompt = null;
+    let aiRedrawMetadata = null;
     if (meta.settings.inputMode === 'ready_trace') {
       sourceImagePath = safeJobPath(jobId, 'trace-source.png');
       await fs.copy(input.cleanInputPath, sourceImagePath);
@@ -230,8 +230,8 @@ async function processJob(jobId, uploadedBuffer) {
         message: statusMessages.processing_ai
       });
       const aiOutputPath = safeJobPath(jobId, 'ai-redraw.png');
-      prompt = buildRedrawPrompt(meta.settings);
-      await redrawWithAI(input.cleanInputPath, aiOutputPath, meta.settings);
+      const redrawResult = await redrawWithAI(input.cleanInputPath, aiOutputPath, meta.settings);
+      aiRedrawMetadata = redrawResult.metadata || null;
       sourceImagePath = aiOutputPath;
       await fs.copy(aiOutputPath, safeJobPath(jobId, 'preview-full-color.png'));
     }
@@ -248,7 +248,8 @@ async function processJob(jobId, uploadedBuffer) {
         status: 'vectorizing',
         progress: 55,
         message: statusMessages.vectorizing,
-        prompt
+        prompt: aiRedrawMetadata?.technicalPrompt || undefined,
+        aiRedraw: aiRedrawMetadata || undefined
       });
 
       const quantized = await quantizeImage(sourceImagePath, {
@@ -335,6 +336,8 @@ async function processJob(jobId, uploadedBuffer) {
       progress: 100,
       message: statusMessages.done,
       files: publicFiles(jobId, { separations }),
+      prompt: aiRedrawMetadata?.technicalPrompt || undefined,
+      aiRedraw: aiRedrawMetadata || undefined,
       palette,
       separations,
       stickerCutline

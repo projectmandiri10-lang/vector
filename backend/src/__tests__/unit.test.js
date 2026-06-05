@@ -28,17 +28,16 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
     productionType: 'sablon',
     maxColors: 4,
     aiQuality: 'standard',
+    colorLimitMode: 'manual',
     whiteAsBackground: false
   });
 
-  assert.match(prompt, /Faithfully redraw only the actual artwork/);
-  assert.match(prompt, /true redraw from shapes and colors, not pixel repair/);
-  assert.match(prompt, /Preserve all important visible colors/);
-  assert.match(prompt, /Separate the real design from camera background/);
-  assert.match(prompt, /Treat white as a real printable artwork color/);
-  assert.match(prompt, /Optimize for manual screen printing/);
-  assert.match(prompt, /approximately 4 printable solid artwork colors/);
-  assert.match(prompt, /outermost artwork silhouette smooth, clean, closed, continuous/);
+  assert.match(prompt, /Faithfully redraw the uploaded artwork/);
+  assert.match(prompt, /true redraw from shape intent and color placement/);
+  assert.match(prompt, /Treat white inside the actual artwork as a printable color/);
+  assert.match(prompt, /Optimize for manual screen printing and backend vector tracing/);
+  assert.match(prompt, /Keep the redraw within about 4 dominant printable solid colors/);
+  assert.match(prompt, /outermost artwork silhouette as smooth, clean, closed, continuous/);
 });
 
 test('standard prompt prioritizes faithful color matching', () => {
@@ -46,12 +45,13 @@ test('standard prompt prioritizes faithful color matching', () => {
     productionType: 'sablon',
     maxColors: 4,
     aiQuality: 'standard',
+    colorLimitMode: 'auto',
     whiteAsBackground: true
   });
 
-  assert.match(prompt, /prioritize accurate color matching/);
-  assert.match(prompt, /Treat empty background as non-printing/);
-  assert.match(prompt, /Avoid jagged outer contours, wavy borders/);
+  assert.match(prompt, /Remove all camera background/);
+  assert.match(prompt, /Treat white, near-white, and paper-like empty background as non-printing space/);
+  assert.match(prompt, /no jagged steps, no broken edges, and no accidental gaps/);
 });
 
 test('color helpers detect near white background and nearest palette', () => {

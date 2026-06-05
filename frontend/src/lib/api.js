@@ -23,6 +23,17 @@ export function absoluteUrl(path) {
   return `${API_BASE_URL}${path}`;
 }
 
+function decodeBase64UrlJson(value) {
+  if (!value) return null;
+  try {
+    const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return null;
+  }
+}
+
 async function apiFetch(path, { accessToken, method = 'GET', body, headers = {} } = {}) {
   if (!API_BASE_URL) {
     throw new Error('VITE_API_BASE_URL belum diatur. Hubungkan Cloudflare Worker API terlebih dahulu.');
@@ -109,10 +120,12 @@ export async function requestImageRetouch(file, settings, accessToken) {
     throw new Error(data.error || 'Gambar ulang gagal.');
   }
   const retouchLedgerId = response.headers.get('x-ai-ledger-id') || '';
+  const aiRedrawMetadata = decodeBase64UrlJson(response.headers.get('x-ai-redraw-metadata') || '');
   const blob = await response.blob();
   return {
     file: new File([blob], 'gambar-ulang.png', { type: blob.type || 'image/png' }),
-    retouchLedgerId
+    retouchLedgerId,
+    aiRedrawMetadata
   };
 }
 

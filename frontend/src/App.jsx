@@ -81,6 +81,7 @@ function buildExampleArtifactsFormData({ sourcePreviewBlob, sourceFileName, job 
       productionType: job.settings?.productionType || 'sticker',
       inputMode: job.settings?.inputMode || 'ready_trace',
       settings: job.settings || {},
+      aiRedraw: job.manifest?.aiRedraw || null,
       createdAt: job.createdAt,
       updatedAt: job.updatedAt,
       sourceFileName: sourceFileName || '',
@@ -262,16 +263,22 @@ export default function App() {
       await ensureCanRun(settings.separateColors ? 1 : 0);
       let processingFile = file;
       let retouchLedgerId = '';
+      let aiRedrawMetadata = null;
 
       if (settings.inputMode === INPUT_MODE_RETOUCH) {
         setJob(statusJob('processing_image', 'Menggambar ulang gambar tanpa penyimpanan permanen server.', 25));
         const retouchResult = await requestImageRetouch(file, settings, session.access_token);
         processingFile = retouchResult.file;
         retouchLedgerId = retouchResult.retouchLedgerId;
+        aiRedrawMetadata = retouchResult.aiRedrawMetadata || null;
       }
 
       setJob(statusJob('vectorizing', 'Membuat vector, cutline, film, PDF, dan ZIP di browser.', 60));
       const localResult = await processImageLocally(processingFile, settings);
+      const manifest = {
+        ...(localResult.manifest || {}),
+        aiRedraw: aiRedrawMetadata
+      };
       const finalPrice = calculateJobPrice({
         inputMode: settings.inputMode,
         separationFilmCount: localResult.separationFilmCount,
@@ -286,7 +293,7 @@ export default function App() {
           projectName: settings.projectName || 'Project Vector',
           separationFilmCount: localResult.separationFilmCount,
           settings,
-          manifest: localResult.manifest,
+          manifest,
           aiLedgerId: retouchLedgerId,
           priceIdr: finalPrice
         },
@@ -295,6 +302,7 @@ export default function App() {
 
       const completedJob = {
         ...localResult,
+        manifest,
         jobId: committed.job?.id || localResult.jobId,
         priceIdr: (settings.inputMode === INPUT_MODE_RETOUCH ? IMAGE_RETOUCH_PRICE_IDR : 0) + finalPrice,
         remoteJob: committed.job

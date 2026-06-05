@@ -19,6 +19,7 @@ import {
   updateAdminSetting,
   updateAdminUser
 } from '../lib/api.js';
+import { listHybridRedrawPresets, normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from '../lib/modes.js';
 import { formatRupiah } from '../lib/pricing.js';
 
@@ -33,50 +34,10 @@ const inputModeLabels = {
   [INPUT_MODE_RETOUCH]: 'Gambar ulang'
 };
 
-const aiRedrawModelPresets = [
-  {
-    mode: 'budget',
-    label: 'Hemat',
-    model: 'gemini-2.5-flash-image',
-    imageSize: '1K',
-    estimatedUsdPerImage: 0.039,
-    note: 'Biaya paling rendah, cocok untuk logo sederhana dan volume tinggi.'
-  },
-  {
-    mode: 'standard',
-    label: 'Standar',
-    model: 'gemini-3.1-flash-image-preview',
-    imageSize: '1K',
-    estimatedUsdPerImage: 0.067,
-    note: 'Kompromi biaya dan kualitas untuk kebanyakan upload.'
-  },
-  {
-    mode: 'quality',
-    label: 'Kualitas',
-    model: 'gemini-3.1-flash-image-preview',
-    imageSize: '2K',
-    estimatedUsdPerImage: 0.101,
-    note: 'Default aman untuk trace lebih halus.'
-  },
-  {
-    mode: 'premium',
-    label: 'Premium',
-    model: 'gemini-3-pro-image-preview',
-    imageSize: '2K',
-    estimatedUsdPerImage: 0.134,
-    note: 'Untuk testing kualitas tinggi, biaya lebih mahal.'
-  }
-];
+const aiRedrawModelPresets = listHybridRedrawPresets();
 
 function normalizeAiModelDraft(value = {}) {
-  const selected = aiRedrawModelPresets.find((preset) => preset.mode === value.mode) || aiRedrawModelPresets[2];
-  return {
-    mode: value.mode || selected.mode,
-    label: value.label || selected.label,
-    model: value.model || selected.model,
-    imageSize: value.imageSize || selected.imageSize,
-    estimatedUsdPerImage: Number(value.estimatedUsdPerImage) || selected.estimatedUsdPerImage
-  };
+  return normalizeHybridRedrawConfig(value);
 }
 
 function estimatedIdr(usd) {
@@ -357,12 +318,12 @@ export default function AdminPanel({ session, enabled }) {
           key: 'ai_redraw_model',
           value: nextValue,
           isPublic: false,
-          description: 'Model dan ukuran output untuk gambar ulang AI'
+          description: 'Pipeline hybrid redraw: Gemini director + Imagen 3 painter'
         },
         accessToken
       );
       await loadAdminData();
-      setMessage(`Model gambar ulang disimpan: ${nextValue.label} (${nextValue.model}, ${nextValue.imageSize}).`);
+      setMessage(`Pipeline redraw disimpan: ${nextValue.label} (${nextValue.analysisModel} + ${nextValue.generationModel}).`);
     } catch (error) {
       setMessage(toUserApiError(error, 'Gagal menyimpan model gambar ulang.').message);
     } finally {
@@ -729,6 +690,10 @@ export default function AdminPanel({ session, enabled }) {
                 <select
                   value={aiModelDraft.mode}
                   onChange={(event) => {
+                    if (event.target.value === 'custom') {
+                      setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom' }));
+                      return;
+                    }
                     const preset = aiRedrawModelPresets.find((item) => item.mode === event.target.value) || aiRedrawModelPresets[2];
                     setAiModelDraft(normalizeAiModelDraft(preset));
                   }}
@@ -736,31 +701,28 @@ export default function AdminPanel({ session, enabled }) {
                 >
                   {aiRedrawModelPresets.map((preset) => (
                     <option key={preset.mode} value={preset.mode}>
-                      {preset.label} - {preset.model} {preset.imageSize}
+                      {preset.label} - {preset.analysisModel} + {preset.generationModel}
                     </option>
                   ))}
+                  <option value="custom">Custom</option>
                 </select>
               </label>
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-ink">Model</span>
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Gemini director</span>
                   <input
-                    value={aiModelDraft.model}
-                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', label: 'Custom', model: event.target.value }))}
+                    value={aiModelDraft.analysisModel}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', analysisModel: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran output</span>
-                  <select
-                    value={aiModelDraft.imageSize}
-                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', label: 'Custom', imageSize: event.target.value }))}
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Imagen painter</span>
+                  <input
+                    value={aiModelDraft.generationModel}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', generationModel: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
-                  >
-                    <option value="1K">1K</option>
-                    <option value="2K">2K</option>
-                    <option value="4K">4K</option>
-                  </select>
+                  />
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Estimasi USD/gambar</span>
@@ -769,21 +731,49 @@ export default function AdminPanel({ session, enabled }) {
                     min="0"
                     step="0.001"
                     value={aiModelDraft.estimatedUsdPerImage}
-                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', label: 'Custom', estimatedUsdPerImage: event.target.value }))}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', estimatedUsdPerImage: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   />
                 </label>
               </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Resolusi policy</span>
+                  <select
+                    value={aiModelDraft.resolutionPolicy}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', resolutionPolicy: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="economy">Economy</option>
+                    <option value="standard">Standard</option>
+                    <option value="high">High</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Aspect policy</span>
+                  <input value={aiModelDraft.aspectPolicy} readOnly className="w-full border border-line bg-panel px-3 py-2.5 text-sm text-gray-700" />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Preprocess</span>
+                  <input value={aiModelDraft.preprocess} readOnly className="w-full border border-line bg-panel px-3 py-2.5 text-sm text-gray-700" />
+                </label>
+              </div>
               <div className="border border-line bg-white p-3 text-sm leading-6 text-gray-700">
                 <p>
-                  Aktif: <strong>{aiModelDraft.label}</strong> · {aiModelDraft.model} · {aiModelDraft.imageSize}
+                  Aktif: <strong>{aiModelDraft.label}</strong> | {aiModelDraft.analysisModel} to {aiModelDraft.generationModel}
                 </p>
-                <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw, belum termasuk input token kecil.</p>
-                <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen model.'}</p>
+                <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
+                <p>Pipeline: Gemini menganalisis niat desain dan menulis prompt teknis, lalu Imagen 3 menggambar ulang dari nol sebelum hasilnya di-trace.</p>
+                <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen pipeline hybrid.'}</p>
+                <p>
+                  Kebijakan tetap: aspect mengikuti sumber, preprocess Node heuristic, prompt disimpan ke manifest,
+                  {` `}
+                  retry low-confidence {aiModelDraft.retryOnLowConfidence ? 'aktif' : 'mati'}.
+                </p>
               </div>
               <button type="button" onClick={saveAiModelSetting} className="inline-flex min-h-10 w-fit items-center justify-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-bold text-white">
                 <Save className="h-4 w-4" aria-hidden="true" />
-                Simpan model gambar ulang
+                Simpan pipeline redraw
               </button>
             </div>
           </div>
