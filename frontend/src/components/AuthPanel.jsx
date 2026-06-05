@@ -48,7 +48,21 @@ export default function AuthPanel({ onSignedIn }) {
       setMessage('Supabase belum dikonfigurasi.');
       return;
     }
+    setIsBusy(true);
     setMessage('Mengarahkan ke login Google...');
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: GOOGLE_REDIRECT_TO,
+        skipBrowserRedirect: true
+      }
+    });
+    if (error) {
+      setMessage(error.message || 'Login Google gagal.');
+      setIsBusy(false);
+      return;
+    }
+    window.location.href = data?.url || googleAuthUrl;
   }
 
   const googleAuthUrl = buildGoogleAuthUrl();
@@ -103,7 +117,10 @@ export default function AuthPanel({ onSignedIn }) {
 
       <a
         href={googleAuthUrl || undefined}
-        onClick={signInWithGoogle}
+        onClick={(event) => {
+          event.preventDefault();
+          signInWithGoogle();
+        }}
         className={`mt-3 inline-flex min-h-11 w-full items-center justify-center gap-3 border border-[#DADCE0] bg-white px-4 py-2.5 text-sm font-semibold text-[#3C4043] hover:bg-gray-50 ${!googleAuthUrl || isBusy ? 'pointer-events-none opacity-60' : ''}`}
       >
         {googleIcon}
