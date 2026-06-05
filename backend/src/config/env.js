@@ -14,5 +14,4 @@ dotenv.config({ path: path.join(backendDir, '.env'), override: false });
 process.env.GEMINI_ANALYSIS_MODEL ||= 'gemini-3-pro-preview';
 process.env.IMAGEN_GENERATION_MODEL ||= 'imagen-3.0-generate-002';
 process.env.AI_REDRAW_PRESET ||= 'quality';
-process.env.VERTEX_AI_LOCATION ||= process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-process.env.VERTEX_AI_PROJECT ||= process.env.GOOGLE_CLOUD_PROJECT || process.env.GCLOUD_PROJECT || process.env.GCP_PROJECT || '';
+process.env.SUPABASE_PUBLISHABLE_KEY ||= process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';

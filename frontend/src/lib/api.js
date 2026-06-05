@@ -7,7 +7,7 @@ function isNetworkLikeError(message = '') {
 
 export function toUserApiError(error, fallbackMessage) {
   const message = error instanceof Error ? error.message : String(error || '');
-  if (!API_BASE_URL || message.includes('VITE_API_BASE_URL')) {
+  if (message.includes('VITE_API_BASE_URL')) {
     return new Error('Koneksi ke layanan belum tersambung. Periksa URL API aplikasi.');
   }
   if (isNetworkLikeError(message)) {
@@ -35,10 +35,6 @@ function decodeBase64UrlJson(value) {
 }
 
 async function apiFetch(path, { accessToken, method = 'GET', body, headers = {} } = {}) {
-  if (!API_BASE_URL) {
-    throw new Error('VITE_API_BASE_URL belum diatur. Hubungkan Cloudflare Worker API terlebih dahulu.');
-  }
-
   let response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {

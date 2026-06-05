@@ -391,20 +391,11 @@ function buildRetryPrompt(technicalPrompt, analysis) {
 }
 
 function createVertexClient() {
-  const project =
-    process.env.VERTEX_AI_PROJECT ||
-    process.env.GOOGLE_CLOUD_PROJECT ||
-    process.env.GCLOUD_PROJECT ||
-    process.env.GCP_PROJECT;
-  const location = process.env.VERTEX_AI_LOCATION || process.env.GOOGLE_CLOUD_LOCATION || 'us-central1';
-  if (!project) {
-    throw new Error('VERTEX_AI_PROJECT atau GOOGLE_CLOUD_PROJECT belum dikonfigurasi.');
+  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY atau GOOGLE_API_KEY belum dikonfigurasi.');
   }
-  return new GoogleGenAI({
-    vertexai: true,
-    project,
-    location
-  });
+  return new GoogleGenAI({ apiKey });
 }
 
 async function preprocessForHybridRedraw(buffer, preprocessName) {

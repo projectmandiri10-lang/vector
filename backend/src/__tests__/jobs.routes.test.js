@@ -12,11 +12,12 @@ process.env.NODE_ENV = 'test';
 process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
-process.env.VERTEX_AI_PROJECT = 'test-project';
-process.env.VERTEX_AI_LOCATION = 'us-central1';
+process.env.GEMINI_ANALYSIS_MODEL = 'gemini-3-pro-preview';
+process.env.IMAGEN_GENERATION_MODEL = 'imagen-3.0-generate-002';
 
 const { app } = await import('../server.js');
 const { ensureJobDir, safeJobPath, writeJobMeta } = await import('../utils/file.js');
+const { hybridRedrawBuffer } = await import('../services/aiRedraw.service.js');
 
 function makePngBuffer() {
   const png = new PNG({ width: 8, height: 8 });
@@ -161,7 +162,28 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.equal(response.status, 200);
     assert.match(response.headers['content-type'], /image\/png/);
     assert.ok(response.headers['x-ai-redraw-metadata']);
+    const metadata = JSON.parse(Buffer.from(response.headers['x-ai-redraw-metadata'], 'base64url').toString('utf8'));
+    assert.equal(metadata.provider, 'gemini_api_key_imagen3');
+    assert.equal(metadata.analysisModel, 'gemini-3-pro-preview');
+    assert.equal(metadata.generationModel, 'imagen-3.0-generate-002');
   } finally {
     delete process.env.PROCESSOR_API_KEY;
+  }
+});
+
+test('Gemini API key mode reports clear missing key error', async () => {
+  const previousMock = process.env.AI_REDRAW_MOCK;
+  const previousKey = process.env.GEMINI_API_KEY;
+  delete process.env.AI_REDRAW_MOCK;
+  delete process.env.GEMINI_API_KEY;
+
+  try {
+    await assert.rejects(
+      () => hybridRedrawBuffer(makePngBuffer(), { productionType: 'sablon', inputMode: 'ai_redraw' }),
+      /GEMINI_API_KEY atau GOOGLE_API_KEY belum dikonfigurasi/
+    );
+  } finally {
+    process.env.AI_REDRAW_MOCK = previousMock;
+    if (previousKey) process.env.GEMINI_API_KEY = previousKey;
   }
 });

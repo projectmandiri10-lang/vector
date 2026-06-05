@@ -19,7 +19,7 @@ test('legacy ai_redraw_model values normalize into hybrid config', () => {
     estimatedUsdPerImage: 0.101
   });
 
-  assert.equal(normalized.provider, 'vertex_hybrid_imagen3');
+  assert.equal(normalized.provider, 'gemini_api_key_imagen3');
   assert.equal(normalized.analysisModel, 'gemini-3-pro-preview');
   assert.equal(normalized.generationModel, 'imagen-3.0-generate-002');
   assert.equal(normalized.resolutionPolicy, 'high');

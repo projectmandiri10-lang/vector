@@ -1,4 +1,4 @@
-export const HYBRID_REDRAW_PROVIDER = 'vertex_hybrid_imagen3';
+export const HYBRID_REDRAW_PROVIDER = 'gemini_api_key_imagen3';
 
 export const HYBRID_REDRAW_PRESETS = {
   budget: {
@@ -14,7 +14,7 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.022,
-    note: 'Gemini menganalisis niat desain, lalu Imagen 3 Fast menggambar ulang dengan biaya paling hemat.'
+    note: 'Gemini API menganalisis niat desain, lalu Imagen menggambar ulang dengan biaya paling hemat.'
   },
   standard: {
     mode: 'standard',
@@ -29,7 +29,7 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.041,
-    note: 'Keseimbangan biaya dan kualitas untuk mayoritas logo, sticker, dan sablon.'
+    note: 'Keseimbangan biaya dan kualitas untuk mayoritas logo, sticker, dan sablon lewat Gemini API.'
   },
   quality: {
     mode: 'quality',
@@ -44,7 +44,7 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.045,
-    note: 'Default aman untuk redraw halus yang nanti akan di-trace dan dipisah warna.'
+    note: 'Default aman untuk redraw halus lewat Gemini API yang nanti akan di-trace dan dipisah warna.'
   },
   premium: {
     mode: 'premium',

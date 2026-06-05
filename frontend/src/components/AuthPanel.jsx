@@ -2,7 +2,8 @@ import { LogIn } from 'lucide-react';
 import { useState } from 'react';
 import { isSupabaseConfigured, supabase } from '../lib/supabase.js';
 
-const GOOGLE_REDIRECT_TO = import.meta.env.VITE_GOOGLE_OAUTH_REDIRECT_TO || window.location.origin;
+const runtimeConfig = window.__APP_CONFIG__ || {};
+const GOOGLE_REDIRECT_TO = runtimeConfig.googleOAuthRedirectTo || import.meta.env.VITE_GOOGLE_OAUTH_REDIRECT_TO || window.location.origin;
 
 export default function AuthPanel({ onSignedIn }) {
   const [mode, setMode] = useState('login');
@@ -14,7 +15,7 @@ export default function AuthPanel({ onSignedIn }) {
   async function submit(event) {
     event.preventDefault();
     if (!isSupabaseConfigured) {
-      setMessage('Supabase belum dikonfigurasi. Isi VITE_SUPABASE_URL dan VITE_SUPABASE_PUBLISHABLE_KEY.');
+      setMessage('Supabase belum dikonfigurasi. Isi SUPABASE_URL dan SUPABASE_PUBLISHABLE_KEY di environment aplikasi.');
       return;
     }
     setIsBusy(true);
