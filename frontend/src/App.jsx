@@ -19,6 +19,7 @@ import { IMAGE_RETOUCH_PRICE_IDR, calculateJobPrice, formatRupiah } from './lib/
 import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 
 const SUPERUSER_ACCOUNT = ['jho.j80@gm', 'a', 'il.com'].join('');
+const FALLBACK_SESSION_STORAGE_KEY = 'designmudah.supabaseFallbackSession';
 
 const initialSettings = {
   projectName: '',
@@ -109,6 +110,78 @@ function cleanAuthCallbackUrl() {
   window.history.replaceState({}, document.title, window.location.pathname || '/');
 }
 
+function decodeBase64UrlJson(value) {
+  if (!value) return null;
+  try {
+    const normalized = value.replaceAll('-', '+').replaceAll('_', '/');
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
+    const decoded = window.atob(padded);
+    const bytes = Uint8Array.from(decoded, (char) => char.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+}
+
+function buildFallbackSession(accessToken, refreshToken, params) {
+  const claims = decodeBase64UrlJson(accessToken.split('.')[1]);
+  if (!claims?.sub) return null;
+
+  const now = Math.floor(Date.now() / 1000);
+  const expiresAt = Number(params.get('expires_at') || claims.exp || now + Number(params.get('expires_in') || 3600));
+  if (expiresAt <= now) return null;
+
+  return {
+    access_token: accessToken,
+    refresh_token: refreshToken,
+    token_type: params.get('token_type') || 'bearer',
+    expires_at: expiresAt,
+    expires_in: Math.max(0, expiresAt - now),
+    user: {
+      id: claims.sub,
+      aud: claims.aud || 'authenticated',
+      role: claims.role || 'authenticated',
+      email: claims.email || '',
+      phone: claims.phone || '',
+      app_metadata: claims.app_metadata || {},
+      user_metadata: claims.user_metadata || {},
+      created_at: claims.iat ? new Date(claims.iat * 1000).toISOString() : '',
+      updated_at: ''
+    }
+  };
+}
+
+function saveFallbackSession(session) {
+  try {
+    window.localStorage.setItem(FALLBACK_SESSION_STORAGE_KEY, JSON.stringify(session));
+  } catch {
+    // Browser storage can be unavailable in hardened/private profiles.
+  }
+}
+
+function loadFallbackSession() {
+  try {
+    const raw = window.localStorage.getItem(FALLBACK_SESSION_STORAGE_KEY);
+    const session = raw ? JSON.parse(raw) : null;
+    if (!session?.access_token || !session?.user?.id) return null;
+    if (session.expires_at && session.expires_at <= Math.floor(Date.now() / 1000)) {
+      window.localStorage.removeItem(FALLBACK_SESSION_STORAGE_KEY);
+      return null;
+    }
+    return session;
+  } catch {
+    return null;
+  }
+}
+
+function clearFallbackSession() {
+  try {
+    window.localStorage.removeItem(FALLBACK_SESSION_STORAGE_KEY);
+  } catch {
+    // Browser storage can be unavailable in hardened/private profiles.
+  }
+}
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [settings, setSettings] = useState(initialSettings);
@@ -167,17 +240,41 @@ export default function App() {
         }
 
         if (accessToken && refreshToken) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
+          const fallbackSession = buildFallbackSession(accessToken, refreshToken, hashParams);
+          let result;
+          try {
+            result = await supabase.auth.setSession({
+              access_token: accessToken,
+              refresh_token: refreshToken
+            });
+          } catch (error) {
+            cleanAuthCallbackUrl();
+            if (!isMounted) return;
+            if (fallbackSession) {
+              saveFallbackSession(fallbackSession);
+              setAuthCallbackError('');
+              setSession(fallbackSession);
+              setView('app');
+              return;
+            }
+            throw error;
+          }
+          const { data, error } = result;
           cleanAuthCallbackUrl();
           if (!isMounted) return;
           if (error) {
+            if (fallbackSession) {
+              saveFallbackSession(fallbackSession);
+              setAuthCallbackError('');
+              setSession(fallbackSession);
+              setView('app');
+              return;
+            }
             setAuthCallbackError(error.message || 'Login Google gagal diproses.');
             return;
           }
           setAuthCallbackError('');
+          clearFallbackSession();
           setSession(data.session || null);
           if (data.session) setView('app');
           return;
@@ -185,27 +282,40 @@ export default function App() {
 
         const { data, error } = await supabase.auth.getSession();
         if (!isMounted) return;
+        const fallbackSession = loadFallbackSession();
         if (error) {
-          setAuthCallbackError(error.message || 'Session login tidak bisa dibaca.');
+          if (!fallbackSession) setAuthCallbackError(error.message || 'Session login tidak bisa dibaca.');
         } else {
           setAuthCallbackError('');
         }
-        setSession(data.session || null);
-        if (data.session) setView('app');
+        const nextSession = data.session || fallbackSession;
+        setSession(nextSession || null);
+        if (nextSession) setView('app');
       } catch (error) {
         cleanAuthCallbackUrl();
         if (isMounted) {
-          setAuthCallbackError(error instanceof Error ? error.message : 'Login Google gagal diproses.');
+          const fallbackSession = loadFallbackSession();
+          if (fallbackSession) {
+            setAuthCallbackError('');
+            setSession(fallbackSession);
+            setView('app');
+          } else {
+            setAuthCallbackError(error instanceof Error ? error.message : 'Login Google gagal diproses.');
+          }
         }
       }
     }
 
     bootstrapAuth();
-    const { data: listener } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession);
+    const { data: listener } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (nextSession) {
+        clearFallbackSession();
+        setSession(nextSession);
         setAuthCallbackError('');
         setView('app');
+      } else if (event === 'SIGNED_OUT') {
+        clearFallbackSession();
+        setSession(null);
       }
     });
     return () => {
@@ -286,6 +396,7 @@ export default function App() {
 
   async function signOut() {
     if (supabase) await supabase.auth.signOut();
+    clearFallbackSession();
     setSession(null);
     setBalance(null);
     setJob(null);
