@@ -1,6 +1,6 @@
 import { LogIn } from 'lucide-react';
 import { useState } from 'react';
-import { isSupabaseConfigured, supabase } from '../lib/supabase.js';
+import { isSupabaseConfigured, supabase, SUPABASE_URL } from '../lib/supabase.js';
 
 const runtimeConfig = window.__APP_CONFIG__ || {};
 const GOOGLE_REDIRECT_TO = runtimeConfig.googleOAuthRedirectTo || import.meta.env.VITE_GOOGLE_OAUTH_REDIRECT_TO || window.location.origin;
@@ -40,23 +40,11 @@ export default function AuthPanel({ onSignedIn }) {
       setMessage('Supabase belum dikonfigurasi.');
       return;
     }
-    setIsBusy(true);
     setMessage('Mengarahkan ke login Google...');
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: GOOGLE_REDIRECT_TO,
-          skipBrowserRedirect: true
-        }
-      });
-      if (error) throw error;
-      if (!data?.url) throw new Error('URL login Google tidak diterima dari Supabase.');
-      window.location.assign(data.url);
-    } catch (error) {
-      setMessage(error.message || 'Login Google gagal.');
-      setIsBusy(false);
-    }
+    const authUrl = new URL(`${SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/authorize`);
+    authUrl.searchParams.set('provider', 'google');
+    authUrl.searchParams.set('redirect_to', GOOGLE_REDIRECT_TO);
+    window.location.href = authUrl.toString();
   }
 
   const googleIcon = (
