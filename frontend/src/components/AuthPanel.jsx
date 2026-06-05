@@ -40,11 +40,23 @@ export default function AuthPanel({ onSignedIn }) {
       setMessage('Supabase belum dikonfigurasi.');
       return;
     }
-    const { error } = await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: GOOGLE_REDIRECT_TO }
-    });
-    if (error) setMessage(error.message);
+    setIsBusy(true);
+    setMessage('Mengarahkan ke login Google...');
+    try {
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: GOOGLE_REDIRECT_TO,
+          skipBrowserRedirect: true
+        }
+      });
+      if (error) throw error;
+      if (!data?.url) throw new Error('URL login Google tidak diterima dari Supabase.');
+      window.location.assign(data.url);
+    } catch (error) {
+      setMessage(error.message || 'Login Google gagal.');
+      setIsBusy(false);
+    }
   }
 
   const googleIcon = (
@@ -98,6 +110,7 @@ export default function AuthPanel({ onSignedIn }) {
       <button
         type="button"
         onClick={signInWithGoogle}
+        disabled={isBusy}
         className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-3 border border-[#DADCE0] bg-white px-4 py-2.5 text-sm font-semibold text-[#3C4043] hover:bg-gray-50"
       >
         {googleIcon}
