@@ -5,6 +5,14 @@ import { isSupabaseConfigured, supabase, SUPABASE_URL } from '../lib/supabase.js
 const runtimeConfig = window.__APP_CONFIG__ || {};
 const GOOGLE_REDIRECT_TO = runtimeConfig.googleOAuthRedirectTo || import.meta.env.VITE_GOOGLE_OAUTH_REDIRECT_TO || window.location.origin;
 
+function buildGoogleAuthUrl() {
+  if (!SUPABASE_URL) return '';
+  const authUrl = new URL(`${SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/authorize`);
+  authUrl.searchParams.set('provider', 'google');
+  authUrl.searchParams.set('redirect_to', GOOGLE_REDIRECT_TO);
+  return authUrl.toString();
+}
+
 export default function AuthPanel({ onSignedIn }) {
   const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
@@ -41,11 +49,9 @@ export default function AuthPanel({ onSignedIn }) {
       return;
     }
     setMessage('Mengarahkan ke login Google...');
-    const authUrl = new URL(`${SUPABASE_URL.replace(/\/+$/, '')}/auth/v1/authorize`);
-    authUrl.searchParams.set('provider', 'google');
-    authUrl.searchParams.set('redirect_to', GOOGLE_REDIRECT_TO);
-    window.location.href = authUrl.toString();
   }
+
+  const googleAuthUrl = buildGoogleAuthUrl();
 
   const googleIcon = (
     <svg className="h-5 w-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -95,15 +101,14 @@ export default function AuthPanel({ onSignedIn }) {
         </button>
       </form>
 
-      <button
-        type="button"
+      <a
+        href={googleAuthUrl || undefined}
         onClick={signInWithGoogle}
-        disabled={isBusy}
-        className="mt-3 inline-flex min-h-11 w-full items-center justify-center gap-3 border border-[#DADCE0] bg-white px-4 py-2.5 text-sm font-semibold text-[#3C4043] hover:bg-gray-50"
+        className={`mt-3 inline-flex min-h-11 w-full items-center justify-center gap-3 border border-[#DADCE0] bg-white px-4 py-2.5 text-sm font-semibold text-[#3C4043] hover:bg-gray-50 ${!googleAuthUrl || isBusy ? 'pointer-events-none opacity-60' : ''}`}
       >
         {googleIcon}
         Login dengan Google
-      </button>
+      </a>
 
       <button
         type="button"
