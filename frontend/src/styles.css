@@ -36,6 +36,12 @@ select {
     linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
 }
 
+.hero-gradient-pan {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.03) 0%, rgba(37, 99, 235, 0.03) 25%, rgba(20, 184, 166, 0.03) 50%, rgba(37, 99, 235, 0.03) 75%, rgba(124, 58, 237, 0.03) 100%);
+  background-size: 400% 400%;
+  animation: hero-gradient-pan 15s ease-in-out infinite;
+}
+
 .gradient-text {
   background: linear-gradient(90deg, #7c3aed 0%, #2563eb 45%, #f59e0b 100%);
   -webkit-background-clip: text;
@@ -81,4 +87,79 @@ select {
     8px -8px,
     -8px 0;
   background-size: 16px 16px;
+}
+
+.animate-float {
+  animation: soft-float 8s ease-in-out infinite;
+}
+
+.animate-badge-float {
+  animation: badge-float 5.5s ease-in-out infinite;
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2.8s ease-in-out infinite;
+}
+
+.animate-gradient-text {
+  animation: gradient-shift 8s ease-in-out infinite;
+}
+
+.hero-shimmer > span {
+  animation: shimmer-sweep 3s ease-in-out infinite;
+  animation-delay: 4s;
+}
+
+@keyframes soft-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -14px, 0);
+  }
+}
+
+@keyframes badge-float {
+  0%, 100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -10px, 0);
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 12px 30px rgba(124, 58, 237, 0.15);
+  }
+  50% {
+    box-shadow: 0 18px 42px rgba(124, 58, 237, 0.28);
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes shimmer-sweep {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(260%);
+  }
+}
+
+@keyframes hero-gradient-pan {
+  0%, 100% {
+    background-position: 0% 0%;
+  }
+  50% {
+    background-position: 100% 100%;
+  }
 }

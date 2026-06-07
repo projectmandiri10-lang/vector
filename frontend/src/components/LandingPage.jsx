@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  ArrowUp,
   ArrowUpRight,
   BadgeCheck,
   BookOpen,
@@ -36,6 +37,7 @@ import {
   Lock,
   Mail,
   MapPinned,
+  Menu,
   MessageSquareQuote,
   PenTool,
   PhoneCall,
@@ -57,6 +59,7 @@ import {
   Users,
   Scale,
   Wand2,
+  X,
   Zap
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -559,6 +562,8 @@ function SectionHeader({ eyebrow, title, subtitle, id }) {
 }
 
 function PublicNav({ onStart, onNavigate }) {
+  const [scrolled, setScrolled] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const links = [
     { label: 'Beranda', id: 'beranda' },
     { label: 'Cara Kerja', id: 'how-it-works' },
@@ -566,32 +571,65 @@ function PublicNav({ onStart, onNavigate }) {
     { label: 'FAQ', id: 'faq' }
   ];
 
+  useEffect(() => {
+    function handleScroll() {
+      setScrolled(window.scrollY > 10);
+    }
+
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  function handleStart() {
+    setMobileOpen(false);
+    if (typeof onStart === 'function') {
+      onStart();
+      return;
+    }
+    scrollToId('auth');
+  }
+
+  function handleSectionClick(id) {
+    setMobileOpen(false);
+    scrollToId(id);
+  }
+
   return (
-    <header className="glass-nav sticky top-0 z-40">
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
+    <header
+      className={`sticky top-0 z-40 w-full transition-all duration-500 after:absolute after:bottom-0 after:left-0 after:right-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-primary/20 after:to-transparent ${
+        scrolled ? 'glass-nav shadow-lg shadow-primary/5 after:opacity-100' : 'bg-transparent after:opacity-0'
+      }`}
+    >
+      <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <button type="button" onClick={() => scrollToId('beranda')} className="flex items-center gap-2 text-left transition-opacity hover:opacity-80">
           <Sparkles className="h-6 w-6 text-primary" />
-          <span className="text-lg font-bold tracking-tight gradient-text">AI Logo Redesign</span>
+          <span className="gradient-text text-xl font-bold tracking-tight">AI Logo Redesign</span>
         </button>
 
         <nav className="hidden items-center gap-1 md:flex">
           {links.map((link) => (
-            <button key={link.id} type="button" onClick={() => scrollToId(link.id)} className="rounded-full px-3 py-2 text-sm font-medium text-mutedForeground transition hover:text-foreground">
+            <button
+              key={link.id}
+              type="button"
+              onClick={() => handleSectionClick(link.id)}
+              className="rounded-md px-3 py-2 text-sm font-medium text-mutedForeground transition hover:bg-white/70 hover:text-foreground"
+            >
               {link.label}
             </button>
           ))}
           <div className="ml-2 flex items-center gap-2">
             <button
               type="button"
-              onClick={() => (typeof onStart === 'function' ? onStart() : scrollToId('auth'))}
-              className="rounded-full border border-primary/20 px-4 py-2 text-sm font-semibold text-primary transition hover:border-primary hover:bg-primary/5"
+              onClick={handleStart}
+              className="rounded-md px-3 py-2 text-sm font-medium text-foreground transition hover:bg-white/70"
             >
               Masuk
             </button>
             <button
               type="button"
-              onClick={() => (typeof onStart === 'function' ? onStart() : scrollToId('auth'))}
-              className="gradient-bg rounded-full px-4 py-2 text-sm font-semibold text-white shadow-lg shadow-primary/20 transition hover:shadow-xl"
+              onClick={handleStart}
+              className="gradient-bg rounded-md px-3 py-2 text-sm font-medium text-white shadow-lg shadow-primary/20 transition hover:shadow-xl"
             >
               Daftar
             </button>
@@ -600,12 +638,37 @@ function PublicNav({ onStart, onNavigate }) {
 
         <button
           type="button"
-          onClick={() => (typeof onStart === 'function' ? onStart() : scrollToId('auth'))}
-          className="inline-flex min-h-11 items-center justify-center rounded-full border border-primary/20 px-4 py-2 text-sm font-semibold text-primary md:hidden"
+          onClick={() => setMobileOpen((value) => !value)}
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition hover:bg-white/70 md:hidden"
+          aria-expanded={mobileOpen}
+          aria-label={mobileOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'}
         >
-          Masuk
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </div>
+
+      {mobileOpen && (
+        <div className="border-t border-border/70 bg-white/95 px-4 py-4 backdrop-blur md:hidden">
+          <div className="flex flex-col gap-2">
+            {links.map((link) => (
+              <button
+                key={link.id}
+                type="button"
+                onClick={() => handleSectionClick(link.id)}
+                className="rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/5"
+              >
+                {link.label}
+              </button>
+            ))}
+            <button type="button" onClick={handleStart} className="rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/5">
+              Masuk
+            </button>
+            <button type="button" onClick={handleStart} className="gradient-bg rounded-xl px-4 py-3 text-left text-sm font-semibold text-white shadow-lg shadow-primary/20">
+              Daftar
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
@@ -613,6 +676,13 @@ function PublicNav({ onStart, onNavigate }) {
 function PublicFooter({ onNavigate }) {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const helpLinks = [
+    { label: 'FAQ', icon: HelpCircle, action: () => scrollToId('faq') },
+    { label: 'Kontak', icon: Mail, action: () => navigatePath('/contact', onNavigate) },
+    { label: 'Kebijakan Privasi', icon: ShieldCheck, action: () => navigatePath('/privacy', onNavigate) },
+    { label: 'Syarat & Ketentuan', icon: FileText, action: () => navigatePath('/terms', onNavigate) },
+    { label: 'Tentang Kami', icon: BookOpen, action: () => navigatePath('/about', onNavigate) }
+  ];
 
   function handleSubscribe(event) {
     event.preventDefault();
@@ -620,6 +690,10 @@ function PublicFooter({ onNavigate }) {
     setSubscribed(true);
     setEmail('');
     window.setTimeout(() => setSubscribed(false), 3000);
+  }
+
+  function scrollToTop() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   return (
@@ -648,12 +722,21 @@ function PublicFooter({ onNavigate }) {
 
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-foreground">Bantuan</h3>
-            <ul className="space-y-2 text-sm text-mutedForeground">
-              <li><button type="button" onClick={() => scrollToId('faq')} className="hover:text-primary">FAQ</button></li>
-              <li><button type="button" onClick={() => navigatePath('/contact', onNavigate)} className="hover:text-primary">Kontak</button></li>
-              <li><button type="button" onClick={() => navigatePath('/privacy', onNavigate)} className="hover:text-primary">Kebijakan Privasi</button></li>
-              <li><button type="button" onClick={() => navigatePath('/terms', onNavigate)} className="hover:text-primary">Syarat & Ketentuan</button></li>
-              <li><button type="button" onClick={() => navigatePath('/about', onNavigate)} className="hover:text-primary">Tentang Kami</button></li>
+            <ul className="space-y-2">
+              {helpLinks.map((link) => (
+                <li key={link.label}>
+                  <button
+                    type="button"
+                    onClick={link.action}
+                    className="group flex items-center gap-2 text-sm text-mutedForeground transition-all hover:translate-x-1 hover:text-primary"
+                  >
+                    <span className="transition-transform group-hover:scale-110">
+                      <link.icon className="h-4 w-4" />
+                    </span>
+                    {link.label}
+                  </button>
+                </li>
+              ))}
             </ul>
           </div>
 
@@ -667,34 +750,57 @@ function PublicFooter({ onNavigate }) {
                   onClick={(event) => event.preventDefault()}
                   aria-label={social.label}
                   title="Segera hadir"
-                  className="flex h-10 w-10 items-center justify-center rounded-full border border-border text-mutedForeground transition hover:border-primary hover:text-primary"
+                  className="group/social flex h-10 w-10 items-center justify-center rounded-full border border-border text-mutedForeground transition-all duration-300 hover:-translate-y-1 hover:scale-110 hover:border-primary hover:bg-primary/5 hover:text-primary hover:shadow-md hover:shadow-primary/10"
                 >
-                  <social.icon className="h-5 w-5" />
+                  <social.icon className="h-5 w-5 transition-all duration-300 group-hover/social:scale-110 group-hover/social:text-primary" />
                 </a>
               ))}
             </div>
             <div className="space-y-2">
-              <p className="text-xs text-mutedForeground">Dapatkan tips desain dan update terbaru</p>
+              <p className="text-xs text-mutedForeground">Dapatkan tips desain & update terbaru</p>
               {subscribed ? (
                 <div className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium text-emerald-700">
                   <CheckCircle2 className="h-4 w-4" />
-                  Berhasil berlangganan
+                  Berhasil berlangganan!
                 </div>
               ) : (
                 <form onSubmit={handleSubscribe} className="flex gap-2">
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(event) => setEmail(event.target.value)}
-                    placeholder="Email Anda"
-                    className="min-w-0 flex-1 rounded-xl border border-border bg-white px-3 py-2 text-sm outline-none focus:border-primary"
-                  />
-                  <button type="submit" className="inline-flex items-center justify-center rounded-xl bg-primary px-3 py-2 text-sm font-semibold text-white">
-                    <Send className="h-4 w-4" />
+                  <div className="relative min-w-0 flex-1">
+                    <Mail className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-mutedForeground" />
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(event) => setEmail(event.target.value)}
+                      placeholder="Email Anda"
+                      className="min-w-0 w-full rounded-xl border border-border bg-white py-2 pl-8 pr-3 text-xs outline-none focus:border-primary"
+                    />
+                  </div>
+                  <button type="submit" className="inline-flex items-center justify-center gap-1 rounded-xl bg-gradient-to-r from-primary to-chart-2 px-3 py-2 text-xs font-semibold text-white hover:opacity-90">
+                    <Send className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Kirim</span>
                   </button>
                 </form>
               )}
             </div>
+          </div>
+        </div>
+
+        <div className="my-8 h-px bg-gradient-to-r from-transparent via-border to-transparent" />
+
+        <div className="flex flex-col items-center justify-between gap-4 sm:flex-row">
+          <p className="text-xs text-mutedForeground">&copy; {new Date().getFullYear()} AI Logo Redesign. Hak cipta dilindungi.</p>
+          <div className="flex items-center gap-4">
+            <p className="flex items-center gap-1 text-xs text-mutedForeground">
+              Made with <Heart className="inline h-3 w-3 fill-red-500 text-red-500" /> in Indonesia
+            </p>
+            <button
+              type="button"
+              onClick={scrollToTop}
+              className="flex h-8 w-8 items-center justify-center rounded-full border bg-primary/10 text-primary transition-all duration-300 hover:-translate-y-0.5 hover:bg-primary hover:text-white hover:shadow-md hover:shadow-primary/20"
+              aria-label="Kembali ke atas"
+            >
+              <ArrowUp className="h-4 w-4" />
+            </button>
           </div>
         </div>
       </div>
@@ -703,22 +809,52 @@ function PublicFooter({ onNavigate }) {
 }
 
 function HeroSection({ onStart }) {
+  const floatingBadges = [
+    { label: 'AI Powered', icon: Sparkles, tone: 'text-primary border-primary/20', position: 'right-[8%] top-[12%] sm:right-[12%] sm:top-[15%]', delay: '0s' },
+    { label: 'Rp 2.500', icon: Zap, tone: 'text-chart-3 border-chart-3/20', position: 'left-[5%] top-[25%] sm:left-[8%] sm:top-[30%]', delay: '1.3s' },
+    { label: '5 Credit Gratis', icon: Star, tone: 'text-chart-2 border-chart-2/20', position: 'right-[15%] bottom-[18%] sm:right-[18%] sm:bottom-[20%]', delay: '2.6s' }
+  ];
+
   return (
     <section id="beranda" className="relative overflow-hidden py-20 sm:py-28 lg:py-36">
       <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(124,58,237,0.05)_0%,rgba(37,99,235,0.05)_50%,rgba(245,158,11,0.05)_100%)]" />
+        <div className="hero-gradient-pan absolute inset-0" />
         <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#7c3aed 1px, transparent 1px), linear-gradient(90deg, #7c3aed 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+        <div className="animate-float absolute -left-32 -top-32 h-[500px] w-[500px] rounded-full bg-primary/10 blur-[100px]" />
+        <div className="animate-float absolute -bottom-40 -right-40 h-[600px] w-[600px] rounded-full bg-chart-2/10 blur-[120px]" style={{ animationDelay: '1.5s' }} />
+        <div className="animate-float absolute left-1/2 top-1/3 h-[400px] w-[400px] -translate-x-1/2 rounded-full bg-chart-3/10 blur-[100px]" style={{ animationDelay: '2.5s' }} />
+        <div className="animate-float absolute right-[5%] top-[10%] h-[300px] w-[300px] rounded-full bg-chart-4/10 blur-[80px]" style={{ animationDelay: '0.8s' }} />
+        <div className="animate-float absolute bottom-[20%] left-[10%] h-[250px] w-[250px] rounded-full bg-primary/8 blur-[80px]" style={{ animationDelay: '3s' }} />
+        <div className="absolute right-[15%] top-[20%] h-3 w-3 rounded-full bg-primary/30 animate-float" />
+        <div className="absolute left-[20%] top-[60%] h-2 w-2 rounded-full bg-chart-3/40 animate-float" style={{ animationDelay: '0.5s' }} />
+        <div className="absolute right-[30%] bottom-[25%] h-4 w-4 rounded-full bg-chart-2/20 animate-float" style={{ animationDelay: '1s' }} />
       </div>
 
-      <div className="relative mx-auto grid max-w-7xl gap-8 px-4 sm:px-6 lg:grid-cols-[minmax(0,1fr)_360px] lg:px-8">
-        <div className="lg:pt-6">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-4 py-2 text-sm font-medium text-primary">
+      <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <div className="flex flex-col items-center text-center">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-4 py-2 text-sm font-medium text-primary shadow-sm backdrop-blur animate-pulse-glow">
             <Sparkles className="h-4 w-4" />
             Didukung Teknologi AI Terbaru
           </div>
 
+          <div className="pointer-events-none absolute inset-0 hidden sm:block">
+            {floatingBadges.map((badge) => (
+              <div key={badge.label} className={`animate-badge-float absolute ${badge.position}`} style={{ animationDelay: badge.delay }}>
+                <span className={`glass-card inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold shadow-lg ${badge.tone}`}>
+                  <badge.icon className="h-3 w-3" />
+                  {badge.label}
+                </span>
+              </div>
+            ))}
+          </div>
+
           <h1 className="max-w-4xl text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-            <span className="gradient-text">Transformasi Logo Kaos Anda</span>
+            <span className="gradient-text animate-gradient-text relative inline-block bg-[length:200%_200%]">
+              Transformasi Logo Kaos Anda
+              <span className="hero-shimmer pointer-events-none absolute inset-0 overflow-hidden">
+                <span className="absolute inset-y-0 -translate-x-full bg-gradient-to-r from-transparent via-white/30 to-transparent" style={{ width: '50%' }} />
+              </span>
+            </span>
             <br />
             <span className="text-foreground">Menjadi Desain Siap Sablon</span>
           </h1>
@@ -731,7 +867,7 @@ function HeroSection({ onStart }) {
             <button
               type="button"
               onClick={onStart}
-              className="gradient-bg inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-8 text-base font-semibold text-white shadow-lg shadow-primary/20 transition hover:shadow-xl"
+              className="gradient-bg animate-pulse-glow inline-flex min-h-12 items-center justify-center gap-2 rounded-xl px-8 text-base font-semibold text-white shadow-lg shadow-primary/20 transition hover:shadow-xl"
             >
               Mulai Sekarang
               <ArrowRight className="h-5 w-5" />
@@ -753,43 +889,6 @@ function HeroSection({ onStart }) {
                 <div className="mt-1 text-[11px] text-mutedForeground">{badge.subtitle}</div>
               </div>
             ))}
-          </div>
-        </div>
-
-        <div className="glass-card relative overflow-hidden rounded-3xl p-6">
-          <div className="pointer-events-none absolute inset-0 opacity-[0.04]" style={{ backgroundImage: 'linear-gradient(#7c3aed 1px, transparent 1px), linear-gradient(90deg, #7c3aed 1px, transparent 1px)', backgroundSize: '28px 28px' }} />
-          <div className="relative space-y-6">
-            <div className="rounded-2xl border border-border bg-white p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-mutedForeground">Sebelum</p>
-              <div className="checkerboard flex h-36 items-center justify-center rounded-xl border border-dashed border-border bg-white">
-                <div className="flex flex-col items-center gap-3 text-mutedForeground">
-                  <ImageIcon className="h-12 w-12" />
-                  <span className="text-sm">Logo buram atau berantakan</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center">
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-white shadow-lg shadow-primary/20">
-                <Wand2 className="h-5 w-5" />
-              </div>
-            </div>
-
-            <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4">
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-primary">Sesudah</p>
-              <div className="flex h-36 items-center justify-center rounded-xl border border-primary/20 bg-white">
-                <div className="flex flex-col items-center gap-3 text-primary">
-                  <Sparkles className="h-12 w-12" />
-                  <span className="text-sm font-semibold">Desain bersih siap cetak</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center justify-center gap-3 text-xs font-medium text-mutedForeground">
-              <span className="h-px flex-1 bg-border" />
-              AI Processing
-              <span className="h-px flex-1 bg-border" />
-            </div>
           </div>
         </div>
       </div>
