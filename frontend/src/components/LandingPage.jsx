@@ -548,7 +548,7 @@ function SectionHeader({ eyebrow, title, subtitle, id }) {
   return (
     <div className="text-center">
       {eyebrow && (
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-4 py-1.5 text-sm font-medium text-primary">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/5 px-4 py-1.5 text-sm font-medium text-primary shadow-[0_0_0_1px_rgba(124,58,237,0.04)] backdrop-blur-sm">
           <Sparkles className="h-4 w-4" />
           {eyebrow}
         </div>
@@ -613,7 +613,7 @@ function PublicNav({ onStart, onNavigate }) {
               key={link.id}
               type="button"
               onClick={() => handleSectionClick(link.id)}
-              className="rounded-md px-3 py-2 text-sm font-medium text-mutedForeground transition hover:bg-white/70 hover:text-foreground"
+              className="rounded-md px-3 py-2 text-sm font-medium text-mutedForeground transition hover:bg-white/5 hover:text-foreground"
             >
               {link.label}
             </button>
@@ -622,7 +622,7 @@ function PublicNav({ onStart, onNavigate }) {
             <button
               type="button"
               onClick={handleStart}
-              className="rounded-md px-3 py-2 text-sm font-medium text-foreground transition hover:bg-white/70"
+              className="rounded-md px-3 py-2 text-sm font-medium text-foreground transition hover:bg-white/5"
             >
               Masuk
             </button>
@@ -639,7 +639,7 @@ function PublicNav({ onStart, onNavigate }) {
         <button
           type="button"
           onClick={() => setMobileOpen((value) => !value)}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition hover:bg-white/70 md:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition hover:bg-white/5 md:hidden"
           aria-expanded={mobileOpen}
           aria-label={mobileOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'}
         >
@@ -648,19 +648,19 @@ function PublicNav({ onStart, onNavigate }) {
       </div>
 
       {mobileOpen && (
-        <div className="border-t border-border/70 bg-white/95 px-4 py-4 backdrop-blur md:hidden">
+        <div className="border-t border-border/70 bg-[#090d18]/95 px-4 py-4 backdrop-blur md:hidden">
           <div className="flex flex-col gap-2">
             {links.map((link) => (
               <button
                 key={link.id}
                 type="button"
                 onClick={() => handleSectionClick(link.id)}
-                className="rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/5"
+                className="rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-white/5"
               >
                 {link.label}
               </button>
             ))}
-            <button type="button" onClick={handleStart} className="rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-primary/5">
+            <button type="button" onClick={handleStart} className="rounded-xl border border-border bg-white px-4 py-3 text-left text-sm font-medium text-foreground transition hover:border-primary/30 hover:bg-white/5">
               Masuk
             </button>
             <button type="button" onClick={handleStart} className="gradient-bg rounded-xl px-4 py-3 text-left text-sm font-semibold text-white shadow-lg shadow-primary/20">
@@ -832,7 +832,7 @@ function HeroSection({ onStart }) {
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="flex flex-col items-center text-center">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/70 px-4 py-2 text-sm font-medium text-primary shadow-sm backdrop-blur animate-pulse-glow">
+          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/5 px-4 py-2 text-sm font-medium text-primary shadow-sm backdrop-blur animate-pulse-glow">
             <Sparkles className="h-4 w-4" />
             Didukung Teknologi AI Terbaru
           </div>
@@ -890,6 +890,36 @@ function HeroSection({ onStart }) {
               </div>
             ))}
           </div>
+
+          <div className="landing-showcase mt-12 w-full max-w-4xl overflow-hidden rounded-[28px] p-6 sm:p-8">
+            <div className="pointer-events-none absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(rgba(96,165,250,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(96,165,250,0.6) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
+            <div className="relative flex flex-col items-center gap-6 md:flex-row md:justify-center md:gap-10">
+              <div className="landing-before flex h-40 w-full max-w-[230px] flex-col items-center justify-center rounded-[26px]">
+                <div className="flex h-16 w-16 items-center justify-center rounded-[22px] border border-dashed border-white/20 bg-white/5 text-mutedForeground">
+                  <ImageIcon className="h-8 w-8" />
+                </div>
+                <p className="mt-4 text-lg font-semibold text-foreground">Sebelum</p>
+              </div>
+
+              <div className="landing-process-pill flex flex-col items-center gap-2">
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-gradient-to-br from-primary to-chart-2 text-white shadow-[0_0_35px_rgba(96,165,250,0.35)]">
+                  <Wand2 className="h-7 w-7" />
+                </div>
+                <p className="text-sm font-medium text-mutedForeground">AI Processing</p>
+              </div>
+
+              <div className="landing-after flex h-40 w-full max-w-[230px] flex-col items-center justify-center rounded-[26px]">
+                <div className="flex h-24 w-24 items-center justify-center rounded-[28px] border border-primary/35 bg-primary/10 text-primary shadow-[0_0_32px_rgba(124,58,237,0.35)]">
+                  <ImageIcon className="h-10 w-10" />
+                </div>
+                <p className="mt-4 text-lg font-semibold text-primary">Sesudah</p>
+              </div>
+            </div>
+            <div className="mt-5 flex items-center justify-between text-xs text-mutedForeground">
+              <span className="rounded-full border border-chart-3/20 bg-white/5 px-3 py-1 text-chart-3">Rp 2.500</span>
+              <span className="rounded-full border border-primary/20 bg-white/5 px-3 py-1 text-primary">5 Credit Gratis</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -897,8 +927,9 @@ function HeroSection({ onStart }) {
 }
 
 function StepCard({ step }) {
+  const accentClass = step.number === '01' ? 'landing-step-cyan' : step.number === '02' ? 'landing-step-violet' : 'landing-step-amber';
   return (
-    <div className="glass-card group relative overflow-hidden rounded-3xl p-6 text-center transition-transform hover:-translate-y-1">
+    <div className={`landing-step-card glass-card group relative overflow-hidden rounded-3xl p-6 text-center transition-transform hover:-translate-y-1 ${accentClass}`}>
       <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-primary to-chart-2 text-base font-bold text-white shadow-lg shadow-primary/20">
         {step.number}
       </div>
@@ -924,10 +955,13 @@ function HowItWorksSection() {
       </div>
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeader eyebrow="Mudah dan Cepat" title="Cara Kerja" subtitle="Tiga langkah mudah untuk mendapatkan logo kaos profesional" />
-        <div className="mt-16 grid gap-8 lg:grid-cols-3">
+        <div className="relative mt-16">
+          <div className="pointer-events-none absolute left-[10%] right-[10%] top-[190px] hidden h-px bg-gradient-to-r from-chart-2/25 via-primary/25 to-chart-3/25 lg:block" />
+          <div className="grid gap-8 lg:grid-cols-3">
           {howItWorks.map((step) => (
             <StepCard key={step.number} step={step} />
           ))}
+          </div>
         </div>
         <p className="mt-14 text-center text-sm text-mutedForeground">Seluruh proses berjalan otomatis - tidak perlu keahlian desain.</p>
       </div>
@@ -948,7 +982,7 @@ function PricingSection() {
 
         <div className="mt-14 grid gap-6 lg:grid-cols-2 lg:max-w-4xl lg:mx-auto">
           {pricingCards.map((card) => (
-            <div key={card.title} className={`relative overflow-hidden rounded-3xl ${card.popular ? 'ring-1 ring-primary/20' : ''}`}>
+            <div key={card.title} className={`landing-price-card relative overflow-hidden rounded-3xl ${card.popular ? 'landing-price-primary ring-1 ring-primary/20' : 'landing-price-secondary'}`}>
               {card.popular && (
                 <div className="absolute right-4 top-4 z-10 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white shadow-lg shadow-primary/20">
                   <div className="inline-flex items-center gap-1">
@@ -988,7 +1022,7 @@ function PricingSection() {
 
         <div className="mt-10 grid gap-4 sm:grid-cols-3 lg:max-w-5xl lg:mx-auto">
           {creditPackages.map((pkg) => (
-            <div key={pkg.name} className={`glass-card rounded-2xl p-5 ${pkg.highlight ? 'ring-1 ring-primary/20' : ''}`}>
+            <div key={pkg.name} className={`landing-mini-card glass-card rounded-2xl p-5 ${pkg.highlight ? 'ring-1 ring-primary/20' : ''}`}>
               {pkg.highlight && <div className="mb-3 inline-flex rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">Rekomendasi</div>}
               <h4 className="text-lg font-bold text-foreground">{pkg.name}</h4>
               <p className="mt-1 text-sm text-mutedForeground">{pkg.credits} credit untuk proses gambar</p>
@@ -1051,6 +1085,23 @@ function TestimonialsSection() {
             </div>
           ))}
         </div>
+        <div className="mt-12 flex justify-center">
+          <div className="landing-trust-pill inline-flex items-center gap-3 rounded-full px-4 py-3 text-sm text-mutedForeground">
+            <div className="flex -space-x-2">
+              {['S', 'R', 'A', 'B'].map((initial) => (
+                <span key={initial} className="flex h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-white/5 text-xs font-bold text-foreground">
+                  {initial}
+                </span>
+              ))}
+            </div>
+            <div className="flex items-center gap-1 text-chart-3">
+              {Array.from({ length: 5 }).map((_, index) => (
+                <Star key={index} className="h-3.5 w-3.5 fill-chart-3 text-chart-3" />
+              ))}
+            </div>
+            <span>Dipercaya 500+ pengguna</span>
+          </div>
+        </div>
       </div>
     </section>
   );
@@ -1067,7 +1118,7 @@ function FaqSection() {
         <SectionHeader eyebrow="Pertanyaan Umum" title="FAQ" subtitle="Temukan jawaban untuk pertanyaan yang sering diajukan" />
         <div className="mt-12 space-y-3">
           {faqItems.map((item, index) => (
-            <details key={item.question} className="glass-card group overflow-hidden rounded-2xl">
+            <details key={item.question} className="landing-faq-item glass-card group overflow-hidden rounded-2xl">
               <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-foreground sm:text-base">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/20 text-xs font-semibold text-primary">
                   {index + 1}
@@ -1091,8 +1142,8 @@ function CtaSection({ onStart }) {
     <section className="relative overflow-hidden py-24 sm:py-32">
       <div className="absolute inset-0">
         <div className="absolute inset-0 gradient-bg" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(0,0,0,0.2)_100%)]" />
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(white 1px, transparent 1px), linear-gradient(90deg, white 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,transparent_30%,rgba(2,6,23,0.35)_100%)]" />
+        <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.35) 1px, transparent 1px)', backgroundSize: '50px 50px' }} />
       </div>
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
@@ -1171,7 +1222,7 @@ function AuthSection({ authPanel, onStart }) {
               <ArrowRight className="h-4 w-4" />
             </button>
           </div>
-          <div>{authPanel}</div>
+          <div className="landing-auth-shell">{authPanel}</div>
         </div>
       </div>
     </section>
@@ -1180,7 +1231,7 @@ function AuthSection({ authPanel, onStart }) {
 
 function PublicLanding({ onStart, authPanel, onNavigate }) {
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="landing-shell min-h-screen bg-background text-foreground">
       <PublicNav onStart={onStart} onNavigate={onNavigate} />
       <HeroSection onStart={onStart} />
       <HowItWorksSection />

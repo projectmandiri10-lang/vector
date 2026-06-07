@@ -18,6 +18,164 @@ body {
   color: inherit;
 }
 
+.landing-shell {
+  background:
+    radial-gradient(circle at top left, rgba(59, 130, 246, 0.14), transparent 22%),
+    radial-gradient(circle at top right, rgba(124, 58, 237, 0.12), transparent 20%),
+    radial-gradient(circle at bottom right, rgba(245, 158, 11, 0.07), transparent 18%),
+    linear-gradient(180deg, #050816 0%, #060914 38%, #040710 100%);
+  color: #f8fafc;
+}
+
+.landing-shell .glass-card {
+  background: rgba(9, 13, 25, 0.78);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(126, 145, 182, 0.16);
+  box-shadow: 0 24px 60px rgba(2, 6, 23, 0.42);
+}
+
+.landing-shell .glass-nav {
+  background: rgba(6, 10, 19, 0.82);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(126, 145, 182, 0.14);
+}
+
+.landing-shell .text-foreground,
+.landing-shell .text-ink {
+  color: #f8fafc !important;
+}
+
+.landing-shell .text-mutedForeground,
+.landing-shell .text-muted-foreground {
+  color: #b6c0d4 !important;
+}
+
+.landing-shell .bg-white {
+  background-color: rgba(9, 13, 25, 0.72) !important;
+}
+
+.landing-shell .bg-panel {
+  background-color: rgba(9, 13, 25, 0.78) !important;
+}
+
+.landing-shell .border-border,
+.landing-shell .border-line {
+  border-color: rgba(126, 145, 182, 0.16) !important;
+}
+
+.landing-shell input,
+.landing-shell textarea,
+.landing-shell select {
+  background: rgba(9, 13, 25, 0.78);
+  color: #f8fafc;
+  border-color: rgba(126, 145, 182, 0.18);
+}
+
+.landing-shell input::placeholder,
+.landing-shell textarea::placeholder {
+  color: #8f9ab2;
+}
+
+.landing-shell .checkerboard {
+  background-color: #0a1020;
+  background-image:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, rgba(148, 163, 184, 0.08) 75%),
+    linear-gradient(-45deg, transparent 75%, rgba(148, 163, 184, 0.08) 75%);
+}
+
+.landing-showcase {
+  position: relative;
+  background:
+    linear-gradient(180deg, rgba(9, 13, 25, 0.82), rgba(7, 10, 18, 0.9)),
+    radial-gradient(circle at center, rgba(124, 58, 237, 0.08), transparent 40%);
+  border: 1px solid rgba(126, 145, 182, 0.18);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 28px 60px rgba(2, 6, 23, 0.46);
+}
+
+.landing-before,
+.landing-after {
+  position: relative;
+  background: rgba(7, 10, 18, 0.66);
+  border: 1px solid rgba(126, 145, 182, 0.16);
+}
+
+.landing-before::before,
+.landing-after::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.landing-before::before {
+  border: 1px dashed rgba(148, 163, 184, 0.18);
+}
+
+.landing-after::before {
+  box-shadow: inset 0 0 0 1px rgba(124, 58, 237, 0.16), 0 0 26px rgba(124, 58, 237, 0.14);
+}
+
+.landing-process-pill {
+  position: relative;
+}
+
+.landing-step-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+}
+
+.landing-step-cyan::before {
+  background: linear-gradient(90deg, rgba(34, 211, 238, 0.95), rgba(59, 130, 246, 0.6));
+}
+
+.landing-step-violet::before {
+  background: linear-gradient(90deg, rgba(167, 139, 250, 0.95), rgba(124, 58, 237, 0.6));
+}
+
+.landing-step-amber::before {
+  background: linear-gradient(90deg, rgba(250, 204, 21, 0.95), rgba(245, 158, 11, 0.6));
+}
+
+.landing-price-card::before,
+.landing-mini-card::before,
+.landing-faq-item::before,
+.landing-trust-pill::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.landing-price-primary::before {
+  background: linear-gradient(135deg, rgba(124, 58, 237, 0.18), rgba(59, 130, 246, 0.06));
+}
+
+.landing-price-secondary::before {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12), rgba(245, 158, 11, 0.12));
+}
+
+.landing-mini-card::before {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent);
+}
+
+.landing-trust-pill {
+  position: relative;
+  border: 1px solid rgba(126, 145, 182, 0.18);
+  background: rgba(9, 13, 25, 0.8);
+}
+
+.landing-auth-shell > * {
+  background: transparent;
+}
+
 button,
 input,
 select {
