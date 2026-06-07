@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'node:path';
 import { Readable } from 'node:stream';
 import workerApi from '../../../cloudflare-worker/src/index.js';
+import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { hybridRedrawBuffer } from '../services/aiRedraw.service.js';
 
 const router = express.Router();
@@ -129,6 +130,20 @@ async function getPricing() {
   }
 }
 
+async function getAppSetting(key) {
+  const rows = await supabaseFetch(`/rest/v1/app_settings?select=key,value,is_public,description,updated_at&key=eq.${encodeURIComponent(key)}&limit=1`, {});
+  return rows?.[0] || null;
+}
+
+async function getAiRedrawModelConfig() {
+  try {
+    const setting = await getAppSetting('ai_redraw_model');
+    return normalizeHybridRedrawConfig(setting?.value, process.env);
+  } catch (_error) {
+    return normalizeHybridRedrawConfig({}, process.env);
+  }
+}
+
 async function ensureCredit(profile, priceIdr) {
   if (profile.is_unlimited) return { isUnlimited: true, balance: null };
   const balance = await creditBalance(profile.id);
@@ -242,7 +257,8 @@ async function imageRetouchHandler(req, res, next) {
     }
 
     try {
-      const result = await hybridRedrawBuffer(req.file.buffer, settings, settings.aiRedrawModel || {});
+      const aiRedrawModel = settings.aiRedrawModel || (await getAiRedrawModelConfig());
+      const result = await hybridRedrawBuffer(req.file.buffer, settings, aiRedrawModel);
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('X-AI-Ledger-Id', ledger?.id || '');
       res.setHeader('X-AI-Redraw-Metadata', encodeMetadataHeader(result.metadata));

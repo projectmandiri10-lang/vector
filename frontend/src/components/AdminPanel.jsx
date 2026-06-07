@@ -318,7 +318,7 @@ export default function AdminPanel({ session, enabled }) {
           key: 'ai_redraw_model',
           value: nextValue,
           isPublic: false,
-          description: 'Pipeline hybrid redraw: Gemini director + Imagen 3 painter'
+          description: `Pipeline hybrid redraw: ${nextValue.analysisModel} director + ${nextValue.generationModel} painter`
         },
         accessToken
       );
