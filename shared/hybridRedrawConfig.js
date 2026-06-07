@@ -65,7 +65,7 @@ export const HYBRID_REDRAW_PRESETS = {
   gemini_quality: {
     mode: 'gemini_quality',
     preset: 'gemini_quality',
-    label: 'Gemini fallback',
+    label: 'Gemini 3.1 Flash fallback',
     provider: GEMINI_IMAGEN_REDRAW_PROVIDER,
     analysisModel: 'gemini-3.1-flash-preview',
     generationModel: 'imagen-3.0-generate-002',
@@ -75,7 +75,7 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.045,
-    note: 'Fallback jika GLM belum sebagus Gemini untuk jenis gambar tertentu.'
+    note: 'Fallback Gemini 3.1 Flash jika GLM belum sebagus Gemini untuk jenis gambar tertentu.'
   }
 };
 
