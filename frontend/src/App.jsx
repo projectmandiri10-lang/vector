@@ -48,7 +48,7 @@ function getDocumentTitle(route, hasSession) {
 const initialSettings = {
   projectName: '',
   productionType: 'sablon',
-  inputMode: INPUT_MODE_READY,
+  inputMode: INPUT_MODE_RETOUCH,
   makeVector: true,
   separateColors: true,
   colorLimitMode: 'auto',
