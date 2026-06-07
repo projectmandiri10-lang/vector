@@ -65,11 +65,10 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { submitContactMessage } from '../lib/api.js';
 
-const heroBadges = [
-  { icon: ShieldCheck, title: 'Tanpa Kartu Kredit', subtitle: 'Bayar via Shopee' },
-  { icon: Gift, title: '5 Credit Gratis', subtitle: 'Untuk pengguna baru' },
-  { icon: Clock, title: 'Daftar 30 Detik', subtitle: 'Proses instan' },
-  { icon: Zap, title: 'Hasil Instan', subtitle: 'Siap dalam hitungan detik' }
+const heroStats = [
+  { icon: Star, value: '500+', label: 'Logo Diproses', accent: 'text-chart-3' },
+  { icon: Sparkles, value: '98%', label: 'Kepuasan', accent: 'text-primary' },
+  { icon: Zap, value: '2', label: 'Mode Output', accent: 'text-chart-2' }
 ];
 
 const howItWorks = [
@@ -121,20 +120,26 @@ const creditPackages = [
     credits: 2,
     price: 5000,
     pricePerCredit: 2500,
-    callout: 'Lakukan 2 proses dengan 1 paket basic!'
+    callout: 'Lakukan 2 proses dengan 1 paket basic!',
+    aiRedesign: 2,
+    readyToTrace: 5
   },
   {
     name: 'Paket Standard',
     credits: 4,
     price: 10000,
-    pricePerCredit: 2500
+    pricePerCredit: 2500,
+    aiRedesign: 4,
+    readyToTrace: 10
   },
   {
     name: 'Paket Premium',
     credits: 10,
     price: 25000,
     pricePerCredit: 2500,
-    highlight: true
+    highlight: true,
+    aiRedesign: 10,
+    readyToTrace: 25
   }
 ];
 
@@ -209,7 +214,7 @@ const faqItems = [
 ];
 
 const trustBadges = [
-  { icon: ShieldCheck, text: 'Tanpa Risiko', subtext: 'Bisa berhenti kapan saja' },
+  { icon: ShieldCheck, text: 'Tanpa Kartu Kredit', subtext: 'Bayar via Shopee' },
   { icon: Gift, text: '5 Credit Gratis', subtext: 'Untuk pengguna baru' },
   { icon: Clock, text: 'Daftar 30 Detik', subtext: 'Proses instan' },
   { icon: Zap, text: 'Hasil Instan', subtext: 'Siap dalam hitungan detik' }
@@ -699,7 +704,7 @@ function PublicFooter({ onNavigate }) {
   return (
     <footer className="mt-auto overflow-hidden">
       <div className="h-1 bg-gradient-to-r from-primary via-chart-2 to-chart-3" />
-      <div className="glass-card mx-auto max-w-7xl rounded-t-3xl px-4 py-12 sm:px-6 lg:px-8">
+      <div className="landing-footer-shell relative mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid gap-8 sm:grid-cols-2 lg:grid-cols-4">
           <div className="space-y-4">
             <div className="flex items-center gap-2">
@@ -707,7 +712,7 @@ function PublicFooter({ onNavigate }) {
               <span className="text-lg font-bold gradient-text">AI Logo Redesign</span>
             </div>
             <p className="text-sm leading-relaxed text-mutedForeground">
-              Platform redesign logo berbasis AI terdepan untuk konveksi, seller kaos online, dan desainer freelance.
+              Platform redesign logo berbasis AI terdepan di Indonesia. Ubah logo Anda menjadi desain modern dan profesional hanya dalam hitungan detik dengan kekuatan kecerdasan buatan.
             </p>
           </div>
 
@@ -881,16 +886,6 @@ function HeroSection({ onStart }) {
             </button>
           </div>
 
-          <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {heroBadges.map((badge) => (
-              <div key={badge.title} className="glass-card rounded-2xl px-4 py-3 text-center">
-                <badge.icon className="mx-auto mb-2 h-5 w-5 text-primary" />
-                <div className="text-sm font-semibold text-foreground">{badge.title}</div>
-                <div className="mt-1 text-[11px] text-mutedForeground">{badge.subtitle}</div>
-              </div>
-            ))}
-          </div>
-
           <div className="landing-showcase mt-12 w-full max-w-4xl overflow-hidden rounded-[28px] p-6 sm:p-8">
             <div className="pointer-events-none absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'linear-gradient(rgba(96,165,250,0.6) 1px, transparent 1px), linear-gradient(90deg, rgba(96,165,250,0.6) 1px, transparent 1px)', backgroundSize: '42px 42px' }} />
             <div className="relative flex flex-col items-center gap-6 md:flex-row md:justify-center md:gap-10">
@@ -919,6 +914,16 @@ function HeroSection({ onStart }) {
               <span className="rounded-full border border-chart-3/20 bg-white/5 px-3 py-1 text-chart-3">Rp 2.500</span>
               <span className="rounded-full border border-primary/20 bg-white/5 px-3 py-1 text-primary">5 Credit Gratis</span>
             </div>
+          </div>
+
+          <div className="mt-10 grid w-full max-w-4xl gap-4 md:grid-cols-3">
+            {heroStats.map((stat) => (
+              <div key={stat.label} className="landing-stat-card glass-card rounded-2xl px-5 py-4 text-center">
+                <stat.icon className={`mx-auto mb-3 h-5 w-5 ${stat.accent}`} />
+                <div className={`text-3xl font-black tracking-tight ${stat.accent}`}>{stat.value}</div>
+                <div className="mt-1 text-sm text-mutedForeground">{stat.label}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -991,7 +996,7 @@ function PricingSection() {
                   </div>
                 </div>
               )}
-              <div className="glass-card h-full rounded-3xl p-6 sm:p-8">
+              <div className={`h-full rounded-3xl p-6 sm:p-8 ${card.popular ? 'landing-pricing-surface-primary' : 'landing-pricing-surface-secondary'}`}>
                 <div className="flex items-center gap-3">
                   <div className={`flex h-12 w-12 items-center justify-center rounded-2xl ${card.popular ? 'bg-primary/10 text-primary' : 'bg-chart-2/10 text-chart-2'}`}>
                     <card.icon className="h-6 w-6" />
@@ -1020,15 +1025,36 @@ function PricingSection() {
           ))}
         </div>
 
+        <div className="mt-20 text-center">
+          <div className="mb-3 flex items-center justify-center gap-2">
+            <CreditCard className="h-6 w-6 text-primary" />
+            <h3 className="text-2xl font-bold text-foreground sm:text-3xl">Beli Credit</h3>
+          </div>
+          <p className="text-mutedForeground">Beli credit untuk mulai memproses logo Anda</p>
+        </div>
+
         <div className="mt-10 grid gap-4 sm:grid-cols-3 lg:max-w-5xl lg:mx-auto">
           {creditPackages.map((pkg) => (
-            <div key={pkg.name} className={`landing-mini-card glass-card rounded-2xl p-5 ${pkg.highlight ? 'ring-1 ring-primary/20' : ''}`}>
+            <div key={pkg.name} className={`landing-mini-card landing-credit-card rounded-2xl p-5 ${pkg.highlight ? 'landing-credit-card-highlight ring-1 ring-primary/20' : ''}`}>
               {pkg.highlight && <div className="mb-3 inline-flex rounded-full bg-primary px-3 py-1 text-xs font-semibold text-white">Rekomendasi</div>}
               <h4 className="text-lg font-bold text-foreground">{pkg.name}</h4>
               <p className="mt-1 text-sm text-mutedForeground">{pkg.credits} credit untuk proses gambar</p>
               <div className="mt-4 text-2xl font-black text-foreground">{formatMiniRupiah(pkg.price)}</div>
               <div className="mt-1 text-sm text-mutedForeground">{formatMiniRupiah(pkg.pricePerCredit)}/credit</div>
+              <div className="mt-4 space-y-2 text-sm text-mutedForeground">
+                <p>{pkg.aiRedesign}x AI Redesign</p>
+                <p>{pkg.readyToTrace}x Ready to Trace</p>
+              </div>
               {pkg.callout && <p className="mt-3 text-xs text-mutedForeground">{pkg.callout}</p>}
+              <button
+                type="button"
+                onClick={() => scrollToId('auth')}
+                className={`mt-4 inline-flex min-h-10 w-full items-center justify-center rounded-xl px-4 text-sm font-semibold transition ${
+                  pkg.highlight ? 'gradient-bg text-white shadow-lg shadow-primary/20' : 'border border-border bg-white text-foreground hover:border-primary/30 hover:bg-white/5'
+                }`}
+              >
+                Mulai Paket Ini
+              </button>
             </div>
           ))}
         </div>
@@ -1058,7 +1084,7 @@ function TestimonialsSection() {
         <SectionHeader eyebrow="Testimoni Nyata" title="Apa Kata Mereka" subtitle="Ribuan pengguna telah merasakan kemudahan redesign logo dengan AI" />
         <div className="mt-14 grid gap-6 md:grid-cols-3">
           {testimonials.map((testimonial, index) => (
-            <div key={testimonial.name} className={`glass-card rounded-3xl p-6 ${index === 1 ? 'md:mt-8' : ''}`}>
+            <div key={testimonial.name} className={`rounded-3xl p-6 ${index === 1 ? 'landing-testimonial-featured md:mt-8' : 'glass-card'}`}>
               <div className="mb-4 flex items-start justify-between">
                 <div className="relative">
                   <Quote className="h-10 w-10 text-primary/10" />
@@ -1115,10 +1141,10 @@ function FaqSection() {
         <div className="absolute -left-20 bottom-1/4 h-40 w-40 rounded-full bg-chart-2/5 blur-3xl" />
       </div>
       <div className="relative mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-        <SectionHeader eyebrow="Pertanyaan Umum" title="FAQ" subtitle="Temukan jawaban untuk pertanyaan yang sering diajukan" />
-        <div className="mt-12 space-y-3">
+        <SectionHeader title="Pertanyaan Umum" subtitle="Temukan jawaban untuk pertanyaan yang sering diajukan" />
+        <div className="mt-12 overflow-hidden rounded-3xl border border-border/70 glass-card">
           {faqItems.map((item, index) => (
-            <details key={item.question} className="landing-faq-item glass-card group overflow-hidden rounded-2xl">
+            <details key={item.question} className="landing-faq-item group overflow-hidden">
               <summary className="flex cursor-pointer list-none items-center gap-3 px-5 py-4 text-left text-sm font-semibold text-foreground sm:text-base">
                 <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary/20 text-xs font-semibold text-primary">
                   {index + 1}
@@ -1126,7 +1152,7 @@ function FaqSection() {
                 <span className="flex-1">{item.question}</span>
                 <ChevronDown className="h-4 w-4 text-mutedForeground transition group-open:rotate-180" />
               </summary>
-              <div className="px-5 pb-5 text-sm leading-relaxed text-mutedForeground sm:text-base">
+              <div className="px-5 pb-5 pl-14 text-sm leading-relaxed text-mutedForeground sm:text-base">
                 {item.answer}
               </div>
             </details>
@@ -1165,27 +1191,29 @@ function CtaSection({ onStart }) {
               onClick={onStart}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-white px-8 text-base font-semibold text-primary shadow-lg transition hover:bg-white/95"
             >
-              Mulai Sekarang
+              Mulai Gratis Sekarang
               <ArrowRight className="h-5 w-5" />
             </button>
             <button
               type="button"
-              onClick={() => scrollToId('pricing')}
+              onClick={() => scrollToId('how-it-works')}
               className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-white/20 bg-white/10 px-8 text-base font-semibold text-white backdrop-blur-sm transition hover:bg-white/15"
             >
-              Lihat Harga
+              <Eye className="h-4 w-4" />
+              Lihat Demo
             </button>
           </div>
 
           <div className="mt-14 grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-5">
             {trustBadges.map((badge) => (
-              <div key={badge.text} className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 backdrop-blur-sm">
+              <div key={badge.text} className="landing-cta-badge rounded-2xl px-4 py-3">
                 <badge.icon className="mx-auto h-5 w-5 text-white/80" />
                 <div className="mt-2 text-sm font-semibold text-white/90">{badge.text}</div>
                 <div className="mt-1 text-[10px] text-white/60">{badge.subtext}</div>
               </div>
             ))}
           </div>
+          <p className="mt-8 text-sm text-white/55">Tanpa risiko - Tanpa komitmen - Bisa berhenti kapan saja</p>
         </div>
       </div>
     </section>

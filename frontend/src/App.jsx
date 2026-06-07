@@ -642,13 +642,9 @@ export default function App() {
 
   return (
     <main className="min-h-screen gradient-bg-subtle">
-      <div className="glass-nav">
-        <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-semibold uppercase text-spruce">Design Mudah</p>
-            <h1 className="text-2xl font-bold text-ink sm:text-3xl">Sablon dan Sticker</h1>
-          </div>
-          {session && (
+      {session && (
+        <div className="glass-nav">
+          <div className="mx-auto flex max-w-6xl justify-end px-4 py-5 sm:px-6">
             <nav className="flex flex-wrap gap-2">
               {['app', 'billing', 'admin'].map((item) =>
                 item === 'admin' && !isSuperuser ? null : (
@@ -663,9 +659,9 @@ export default function App() {
                 )
               )}
             </nav>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {!session && (
         <>
