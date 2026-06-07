@@ -13,6 +13,7 @@ import saasRouter from './routes/saas.routes.js';
 import { cleanupOldJobs, ensureStorage, markInterruptedJobsFailed } from './utils/file.js';
 
 export const app = express();
+app.set('trust proxy', 1);
 
 app.use(
   helmet({
