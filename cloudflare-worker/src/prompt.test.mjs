@@ -21,7 +21,7 @@ test('legacy ai_redraw_model values normalize into hybrid config', () => {
   });
 
   assert.equal(normalized.provider, 'gemini_api_key_imagen3');
-  assert.equal(normalized.analysisModel, 'gemini-3.1-flash-preview');
+  assert.equal(normalized.analysisModel, 'gemini-3.1-flash-lite-preview');
   assert.equal(normalized.generationModel, 'imagen-3.0-generate-002');
   assert.equal(normalized.resolutionPolicy, 'high');
   assert.equal(normalized.persistPrompt, true);

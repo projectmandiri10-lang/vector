@@ -20,7 +20,7 @@ primary_region = "sin"
   GLM_ANALYSIS_MODEL = "glm-5v-turbo"
   GLM_IMAGE_MODEL = "glm-image"
   AI_REDRAW_PRESET = "quality"
-  GEMINI_ANALYSIS_MODEL = "gemini-3.1-flash-preview"
+  GEMINI_ANALYSIS_MODEL = "gemini-3.1-flash-lite-preview"
   IMAGEN_GENERATION_MODEL = "imagen-3.0-generate-002"
 
 [http_service]

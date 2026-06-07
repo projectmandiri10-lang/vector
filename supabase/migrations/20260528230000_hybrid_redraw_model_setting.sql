@@ -6,7 +6,7 @@ values (
     'preset', 'quality',
     'label', 'Kualitas',
     'provider', 'vertex_hybrid_imagen3',
-    'analysisModel', 'gemini-3.1-flash-preview',
+    'analysisModel', 'gemini-3.1-flash-lite-preview',
     'generationModel', 'imagen-3.0-generate-002',
     'aspectPolicy', 'match_source',
     'resolutionPolicy', 'high',
@@ -48,7 +48,7 @@ set
         else 'Kualitas'
       end,
       'provider', 'vertex_hybrid_imagen3',
-      'analysisModel', 'gemini-3.1-flash-preview',
+      'analysisModel', 'gemini-3.1-flash-lite-preview',
       'generationModel',
       case
         when coalesce(public.app_settings.value ->> 'mode', '') = 'budget' or coalesce(public.app_settings.value ->> 'model', '') = 'gemini-2.5-flash-image' then 'imagen-3.0-fast-generate-001'
