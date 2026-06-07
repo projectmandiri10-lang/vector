@@ -424,7 +424,14 @@ async function zaiJsonFetch(path, body) {
   const text = await response.text();
   const data = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    throw new Error(data?.error?.message || data?.message || data?.error || `Z.AI request gagal: ${response.status}`);
+    const upstreamMessage = data?.error?.message || data?.message || data?.error || `Z.AI request gagal: ${response.status}`;
+    const message = /insufficient balance|no resource package|recharge/i.test(upstreamMessage)
+      ? 'Saldo atau paket resource Z.AI/GLM tidak cukup. Isi saldo Z.AI lalu coba gambar ulang lagi.'
+      : upstreamMessage;
+    const error = new Error(message);
+    error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
+    error.upstream = 'zai';
+    throw error;
   }
   return data;
 }

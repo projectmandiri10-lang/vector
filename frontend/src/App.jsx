@@ -1,5 +1,5 @@
 import { Wand2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import AccountPanel from './components/AccountPanel.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
@@ -200,23 +200,28 @@ export default function App() {
   const [exampleJobs, setExampleJobs] = useState([]);
   const [exampleError, setExampleError] = useState('');
   const [deletingLibraryJobId, setDeletingLibraryJobId] = useState('');
-
-  const previewUrl = useMemo(() => {
-    if (previewRef.current) URL.revokeObjectURL(previewRef.current);
-    if (!file) {
-      previewRef.current = '';
-      return '';
-    }
-    const url = URL.createObjectURL(file);
-    previewRef.current = url;
-    return url;
-  }, [file]);
+  const [previewUrl, setPreviewUrl] = useState('');
 
   useEffect(() => {
+    if (previewRef.current) {
+      URL.revokeObjectURL(previewRef.current);
+      previewRef.current = '';
+    }
+
+    if (!file) {
+      setPreviewUrl('');
+      return undefined;
+    }
+
+    const url = URL.createObjectURL(file);
+    previewRef.current = url;
+    setPreviewUrl(url);
+
     return () => {
-      if (previewRef.current) URL.revokeObjectURL(previewRef.current);
+      URL.revokeObjectURL(url);
+      if (previewRef.current === url) previewRef.current = '';
     };
-  }, []);
+  }, [file]);
 
   useEffect(() => {
     if (!isSupabaseConfigured) return undefined;

@@ -103,30 +103,6 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
           </select>
         </div>
 
-        <fieldset>
-          <legend className="mb-2 text-sm font-medium text-ink">Background</legend>
-          <div className="grid gap-2">
-            <label className="flex cursor-pointer items-center gap-3 border border-line bg-white px-3 py-2.5 text-sm">
-              <input
-                type="radio"
-                checked={settings.whiteAsBackground}
-                onChange={() => update('whiteAsBackground', true)}
-                disabled={disabled}
-              />
-              Putih dianggap background
-            </label>
-            <label className="flex cursor-pointer items-center gap-3 border border-line bg-white px-3 py-2.5 text-sm">
-              <input
-                type="radio"
-                checked={!settings.whiteAsBackground}
-                onChange={() => update('whiteAsBackground', false)}
-                disabled={disabled}
-              />
-              Putih dianggap warna sablon sendiri
-            </label>
-          </div>
-        </fieldset>
-
         {settings.productionType === 'sticker' && (
           <div className="border border-line bg-panel p-3">
             <p className="mb-3 text-sm font-semibold text-ink">Output sticker</p>

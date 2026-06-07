@@ -1,4 +1,5 @@
 import { ImagePlus, UploadCloud, X } from 'lucide-react';
+import { useState } from 'react';
 import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from '../lib/modes.js';
 import { formatRupiah, IMAGE_RETOUCH_PRICE_IDR, READY_PROCESS_PRICE_IDR } from '../lib/pricing.js';
 
@@ -20,9 +21,12 @@ const modeOptions = [
 ];
 
 export default function UploadBox({ file, previewUrl, inputMode, onInputModeChange, onFileChange, disabled }) {
+  const [previewFailed, setPreviewFailed] = useState(false);
+
   function handleChange(event) {
     const nextFile = event.target.files?.[0];
     if (!nextFile) return;
+    setPreviewFailed(false);
     onFileChange(nextFile);
   }
 
@@ -76,7 +80,10 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
             <button
               type="button"
               className="inline-flex h-9 w-9 items-center justify-center border border-line bg-white text-gray-700 hover:border-tomato hover:text-tomato"
-              onClick={() => onFileChange(null)}
+              onClick={() => {
+                setPreviewFailed(false);
+                onFileChange(null);
+              }}
               title="Hapus gambar"
             >
               <X className="h-4 w-4" aria-hidden="true" />
@@ -84,7 +91,11 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
           </div>
           {previewUrl && (
             <div className="checkerboard flex max-h-80 items-center justify-center overflow-hidden p-3">
-              <img className="max-h-72 max-w-full object-contain" src={previewUrl} alt="Preview gambar asli" />
+              {previewFailed ? (
+                <p className="px-3 py-8 text-sm font-medium text-tomato">Preview lokal gagal ditampilkan, tetapi file tetap siap diproses.</p>
+              ) : (
+                <img className="max-h-72 max-w-full object-contain" src={previewUrl} alt="Preview gambar asli" onError={() => setPreviewFailed(true)} />
+              )}
             </div>
           )}
         </div>
