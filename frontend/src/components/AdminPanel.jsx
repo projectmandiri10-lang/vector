@@ -56,9 +56,9 @@ function examplePublishHint(job, isPublished) {
 function StatusBadge({ status }) {
   const styles = {
     pending: 'border-amber-300 bg-amber-50 text-amber-800',
-    approved: 'border-spruce bg-teal-50 text-spruce',
+    approved: 'border-spruce bg-primary/5 text-spruce',
     rejected: 'border-tomato bg-orange-50 text-tomato',
-    done: 'border-spruce bg-teal-50 text-spruce',
+    done: 'border-spruce bg-primary/5 text-spruce',
     failed: 'border-tomato bg-orange-50 text-tomato'
   };
   return <span className={`inline-flex border px-2 py-1 text-xs font-semibold ${styles[status] || 'border-line bg-panel text-gray-700'}`}>{status}</span>;
@@ -835,7 +835,7 @@ export default function AdminPanel({ session, enabled }) {
                       return (
                     <div className="flex max-w-72 flex-wrap items-center gap-2">
                       {isPublished && (
-                        <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-xs font-semibold text-spruce">
+                        <span className="inline-flex items-center gap-1 border border-spruce bg-primary/5 px-2 py-1 text-xs font-semibold text-spruce">
                           <Star className="h-3.5 w-3.5" aria-hidden="true" />
                           Contoh dipublish
                         </span>

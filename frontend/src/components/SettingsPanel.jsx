@@ -6,7 +6,7 @@ function Toggle({ checked, onChange, label, disabled }) {
       type="button"
       onClick={() => !disabled && onChange(!checked)}
       className={`flex w-full items-center justify-between gap-3 border px-3 py-3 text-left text-sm transition ${
-        checked ? 'border-spruce bg-teal-50 text-ink' : 'border-line bg-white text-gray-700'
+        checked ? 'border-spruce bg-primary/5 text-ink' : 'border-line bg-white text-gray-700'
       } ${disabled ? 'cursor-not-allowed opacity-60' : 'hover:border-spruce'}`}
       aria-pressed={checked}
       disabled={disabled}
@@ -86,7 +86,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
               disabled={disabled}
             />
             {settings.colorLimitMode !== 'manual' && (
-              <div className="border border-spruce bg-teal-50 px-3 py-2.5 text-sm font-semibold text-ink">Otomatis</div>
+              <div className="border border-spruce bg-primary/5 px-3 py-2.5 text-sm font-semibold text-ink">Otomatis</div>
             )}
           </div>
           <select
@@ -116,7 +116,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
             {settings.stickerCutlineEnabled && (
               <div className="mt-3 grid gap-3">
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-ink">Lebar artwork aktual</span>
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Lebar artwork horizontal</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
@@ -130,6 +130,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
                     />
                     <span className="text-sm font-medium text-gray-700">cm</span>
                   </div>
+                  <p className="mt-1.5 text-xs text-gray-600">Isi ukuran dari kiri ke kanan gambar, bukan tinggi.</p>
                 </label>
 
                 <label className="block">
@@ -185,7 +186,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
           <div className="border border-line bg-panel p-3">
             <p className="mb-3 text-sm font-semibold text-ink">Ukuran film sablon</p>
             <label className="block">
-              <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran gambar aktual</span>
+              <span className="mb-1.5 block text-sm font-medium text-ink">Lebar gambar horizontal</span>
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -199,6 +200,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
                 />
                 <span className="text-sm font-medium text-gray-700">cm</span>
               </div>
+              <p className="mt-1.5 text-xs text-gray-600">Yang diisi adalah lebar gambar dari sisi kiri ke kanan.</p>
             </label>
 
             <label className="mt-3 flex cursor-pointer items-center gap-3 border border-line bg-white px-3 py-2.5 text-sm">

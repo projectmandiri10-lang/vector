@@ -7,7 +7,7 @@ function ArchiveButton({ href, children, icon: Icon }) {
     <a
       href={absoluteUrl(href)}
       download
-      className="inline-flex min-h-9 items-center justify-center gap-2 border border-spruce bg-white px-2.5 py-1.5 text-xs font-semibold text-spruce transition hover:bg-teal-50"
+      className="inline-flex min-h-9 items-center justify-center gap-2 border border-spruce bg-white px-2.5 py-1.5 text-xs font-semibold text-spruce transition hover:bg-primary/5"
     >
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       <span>{children}</span>

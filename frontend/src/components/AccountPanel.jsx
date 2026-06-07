@@ -54,7 +54,7 @@ export default function AccountPanel({ session, balance, balanceError, onRefresh
         </button>
         <a
           href="#billing"
-          className="inline-flex min-h-10 items-center justify-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-semibold text-white hover:bg-teal-700"
+          className="inline-flex min-h-10 items-center justify-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90"
         >
           <ShoppingBag className="h-4 w-4" aria-hidden="true" />
           Pembayaran Shopee

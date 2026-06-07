@@ -115,7 +115,7 @@ async function creditBalance(userId) {
 }
 
 async function getPricing() {
-  const defaults = { ready_trace: 1000, ai_redraw: 5000, separation_film: 1000 };
+  const defaults = { ready_trace: 1000, ai_redraw: 2500, separation_film: 1000 };
   try {
     const rows = await supabaseFetch('/rest/v1/pricing_rules?select=key,amount_idr,active,description&order=key.asc', {});
     return rows.reduce(
@@ -142,6 +142,62 @@ async function getAiRedrawModelConfig() {
   } catch (_error) {
     return normalizeHybridRedrawConfig({}, process.env);
   }
+}
+
+function isSuperuserProfile(profile) {
+  return ['superuser', 'superadmin'].includes(profile?.role);
+}
+
+function normalizeContactSubject(value) {
+  const allowed = new Set(['umum', 'teknis', 'billing', 'lainnya']);
+  return allowed.has(value) ? value : 'umum';
+}
+
+async function insertContactMessage(payload) {
+  const rows = await supabaseFetch('/rest/v1/contact_messages?select=id,name,email,subject,message,status,created_at', {
+    method: 'POST',
+    prefer: 'return=representation',
+    body: {
+      name: payload.name,
+      email: payload.email,
+      subject: payload.subject,
+      message: payload.message,
+      status: 'pending'
+    }
+  });
+  return rows?.[0] || null;
+}
+
+async function listContactMessages({ status } = {}) {
+  const params = new URLSearchParams('select=id,name,email,subject,message,status,created_at,updated_at,replied_at');
+  params.set('order', 'created_at.desc');
+  params.set('limit', '1000');
+  if (status && ['pending', 'read', 'replied'].includes(status)) {
+    params.set('status', `eq.${status}`);
+  }
+
+  const rows = await supabaseFetch(`/rest/v1/contact_messages?${params.toString()}`, {});
+  const counts = (rows || []).reduce(
+    (acc, row) => {
+      acc.total += 1;
+      if (row.status === 'pending') acc.pending += 1;
+      if (row.status === 'read') acc.read += 1;
+      if (row.status === 'replied') acc.replied += 1;
+      return acc;
+    },
+    { pending: 0, read: 0, replied: 0, total: 0 }
+  );
+
+  return { messages: rows || [], counts };
+}
+
+async function updateContactMessage(messageId, patch) {
+  const rows = await supabaseFetch(`/rest/v1/contact_messages?id=eq.${encodeURIComponent(messageId)}&select=id,name,email,subject,message,status,created_at,updated_at,replied_at`, {
+    method: 'PATCH',
+    prefer: 'return=representation',
+    body: patch
+  });
+  return rows?.[0] || null;
 }
 
 async function ensureCredit(profile, priceIdr) {
@@ -287,6 +343,66 @@ async function imageRetouchHandler(req, res, next) {
 
 export { imageRetouchHandler };
 
+async function submitContactHandler(req, res, next) {
+  try {
+    const name = String(req.body?.name || '').trim();
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const subjectInput = String(req.body?.subject || '').trim();
+    const message = String(req.body?.message || '').trim();
+
+    if (!name) throw new Error('Nama wajib diisi.');
+    if (!email) throw new Error('Email wajib diisi.');
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Format email tidak valid.');
+    if (!subjectInput) throw new Error('Subjek wajib dipilih.');
+    const subject = normalizeContactSubject(subjectInput);
+    if (message.length < 10) throw new Error('Pesan minimal 10 karakter.');
+    if (message.length > 5000) throw new Error('Pesan maksimal 5000 karakter.');
+
+    const contact = await insertContactMessage({ name, email, subject, message });
+    res.status(201).json({
+      success: true,
+      message: 'Pesan Anda berhasil dikirim. Kami akan merespons dalam 1x24 jam.',
+      contact
+    });
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function requireSuperuser(req) {
+  const { profile } = await requireUser(req);
+  if (!isSuperuserProfile(profile)) throw new Error('Akses ditolak.');
+  return profile;
+}
+
+async function contactMessagesHandler(req, res, next) {
+  try {
+    await requireSuperuser(req);
+    const status = String(req.query?.status || '').trim();
+    const data = await listContactMessages({ status });
+    res.json(data);
+  } catch (error) {
+    next(error);
+  }
+}
+
+async function updateContactMessageHandler(req, res, next) {
+  try {
+    await requireSuperuser(req);
+    const messageId = String(req.body?.messageId || '').trim();
+    const status = String(req.body?.status || '').trim();
+    if (!messageId) throw new Error('MessageId diperlukan.');
+    if (!['pending', 'read', 'replied'].includes(status)) throw new Error('Status tidak valid.');
+
+    const patch = { status };
+    if (status === 'replied') patch.replied_at = new Date().toISOString();
+    const message = await updateContactMessage(messageId, patch);
+    res.json({ message });
+  } catch (error) {
+    next(error);
+  }
+}
+
 router.get('/api/app-config', workerHandler);
 router.post('/api/manual-payments', workerHandler);
 router.get('/api/me/balance', workerHandler);
@@ -308,5 +424,8 @@ router.post('/api/admin/jobs/:jobId/set-example', workerHandler);
 router.post('/api/admin/jobs/:jobId/unset-example', workerHandler);
 router.post('/api/admin/manual-payments/:paymentId/approve', workerHandler);
 router.post('/api/admin/manual-payments/:paymentId/reject', workerHandler);
+router.post('/api/contact', submitContactHandler);
+router.get('/api/contact', contactMessagesHandler);
+router.patch('/api/contact', updateContactMessageHandler);
 
 export default router;

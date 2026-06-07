@@ -3,20 +3,69 @@
 @tailwind utilities;
 
 :root {
-  color: #1f2937;
-  background: #f7f7f2;
+  color: #111827;
+  background:
+    radial-gradient(circle at top left, rgba(124, 58, 237, 0.08), transparent 35%),
+    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 30%),
+    linear-gradient(180deg, #fafaff 0%, #ffffff 42%, #f8f5ff 100%);
 }
 
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  background: inherit;
+  color: inherit;
 }
 
 button,
 input,
 select {
   font: inherit;
+}
+
+.gradient-bg {
+  background:
+    linear-gradient(135deg, rgba(124, 58, 237, 0.98), rgba(37, 99, 235, 0.95) 48%, rgba(245, 158, 11, 0.92));
+}
+
+.gradient-bg-subtle {
+  background:
+    radial-gradient(circle at top left, rgba(124, 58, 237, 0.08), transparent 36%),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, 0.08), transparent 34%),
+    linear-gradient(180deg, #ffffff 0%, #faf7ff 100%);
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, #7c3aed 0%, #2563eb 45%, #f59e0b 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.glass-card {
+  background: rgba(255, 255, 255, 0.78);
+  backdrop-filter: blur(18px);
+  border: 1px solid rgba(229, 219, 247, 0.9);
+  box-shadow: 0 20px 60px rgba(15, 23, 42, 0.06);
+}
+
+.glass-nav {
+  background: rgba(255, 255, 255, 0.82);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(229, 219, 247, 0.8);
+}
+
+.glow-purple {
+  box-shadow: 0 18px 55px rgba(124, 58, 237, 0.2);
+}
+
+.glow-blue {
+  box-shadow: 0 18px 55px rgba(37, 99, 235, 0.2);
+}
+
+.glow-primary {
+  box-shadow: 0 18px 55px rgba(124, 58, 237, 0.25);
 }
 
 .checkerboard {

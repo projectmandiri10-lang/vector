@@ -15,7 +15,7 @@ function ExampleCard({ label, example, active }) {
           <p className="text-sm font-semibold text-ink">{label}</p>
           <p className="text-xs text-gray-600">Contoh Gambar</p>
         </div>
-        {active && <span className="border border-spruce bg-teal-50 px-2 py-1 text-xs font-semibold text-spruce">Sedang dipilih</span>}
+        {active && <span className="border border-spruce bg-primary/5 px-2 py-1 text-xs font-semibold text-spruce">Sedang dipilih</span>}
       </div>
 
       {example?.imageUrl ? (

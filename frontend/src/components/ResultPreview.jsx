@@ -7,7 +7,7 @@ function DownloadButton({ href, children, icon: Icon }) {
     <a
       href={absoluteUrl(href)}
       download
-      className="inline-flex min-h-10 items-center justify-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-semibold text-white transition hover:bg-teal-700"
+      className="inline-flex min-h-10 items-center justify-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-semibold text-white transition hover:bg-primary/90"
     >
       <Icon className="h-4 w-4" aria-hidden="true" />
       <span>{children}</span>

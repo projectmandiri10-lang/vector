@@ -171,6 +171,13 @@ export async function getAppConfig() {
   return apiFetch('/api/app-config');
 }
 
+export async function submitContactMessage(payload) {
+  return apiFetch('/api/contact', {
+    method: 'POST',
+    body: payload
+  });
+}
+
 export async function createManualPayment(payload, accessToken) {
   return apiFetch('/api/manual-payments', {
     method: 'POST',

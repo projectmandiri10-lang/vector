@@ -6,7 +6,7 @@ import AuthPanel from './components/AuthPanel.jsx';
 import BillingPanel from './components/BillingPanel.jsx';
 import JobLibraryPanel from './components/JobLibraryPanel.jsx';
 import JobStatus from './components/JobStatus.jsx';
-import LandingPage from './components/LandingPage.jsx';
+import LandingPage, { AboutPage, ContactPage, PrivacyPage, TermsPage } from './components/LandingPage.jsx';
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
@@ -20,6 +20,30 @@ import { isSupabaseConfigured, supabase } from './lib/supabase.js';
 
 const SUPERUSER_ACCOUNT = ['jho.j80@gm', 'a', 'il.com'].join('');
 const FALLBACK_SESSION_STORAGE_KEY = 'designmudah.supabaseFallbackSession';
+const LEGAL_PATHS = new Set(['/privacy', '/terms', '/contact', '/about']);
+
+function normalizePathname(pathname) {
+  const trimmed = pathname.replace(/\/+$/, '') || '/';
+  return trimmed === '' ? '/' : trimmed;
+}
+
+function getPublicRouteFromPathname(pathname) {
+  const normalized = normalizePathname(pathname);
+  if (normalized === '/privacy') return 'privacy';
+  if (normalized === '/terms') return 'terms';
+  if (normalized === '/contact') return 'contact';
+  if (normalized === '/about') return 'about';
+  return 'landing';
+}
+
+function getDocumentTitle(route, hasSession) {
+  if (route === 'privacy') return 'Kebijakan Privasi - AI Logo Redesign';
+  if (route === 'terms') return 'Syarat dan Ketentuan - AI Logo Redesign';
+  if (route === 'contact') return 'Hubungi Kami - AI Logo Redesign';
+  if (route === 'about') return 'Tentang Kami - AI Logo Redesign';
+  if (hasSession) return 'Design Mudah - Sablon dan Sticker';
+  return 'AI Logo Redesign - Transformasi Logo Kaos';
+}
 
 const initialSettings = {
   projectName: '',
@@ -201,6 +225,7 @@ export default function App() {
   const [exampleError, setExampleError] = useState('');
   const [deletingLibraryJobId, setDeletingLibraryJobId] = useState('');
   const [previewUrl, setPreviewUrl] = useState('');
+  const [publicRoute, setPublicRoute] = useState(() => getPublicRouteFromPathname(window.location.pathname || '/'));
 
   useEffect(() => {
     if (previewRef.current) {
@@ -222,6 +247,30 @@ export default function App() {
       if (previewRef.current === url) previewRef.current = '';
     };
   }, [file]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      setPublicRoute(getPublicRouteFromPathname(window.location.pathname || '/'));
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  useEffect(() => {
+    document.title = getDocumentTitle(publicRoute, Boolean(session));
+  }, [publicRoute, session]);
+
+  function navigatePublicPath(path, { replace = false } = {}) {
+    const normalized = normalizePathname(path);
+    if (replace) {
+      window.history.replaceState({}, '', normalized);
+    } else {
+      window.history.pushState({}, '', normalized);
+    }
+    setPublicRoute(getPublicRouteFromPathname(normalized));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
 
   useEffect(() => {
     if (!isSupabaseConfigured) return undefined;
@@ -583,9 +632,17 @@ export default function App() {
     }
   }
 
+  const currentPathname = normalizePathname(window.location.pathname || '/');
+  if (LEGAL_PATHS.has(currentPathname)) {
+    if (publicRoute === 'privacy') return <PrivacyPage onNavigate={navigatePublicPath} />;
+    if (publicRoute === 'terms') return <TermsPage onNavigate={navigatePublicPath} />;
+    if (publicRoute === 'contact') return <ContactPage onNavigate={navigatePublicPath} />;
+    if (publicRoute === 'about') return <AboutPage onNavigate={navigatePublicPath} />;
+  }
+
   return (
-    <main className="min-h-screen bg-panel">
-      <div className="border-b border-line bg-white">
+    <main className="min-h-screen gradient-bg-subtle">
+      <div className="glass-nav">
         <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-5 sm:px-6 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase text-spruce">Design Mudah</p>
@@ -615,6 +672,7 @@ export default function App() {
           <LandingPage
             onStart={() => document.getElementById('auth')?.scrollIntoView({ behavior: 'smooth' })}
             authPanel={<AuthPanel onSignedIn={setSession} />}
+            onNavigate={navigatePublicPath}
           />
           {authCallbackError && (
             <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
@@ -623,16 +681,6 @@ export default function App() {
               </p>
             </div>
           )}
-          <div className="mx-auto max-w-6xl px-4 pb-8 sm:px-6">
-            <div className="border border-line bg-white p-4 sm:p-5">
-              <h2 className="mb-2 text-lg font-bold text-ink">Alur singkat</h2>
-              <div className="grid gap-3 text-sm leading-6 text-gray-700">
-                <p>1. Login atau register.</p>
-                <p>2. Upload gambar siap proses mulai Rp1.000, atau gunakan gambar ulang Rp5.000.</p>
-                <p>3. Download hasil langsung dari browser. Server hanya menyimpan metadata dan credit.</p>
-              </div>
-            </div>
-          </div>
         </>
       )}
 
@@ -685,7 +733,7 @@ export default function App() {
             <button
               type="submit"
               disabled={!canSubmit}
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-3 text-sm font-bold text-white transition hover:bg-teal-700 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300 disabled:text-gray-600"
+              className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300 disabled:text-gray-600"
             >
               <Wand2 className="h-5 w-5" aria-hidden="true" />
               <span>{isBusy ? 'Sedang memproses' : 'Proses dan debit credit'}</span>

@@ -167,7 +167,7 @@ function LibraryCard({ item, onOpen, onDelete, isDeleting }) {
         </div>
         <div className="flex items-center gap-2">
           {item.isExample && (
-            <span className="inline-flex items-center gap-1 border border-spruce bg-teal-50 px-2 py-1 text-[11px] font-semibold text-spruce">
+            <span className="inline-flex items-center gap-1 border border-spruce bg-primary/5 px-2 py-1 text-[11px] font-semibold text-spruce">
               <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
               Contoh
             </span>
@@ -195,7 +195,7 @@ function LibraryCard({ item, onOpen, onDelete, isDeleting }) {
         <button
           type="button"
           onClick={() => onOpen(item)}
-          className="inline-flex min-h-9 items-center justify-center gap-2 border border-spruce bg-white px-3 py-2 text-xs font-semibold text-spruce transition hover:bg-teal-50"
+          className="inline-flex min-h-9 items-center justify-center gap-2 border border-spruce bg-white px-3 py-2 text-xs font-semibold text-spruce transition hover:bg-primary/5"
         >
           <Eye className="h-3.5 w-3.5" aria-hidden="true" />
           Lihat hasil

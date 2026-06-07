@@ -22,6 +22,7 @@ const modeOptions = [
 
 export default function UploadBox({ file, previewUrl, inputMode, onInputModeChange, onFileChange, disabled }) {
   const [previewFailed, setPreviewFailed] = useState(false);
+  const hasPreview = Boolean(file && previewUrl);
 
   function handleChange(event) {
     const nextFile = event.target.files?.[0];
@@ -48,7 +49,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
             disabled={disabled}
             onClick={() => onInputModeChange(option.value)}
             className={`border px-3 py-3 text-left transition ${
-              inputMode === option.value ? 'border-spruce bg-teal-50 text-ink' : 'border-line bg-white text-gray-700 hover:border-spruce'
+              inputMode === option.value ? 'border-spruce bg-primary/5 text-ink' : 'border-line bg-white text-gray-700 hover:border-spruce'
             } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
             aria-pressed={inputMode === option.value}
           >
@@ -59,47 +60,76 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
         ))}
       </div>
 
-      <label className="flex min-h-56 cursor-pointer flex-col items-center justify-center border border-dashed border-line bg-panel px-4 py-8 text-center transition hover:border-spruce hover:bg-white">
-        <UploadCloud className="mb-3 h-9 w-9 text-spruce" aria-hidden="true" />
-        <span className="text-sm font-semibold text-ink">Pilih gambar JPG, PNG, atau WebP</span>
-        <span className="mt-1 text-xs text-gray-600">
-          {inputMode === INPUT_MODE_READY
-            ? 'Maksimal 10 MB. File langsung diproses tanpa gambar ulang.'
-            : 'Maksimal 10 MB. Gambar akan dirapikan sebelum diproses.'}
-        </span>
-        <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} disabled={disabled} />
-      </label>
-
-      {file && (
-        <div className="mt-4 border border-line bg-white">
-          <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2">
-            <div className="min-w-0">
-              <p className="truncate text-sm font-medium text-ink">{file.name}</p>
-              <p className="text-xs text-gray-600">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-            </div>
-            <button
-              type="button"
-              className="inline-flex h-9 w-9 items-center justify-center border border-line bg-white text-gray-700 hover:border-tomato hover:text-tomato"
-              onClick={() => {
-                setPreviewFailed(false);
-                onFileChange(null);
-              }}
-              title="Hapus gambar"
-            >
-              <X className="h-4 w-4" aria-hidden="true" />
-            </button>
+      <label
+        className={`relative flex min-h-56 cursor-pointer overflow-hidden border border-dashed px-4 py-6 text-center transition ${
+          hasPreview ? 'border-spruce bg-white' : 'border-line bg-panel hover:border-spruce hover:bg-white'
+        }`}
+      >
+        {hasPreview && (
+          <div className="absolute inset-0">
+            {previewFailed ? (
+              <div className="checkerboard flex h-full w-full items-center justify-center p-4">
+                <p className="max-w-sm px-3 py-6 text-sm font-medium text-tomato">Preview lokal gagal ditampilkan, tetapi file tetap siap diproses.</p>
+              </div>
+            ) : (
+              <img className="h-full w-full object-cover" src={previewUrl} alt="Preview gambar asli" onError={() => setPreviewFailed(true)} />
+            )}
+            <div className="absolute inset-0 bg-white/65" />
           </div>
-          {previewUrl && (
-            <div className="checkerboard flex max-h-80 items-center justify-center overflow-hidden p-3">
-              {previewFailed ? (
-                <p className="px-3 py-8 text-sm font-medium text-tomato">Preview lokal gagal ditampilkan, tetapi file tetap siap diproses.</p>
+        )}
+
+        <div className="relative z-10 flex w-full flex-col">
+          <div className="flex items-start justify-between gap-3">
+            <div className={`min-w-0 ${file ? 'text-left' : 'text-center'}`}>
+              {file ? (
+                <>
+                  <p className="truncate text-sm font-semibold text-ink">{file.name}</p>
+                  <p className="text-xs text-gray-700">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
+                </>
               ) : (
-                <img className="max-h-72 max-w-full object-contain" src={previewUrl} alt="Preview gambar asli" onError={() => setPreviewFailed(true)} />
+                <>
+                  <UploadCloud className="mx-auto mb-3 h-9 w-9 text-spruce" aria-hidden="true" />
+                  <span className="block text-sm font-semibold text-ink">Pilih gambar JPG, PNG, atau WebP</span>
+                  <span className="mt-1 block text-xs text-gray-600">
+                    {inputMode === INPUT_MODE_READY
+                      ? 'Maksimal 10 MB. File langsung diproses tanpa gambar ulang.'
+                      : 'Maksimal 10 MB. Gambar akan dirapikan sebelum diproses.'}
+                  </span>
+                </>
               )}
+            </div>
+
+            {file && (
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-white text-gray-700 hover:border-tomato hover:text-tomato"
+                onClick={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setPreviewFailed(false);
+                  onFileChange(null);
+                }}
+                title="Hapus gambar"
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </button>
+            )}
+          </div>
+
+          {file && (
+            <div className="mt-6 flex flex-1 items-end justify-center">
+              <div className="checkerboard flex max-h-72 w-full items-center justify-center overflow-hidden border border-line bg-white/75 p-3 shadow-sm">
+                <div className="flex w-full flex-col items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-spruce">Preview terunggah</p>
+                  <p className="text-sm text-gray-700">Klik area ini untuk mengganti gambar.</p>
+                </div>
+              </div>
             </div>
           )}
         </div>
-      )}
+
+        <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} disabled={disabled} />
+      </label>
 
       {!isValidType && <p className="mt-3 text-sm text-tomato">File hanya boleh JPG, PNG, atau WebP.</p>}
       {!isValidSize && <p className="mt-3 text-sm text-tomato">Ukuran file maksimal 10 MB.</p>}

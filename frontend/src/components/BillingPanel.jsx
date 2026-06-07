@@ -29,7 +29,7 @@ export default function BillingPanel({ session }) {
           href={shopeeUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex min-h-10 w-fit items-center justify-center border border-spruce bg-spruce px-3 py-2 text-sm font-bold text-white hover:bg-teal-700"
+          className="inline-flex min-h-10 w-fit items-center justify-center border border-spruce bg-spruce px-3 py-2 text-sm font-bold text-white hover:bg-primary/90"
         >
           Buka Shopee Marketplace
         </a>

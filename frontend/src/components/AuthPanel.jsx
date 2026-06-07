@@ -109,7 +109,7 @@ export default function AuthPanel({ onSignedIn }) {
         <button
           type="submit"
           disabled={isBusy}
-          className="inline-flex min-h-11 items-center justify-center border border-spruce bg-spruce px-4 py-2.5 text-sm font-bold text-white hover:bg-teal-700 disabled:opacity-60"
+          className="inline-flex min-h-11 items-center justify-center border border-spruce bg-spruce px-4 py-2.5 text-sm font-bold text-white hover:bg-primary/90 disabled:opacity-60"
         >
           {isBusy ? 'Memproses' : mode === 'login' ? 'Login email' : 'Buat akun'}
         </button>
