@@ -7,16 +7,16 @@ const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
 const modeOptions = [
   {
-    value: INPUT_MODE_READY,
-    title: 'Gambar siap proses',
-    description: 'Untuk PNG/JPG/WebP yang sudah rapi dan ingin langsung dibuat vector, cutline, atau pisah warna.',
-    priceIdr: READY_PROCESS_PRICE_IDR
-  },
-  {
     value: INPUT_MODE_RETOUCH,
     title: 'Gambar perlu digambar ulang',
     description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.',
     priceIdr: IMAGE_RETOUCH_PRICE_IDR
+  },
+  {
+    value: INPUT_MODE_READY,
+    title: 'Gambar siap proses',
+    description: 'Untuk PNG/JPG/WebP yang sudah rapi dan ingin langsung dibuat vector, cutline, atau pisah warna.',
+    priceIdr: READY_PROCESS_PRICE_IDR
   }
 ];
 
@@ -78,9 +78,9 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
           </div>
         )}
 
-        <div className="relative z-10 flex w-full flex-col">
-          <div className="flex items-start justify-between gap-3">
-            <div className={`min-w-0 ${file ? 'text-left' : 'text-center'}`}>
+        <div className="relative z-10 flex w-full flex-col items-center justify-center gap-4">
+          <div className="flex w-full items-start justify-center gap-3">
+            <div className="min-w-0 text-center">
               {file ? (
                 <>
                   <p className="truncate text-sm font-semibold text-ink">{file.name}</p>
@@ -98,28 +98,12 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
                 </>
               )}
             </div>
-
-            {file && (
-              <button
-                type="button"
-                className="inline-flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-white text-gray-700 hover:border-tomato hover:text-tomato"
-                onClick={(event) => {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  setPreviewFailed(false);
-                  onFileChange(null);
-                }}
-                title="Hapus gambar"
-              >
-                <X className="h-4 w-4" aria-hidden="true" />
-              </button>
-            )}
           </div>
 
           {file && (
-            <div className="mt-6 flex flex-1 items-end justify-center">
-              <div className="checkerboard flex max-h-72 w-full items-center justify-center overflow-hidden border border-line bg-white/75 p-3 shadow-sm">
-                <div className="flex w-full flex-col items-center gap-2">
+            <div className="flex w-full justify-center">
+              <div className="checkerboard flex max-h-72 w-full max-w-96 items-center justify-center overflow-hidden border border-line bg-white/75 p-3 shadow-sm">
+                <div className="flex w-full flex-col items-center gap-2 text-center">
                   <p className="text-xs font-semibold uppercase tracking-wide text-spruce">Preview terunggah</p>
                   <p className="text-sm text-gray-700">Klik area ini untuk mengganti gambar.</p>
                 </div>
@@ -127,6 +111,22 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
             </div>
           )}
         </div>
+
+        {file && (
+          <button
+            type="button"
+            className="absolute right-4 top-4 inline-flex h-9 w-9 shrink-0 items-center justify-center border border-line bg-white text-gray-700 hover:border-tomato hover:text-tomato"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              setPreviewFailed(false);
+              onFileChange(null);
+            }}
+            title="Hapus gambar"
+          >
+            <X className="h-4 w-4" aria-hidden="true" />
+          </button>
+        )}
 
         <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} disabled={disabled} />
       </label>
