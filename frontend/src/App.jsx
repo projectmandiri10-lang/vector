@@ -54,6 +54,7 @@ const initialSettings = {
   colorLimitMode: 'auto',
   maxColors: 4,
   whiteAsBackground: false,
+  removeBackground: false,
   aiQuality: 'standard',
   actualWidthCm: 10,
   includeBackgroundInFilmSize: false,

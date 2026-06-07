@@ -325,7 +325,7 @@ function removeEnclosedBackgroundComponents(output, width, height, backgroundCol
 }
 
 function removeEdgeConnectedBackground(assignments, palette, width, height, settings = {}) {
-  if (settings.includeBackgroundInFilmSize || settings.whiteAsBackground === false) {
+  if (settings.removeBackground !== true || settings.includeBackgroundInFilmSize === true) {
     return {
       assignments,
       colors: recomputeColors(assignments, palette, width, height)
@@ -481,7 +481,7 @@ function mergeBounds(colors, width, height) {
 }
 
 function printableColors(colors, settings, width, height) {
-  if (settings.includeBackgroundInFilmSize || settings.whiteAsBackground === false) return colors;
+  if (settings.removeBackground !== true || settings.includeBackgroundInFilmSize === true) return colors;
   const background = [...colors]
     .filter((color) => color.touchesTop && color.touchesRight && color.touchesBottom && color.touchesLeft)
     .sort((a, b) => b.count - a.count)[0];
@@ -532,7 +532,7 @@ function backgroundColors(colors, width, height) {
 }
 
 function createFilmPlan(colors, width, height, settings = {}) {
-  if (settings.includeBackgroundInFilmSize || settings.whiteAsBackground === false) {
+  if (settings.removeBackground !== true || settings.includeBackgroundInFilmSize === true) {
     return {
       colors,
       bounds: fullCanvasBounds(width, height),
@@ -888,8 +888,9 @@ export async function processImageLocally(file, settings) {
   const outputColors = limited.colors;
   const filmPlan = createFilmPlan(outputColors, width, height, settings);
   const printable = filmPlan.colors;
+  const exportColors = settings.removeBackground === true && settings.includeBackgroundInFilmSize !== true ? printable : outputColors;
   const bounds = filmPlan.bounds;
-  const fullSvg = buildFullSvg({ colors: outputColors, assignments, width, height, settings });
+  const fullSvg = buildFullSvg({ colors: exportColors, assignments, width, height, settings });
   const zip = new JSZip();
   const separationZip = new JSZip();
   const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height);
@@ -900,7 +901,7 @@ export async function processImageLocally(file, settings) {
     maxHeight: 4096
   });
   zip.file('preview-full-color.png', previewBlob);
-  zip.file('palette.json', JSON.stringify(outputColors, null, 2));
+  zip.file('palette.json', JSON.stringify(exportColors, null, 2));
 
   const separations = [];
   if (settings.separateColors) {
@@ -975,7 +976,7 @@ export async function processImageLocally(file, settings) {
     localOnly: true,
     priceIdr,
     separationFilmCount,
-    palette: outputColors,
+    palette: exportColors,
     settings,
     files: {
       fullPng: fileUrl(previewBlob),

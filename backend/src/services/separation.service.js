@@ -98,7 +98,6 @@ function backgroundColors(colors, width, height) {
 
 export function createFilmPlan({ pathsByColor, width, height, settings = {} }) {
   const fullBounds = fullCanvasBounds(width, height);
-  const includeBackground = settings.includeBackgroundInFilmSize === true;
   const colors = pathsByColor
     .map((color) => ({
       ...color,
@@ -106,7 +105,7 @@ export function createFilmPlan({ pathsByColor, width, height, settings = {} }) {
     }))
     .filter((color) => color.bounds);
 
-  if (includeBackground) {
+  if (settings.removeBackground !== true || settings.includeBackgroundInFilmSize === true) {
     return {
       colors,
       bounds: fullBounds,

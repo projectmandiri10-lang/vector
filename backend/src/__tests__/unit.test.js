@@ -308,7 +308,7 @@ test('separation svg contains only black artwork fill and no inactive color fill
   assert.match(svg, /id="registration-marks"/);
 });
 
-test('film plan excludes full canvas background by default and keeps legacy layout when requested', () => {
+test('film plan keeps full canvas by default and crops when background removal is enabled', () => {
   const pathsByColor = [
     {
       index: 1,
@@ -327,12 +327,27 @@ test('film plan excludes full canvas background by default and keeps legacy layo
     }
   ];
 
-  const cropped = createFilmPlan({ pathsByColor, width: 200, height: 100, settings: {} });
-  assert.equal(cropped.backgroundColor.index, 1);
+  const preserved = createFilmPlan({ pathsByColor, width: 200, height: 100, settings: {} });
+  assert.equal(preserved.backgroundColor, null);
+  assert.deepEqual(preserved.colors.map((color) => color.index), [1, 2, 3]);
   assert.deepEqual(
-    cropped.colors.map((color) => color.index),
-    [2, 3]
+    {
+      x: preserved.bounds.x,
+      y: preserved.bounds.y,
+      width: preserved.bounds.width,
+      height: preserved.bounds.height
+    },
+    { x: 0, y: 0, width: 200, height: 100 }
   );
+
+  const cropped = createFilmPlan({
+    pathsByColor,
+    width: 200,
+    height: 100,
+    settings: { removeBackground: true }
+  });
+  assert.equal(cropped.backgroundColor.index, 1);
+  assert.deepEqual(cropped.colors.map((color) => color.index), [2, 3]);
   assert.deepEqual(
     {
       x: cropped.bounds.x,
@@ -342,30 +357,9 @@ test('film plan excludes full canvas background by default and keeps legacy layo
     },
     { x: 50, y: 20, width: 110, height: 70 }
   );
-
-  const fullCanvas = createFilmPlan({
-    pathsByColor,
-    width: 200,
-    height: 100,
-    settings: { includeBackgroundInFilmSize: true }
-  });
-  assert.equal(fullCanvas.backgroundColor, null);
-  assert.deepEqual(
-    fullCanvas.colors.map((color) => color.index),
-    [1, 2, 3]
-  );
-  assert.deepEqual(
-    {
-      x: fullCanvas.bounds.x,
-      y: fullCanvas.bounds.y,
-      width: fullCanvas.bounds.width,
-      height: fullCanvas.bounds.height
-    },
-    { x: 0, y: 0, width: 200, height: 100 }
-  );
 });
 
-test('film plan excludes multiple edge background bands from light gradients', () => {
+test('film plan removes multiple edge background bands when enabled', () => {
   const pathsByColor = [
     {
       index: 1,
@@ -384,7 +378,7 @@ test('film plan excludes multiple edge background bands from light gradients', (
     }
   ];
 
-  const cropped = createFilmPlan({ pathsByColor, width: 200, height: 100, settings: {} });
+  const cropped = createFilmPlan({ pathsByColor, width: 200, height: 100, settings: { removeBackground: true } });
   assert.deepEqual(
     cropped.colors.map((color) => color.index),
     [3]
@@ -423,13 +417,8 @@ test('createSeparations can add an underbase film aligned to cropped artwork', a
           paths: ['M50 20 L150 20 L150 80 L50 80 Z']
         }
       ],
-      settings: {
-        actualWidthCm: 10,
-        paperSize: 'A4',
-        paperOrientation: 'portrait',
-        createUnderbaseFilm: true
-      }
-    });
+    settings: { actualWidthCm: 10, paperSize: 'A4', paperOrientation: 'portrait', createUnderbaseFilm: true, removeBackground: true }
+  });
 
     assert.equal(separations[0].kind, 'underbase');
     assert.equal(separations[0].label, 'FILM DASAR - HITAM 100%');
@@ -520,6 +509,8 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(settings.paperOrientation, 'landscape');
   assert.equal(settings.aiQuality, 'standard');
   assert.equal(settings.includeBackgroundInFilmSize, false);
+  assert.equal(settings.whiteAsBackground, false);
+  assert.equal(settings.removeBackground, false);
   assert.equal(settings.inputMode, 'ready_trace');
   assert.equal(settings.colorLimitMode, 'auto');
   assert.equal(settings.stickerCutlineEnabled, true);
@@ -528,6 +519,9 @@ test('validateSettings normalizes print sizing options', () => {
 
   const includeBackground = validateSettings({ includeBackgroundInFilmSize: 'true' });
   assert.equal(includeBackground.includeBackgroundInFilmSize, true);
+
+  const removeBackground = validateSettings({ removeBackground: 'true' });
+  assert.equal(removeBackground.removeBackground, true);
 
   const readyTrace = validateSettings({
     inputMode: 'ready_trace',

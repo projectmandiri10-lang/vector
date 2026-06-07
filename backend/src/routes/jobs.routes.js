@@ -8,9 +8,9 @@ import { redrawWithAI } from '../services/aiRedraw.service.js';
 import { exportSvgToPdf, exportSvgToPng } from '../services/export.service.js';
 import { preprocessUploadedImage } from '../services/preprocess.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
-import { createSeparations } from '../services/separation.service.js';
+import { createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
-import { vectorizeMasks } from '../services/vectorize.service.js';
+import { buildFullColorSvg, vectorizeMasks } from '../services/vectorize.service.js';
 import { createResultZip, createSeparationZip } from '../services/zip.service.js';
 import { normalizeActualWidthCm } from '../utils/paper.js';
 import {
@@ -110,7 +110,8 @@ export function validateSettings(body = {}) {
     separateColors,
     colorLimitMode,
     maxColors,
-    whiteAsBackground: parseBoolean(body.whiteAsBackground, true),
+    whiteAsBackground: parseBoolean(body.whiteAsBackground, false),
+    removeBackground: parseBoolean(body.removeBackground, false),
     aiQuality: 'standard',
     actualWidthCm: normalizeActualWidthCm(body.actualWidthCm, 10),
     includeBackgroundInFilmSize: parseBoolean(body.includeBackgroundInFilmSize, false),
@@ -277,6 +278,21 @@ async function processJob(jobId, uploadedBuffer) {
         outputPath: safeJobPath(jobId, 'full-vector.svg')
       });
       pathsByColor = vectorResult.pathsByColor;
+
+      if (meta.settings.removeBackground === true) {
+        const artworkPlan = createFilmPlan({
+          pathsByColor,
+          width: quantized.width,
+          height: quantized.height,
+          settings: meta.settings
+        });
+        pathsByColor = artworkPlan.colors;
+        await fs.writeFile(
+          safeJobPath(jobId, 'full-vector.svg'),
+          buildFullColorSvg(pathsByColor, quantized.width, quantized.height),
+          'utf8'
+        );
+      }
 
       stickerCutline = await createStickerCutline({
         masks,

@@ -24,6 +24,14 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
     onChange({ ...settings, [key]: value });
   }
 
+  function setRemoveBackground(value) {
+    onChange({
+      ...settings,
+      removeBackground: value,
+      includeBackgroundInFilmSize: value ? false : settings.includeBackgroundInFilmSize
+    });
+  }
+
   function setProductionType(productionType) {
     onChange({
       ...settings,
@@ -71,6 +79,18 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
         <div className="grid gap-2">
           <Toggle checked={settings.makeVector} onChange={(value) => update('makeVector', value)} label="Buat versi vector" disabled={disabled || settings.separateColors} />
           <Toggle checked={settings.separateColors} onChange={setSeparateColors} label="Pecah warna untuk sablon" disabled={disabled} />
+        </div>
+
+        <div className="border border-line bg-panel p-3">
+          <Toggle
+            checked={settings.removeBackground}
+            onChange={setRemoveBackground}
+            label="Hilangkan background"
+            disabled={disabled}
+          />
+          <p className="mt-2 text-xs text-gray-600">
+            Ukuran dan output difokuskan ke objek utama saja. Background yang terdeteksi akan diabaikan.
+          </p>
         </div>
 
         <div>
@@ -207,8 +227,8 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
               <input
                 type="checkbox"
                 checked={settings.includeBackgroundInFilmSize}
+                disabled={disabled || settings.removeBackground}
                 onChange={(event) => update('includeBackgroundInFilmSize', event.target.checked)}
-                disabled={disabled}
               />
               Sertakan background dalam ukuran
             </label>
