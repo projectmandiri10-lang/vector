@@ -325,7 +325,7 @@ function removeEnclosedBackgroundComponents(output, width, height, backgroundCol
 }
 
 function removeEdgeConnectedBackground(assignments, palette, width, height, settings = {}) {
-  if (settings.includeBackgroundInFilmSize) {
+  if (settings.includeBackgroundInFilmSize || settings.whiteAsBackground === false) {
     return {
       assignments,
       colors: recomputeColors(assignments, palette, width, height)
@@ -481,7 +481,7 @@ function mergeBounds(colors, width, height) {
 }
 
 function printableColors(colors, settings, width, height) {
-  if (settings.includeBackgroundInFilmSize) return colors;
+  if (settings.includeBackgroundInFilmSize || settings.whiteAsBackground === false) return colors;
   const background = [...colors]
     .filter((color) => color.touchesTop && color.touchesRight && color.touchesBottom && color.touchesLeft)
     .sort((a, b) => b.count - a.count)[0];
@@ -532,7 +532,7 @@ function backgroundColors(colors, width, height) {
 }
 
 function createFilmPlan(colors, width, height, settings = {}) {
-  if (settings.includeBackgroundInFilmSize) {
+  if (settings.includeBackgroundInFilmSize || settings.whiteAsBackground === false) {
     return {
       colors,
       bounds: fullCanvasBounds(width, height),
