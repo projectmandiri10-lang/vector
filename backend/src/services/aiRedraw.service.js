@@ -435,9 +435,17 @@ function zaiBaseUrl() {
 function zaiApiKey() {
   const apiKey = process.env.GLM_API_KEY || process.env.ZAI_API_KEY;
   if (!apiKey) {
-    throw new Error('GLM_API_KEY atau ZAI_API_KEY belum dikonfigurasi.');
+    const error = new Error('GLM_API_KEY atau ZAI_API_KEY belum dikonfigurasi.');
+    error.status = 500;
+    error.expose = true;
+    throw error;
   }
   return apiKey;
+}
+
+function exposeAiError(error) {
+  error.expose = true;
+  return error;
 }
 
 async function zaiJsonFetch(path, body) {
@@ -462,13 +470,13 @@ async function zaiJsonFetch(path, body) {
         error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
         error.upstream = 'zai';
         error.responseText = text.slice(0, 500);
-        throw error;
+        throw exposeAiError(error);
       }
       const error = new Error('Respons Z.AI tidak valid JSON.');
       error.status = 502;
       error.upstream = 'zai';
       error.responseText = text.slice(0, 500);
-      throw error;
+      throw exposeAiError(error);
     }
   }
   if (!response.ok) {
@@ -479,7 +487,7 @@ async function zaiJsonFetch(path, body) {
     const error = new Error(message);
     error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
     error.upstream = 'zai';
-    throw error;
+    throw exposeAiError(error);
   }
   return data;
 }
@@ -709,21 +717,53 @@ async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
     prompt: technicalPrompt,
     size: glmImageSize(preprocessMeta.aspectRatio, aiConfig.resolutionPolicy)
   });
-  const imageUrl = data?.data?.[0]?.url;
+  const imageResult = data?.data?.[0] || {};
+  const inlineImage = imageResult.b64_json || imageResult.base64 || imageResult.image_base64;
+  if (inlineImage) {
+    return Buffer.from(String(inlineImage).replace(/^data:image\/\w+;base64,/, ''), 'base64');
+  }
+
+  const imageUrl = imageResult.url;
   if (!imageUrl) {
-    throw new Error('GLM-Image tidak mengembalikan URL gambar.');
+    const error = new Error('GLM-Image tidak mengembalikan URL gambar atau base64 image.');
+    error.status = 502;
+    error.upstream = 'zai';
+    throw exposeAiError(error);
   }
 
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) {
-    throw new Error(`Gagal mengunduh hasil GLM-Image: ${imageResponse.status}`);
+    const error = new Error(`Gagal mengunduh hasil GLM-Image: ${imageResponse.status}`);
+    error.status = imageResponse.status >= 400 && imageResponse.status < 500 ? imageResponse.status : 502;
+    error.upstream = 'zai';
+    throw exposeAiError(error);
   }
+
+  const contentType = imageResponse.headers.get('content-type') || '';
+  if (contentType && !/^image\/|application\/octet-stream/i.test(contentType)) {
+    const error = new Error(`URL hasil GLM-Image tidak mengembalikan file gambar (${contentType}).`);
+    error.status = 502;
+    error.upstream = 'zai';
+    throw exposeAiError(error);
+  }
+
   return Buffer.from(await imageResponse.arrayBuffer());
 }
 
 async function postprocessGeneratedImage(buffer, preprocessName) {
-  const prepared = await preprocessForHybridRedraw(buffer, preprocessName);
-  return prepared.analysisBuffer;
+  try {
+    const prepared = await preprocessForHybridRedraw(buffer, preprocessName);
+    return prepared.analysisBuffer;
+  } catch (error) {
+    try {
+      return await sharp(buffer, { failOn: 'none' }).rotate().png().toBuffer();
+    } catch {
+      const next = new Error(`Gambar GLM berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
+      next.status = 502;
+      next.upstream = 'zai';
+      throw exposeAiError(next);
+    }
+  }
 }
 
 function summarizeAnalysis(analysis) {

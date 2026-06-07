@@ -94,8 +94,9 @@ if (fs.existsSync(frontendDist)) {
 
 app.use((err, _req, res, _next) => {
   const status = err.status || err.statusCode || 500;
+  const message = err.expose || status < 500 ? err.message : 'Terjadi kesalahan server.';
   res.status(status).json({
-    error: status >= 500 ? 'Terjadi kesalahan server.' : err.message,
+    error: message,
     detail: process.env.NODE_ENV === 'production' ? undefined : err.message
   });
 });
