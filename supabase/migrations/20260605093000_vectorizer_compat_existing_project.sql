@@ -309,7 +309,7 @@ values
   ('shopee_payment', '{"url":"https://shopee.co.id/","note":"Checkout nominal credit di Shopee, lalu kirim email akun Design Mudah melalui chat Shopee. Admin top up manual 5-15 menit pada jam kerja.","contact":""}'::jsonb, true, 'Konfigurasi pembayaran manual Shopee'),
   ('app_status', '{"maintenance":false,"message":""}'::jsonb, true, 'Status aplikasi publik'),
   ('example_jobs', '{"sticker":null,"sablon":null}'::jsonb, true, 'Contoh gambar aktif untuk sticker dan sablon'),
-  ('ai_redraw_model', '{"mode":"quality","preset":"quality","label":"Kualitas","provider":"vertex_hybrid_imagen3","analysisModel":"gemini-3.1-flash-lite-preview","generationModel":"imagen-3.0-generate-002","aspectPolicy":"match_source","resolutionPolicy":"high","preprocess":"node_heuristic","persistPrompt":true,"retryOnLowConfidence":false,"estimatedUsdPerImage":0.045}'::jsonb, false, 'Pipeline hybrid redraw: Gemini director + Imagen 3 painter')
+  ('ai_redraw_model', '{"mode":"quality","preset":"quality","label":"Kualitas","provider":"vertex_hybrid_Gemini image3","analysisModel":"gemini-3.1-flash-lite-preview","generationModel":"gemini-3.1-flash-image-preview","aspectPolicy":"match_source","resolutionPolicy":"high","preprocess":"node_heuristic","persistPrompt":true,"retryOnLowConfidence":false,"estimatedUsdPerImage":0.045}'::jsonb, false, 'Pipeline hybrid redraw: Gemini director + Gemini image painter')
 on conflict (key) do update
 set value = case
       when public.app_settings.value is null or public.app_settings.value = '{}'::jsonb then excluded.value

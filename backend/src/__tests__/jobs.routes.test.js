@@ -15,7 +15,7 @@ process.env.MAX_UPLOAD_MB = '10';
 process.env.GLM_ANALYSIS_MODEL = 'glm-5v-turbo';
 process.env.GLM_IMAGE_MODEL = 'glm-image';
 process.env.GEMINI_ANALYSIS_MODEL = 'gemini-3.1-flash-lite-preview';
-process.env.IMAGEN_GENERATION_MODEL = 'imagen-3.0-generate-002';
+process.env.GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 
 const { app } = await import('../server.js');
 const { ensureJobDir, safeJobPath, writeJobMeta } = await import('../utils/file.js');
@@ -190,7 +190,7 @@ test('GLM API key mode reports clear missing key error', async () => {
   }
 });
 
-test('Gemini fallback preset still reports Gemini + Imagen metadata in mock mode', async () => {
+test('Gemini fallback preset still reports Gemini + Gemini image metadata in mock mode', async () => {
   const result = await hybridRedrawBuffer(
     makePngBuffer(),
     { productionType: 'sablon', inputMode: 'ai_redraw' },
@@ -199,5 +199,5 @@ test('Gemini fallback preset still reports Gemini + Imagen metadata in mock mode
 
   assert.equal(result.metadata.provider, 'gemini_api_key_imagen3');
   assert.equal(result.metadata.analysisModel, 'gemini-3.1-flash-lite-preview');
-  assert.equal(result.metadata.generationModel, 'imagen-3.0-generate-002');
+  assert.equal(result.metadata.generationModel, 'gemini-3.1-flash-image-preview');
 });

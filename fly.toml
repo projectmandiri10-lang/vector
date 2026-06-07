@@ -21,7 +21,7 @@ primary_region = "sin"
   GLM_IMAGE_MODEL = "glm-image"
   AI_REDRAW_PRESET = "quality"
   GEMINI_ANALYSIS_MODEL = "gemini-3.1-flash-lite-preview"
-  IMAGEN_GENERATION_MODEL = "imagen-3.0-generate-002"
+  GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
 
 [http_service]
   internal_port = 8080

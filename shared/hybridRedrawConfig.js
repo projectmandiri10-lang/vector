@@ -68,14 +68,14 @@ export const HYBRID_REDRAW_PRESETS = {
     label: 'Gemini 3.1 Flash Lite fallback',
     provider: GEMINI_IMAGEN_REDRAW_PROVIDER,
     analysisModel: 'gemini-3.1-flash-lite-preview',
-    generationModel: 'imagen-3.0-generate-002',
+    generationModel: 'gemini-3.1-flash-image-preview',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.045,
-    note: 'Fallback Gemini 3.1 Flash Lite jika GLM belum sebagus Gemini untuk jenis gambar tertentu.'
+    note: 'Fallback Gemini 3.1 Flash Lite + Gemini image jika GLM belum sebagus Gemini untuk jenis gambar tertentu.'
   }
 };
 
@@ -96,6 +96,13 @@ function clampEstimatedUsd(value, fallback) {
 
 function normalizeText(value, fallback) {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+}
+
+function normalizeGeminiImageModel(env, fallback) {
+  const geminiImageModel = normalizeText(env.GEMINI_IMAGE_MODEL, '');
+  if (geminiImageModel) return geminiImageModel;
+  const legacyImagenModel = normalizeText(env.IMAGEN_GENERATION_MODEL, '');
+  return legacyImagenModel && !legacyImagenModel.startsWith('imagen-') ? legacyImagenModel : fallback;
 }
 
 function inferLegacyPreset(input) {
@@ -138,7 +145,7 @@ export function normalizeHybridRedrawConfig(value = {}, env = {}) {
       : !isLegacy && typeof input.model === 'string' && input.model.trim().startsWith('imagen-')
         ? input.model
         : provider === GEMINI_IMAGEN_REDRAW_PROVIDER
-          ? env.IMAGEN_GENERATION_MODEL || preset.generationModel
+          ? normalizeGeminiImageModel(env, preset.generationModel)
           : env.GLM_IMAGE_MODEL || preset.generationModel;
   const analysisCandidate =
     provider === GEMINI_IMAGEN_REDRAW_PROVIDER

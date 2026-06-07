@@ -15,6 +15,6 @@ process.env.GLM_API_BASE_URL ||= 'https://api.z.ai/api/paas/v4';
 process.env.GLM_ANALYSIS_MODEL ||= 'glm-5v-turbo';
 process.env.GLM_IMAGE_MODEL ||= 'glm-image';
 process.env.GEMINI_ANALYSIS_MODEL ||= 'gemini-3.1-flash-lite-preview';
-process.env.IMAGEN_GENERATION_MODEL ||= 'imagen-3.0-generate-002';
+process.env.GEMINI_IMAGE_MODEL ||= 'gemini-3.1-flash-image-preview';
 process.env.AI_REDRAW_PRESET ||= 'quality';
 process.env.SUPABASE_PUBLISHABLE_KEY ||= process.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';

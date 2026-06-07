@@ -398,6 +398,36 @@ function createVertexClient() {
   return new GoogleGenAI({ apiKey });
 }
 
+function parseGoogleApiError(error) {
+  const rawMessage = error instanceof Error ? error.message : String(error || '');
+  let upstreamMessage = rawMessage;
+  let upstreamStatus = error?.status || error?.statusCode || 502;
+
+  try {
+    const parsed = JSON.parse(rawMessage);
+    upstreamMessage = parsed?.error?.message || upstreamMessage;
+    upstreamStatus = parsed?.error?.code || upstreamStatus;
+  } catch {
+    // Some SDK errors are plain text.
+  }
+
+  if (/quota exceeded|RESOURCE_EXHAUSTED|rate-limits|free_tier/i.test(upstreamMessage)) {
+    const next = new Error('Kuota Gemini/Google AI untuk model gambar habis atau belum aktif. Periksa billing/quota Google AI Studio lalu coba lagi.');
+    next.status = 429;
+    return next;
+  }
+
+  if (/not found|not supported|models\//i.test(upstreamMessage)) {
+    const next = new Error(`Model Gemini tidak tersedia atau tidak mendukung operasi ini: ${upstreamMessage}`);
+    next.status = 400;
+    return next;
+  }
+
+  const next = new Error(upstreamMessage || 'Request Gemini/Google AI gagal.');
+  next.status = upstreamStatus >= 400 && upstreamStatus < 500 ? upstreamStatus : 502;
+  return next;
+}
+
 function zaiBaseUrl() {
   return (process.env.GLM_API_BASE_URL || process.env.ZAI_API_BASE_URL || 'https://api.z.ai/api/paas/v4').replace(/\/+$/, '');
 }
@@ -526,31 +556,36 @@ async function preprocessForHybridRedraw(buffer, preprocessName) {
 }
 
 async function analyzeArtworkWithGemini(client, analysisBuffer, settings, aiConfig, preprocessMeta) {
-  const response = await client.models.generateContent({
-    model: aiConfig.analysisModel,
-    contents: [
-      {
-        role: 'user',
-        parts: [
-          { text: buildAnalysisUserPrompt(settings, preprocessMeta) },
-          {
-            inlineData: {
-              mimeType: 'image/png',
-              data: analysisBuffer.toString('base64')
+  let response;
+  try {
+    response = await client.models.generateContent({
+      model: aiConfig.analysisModel,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { text: buildAnalysisUserPrompt(settings, preprocessMeta) },
+            {
+              inlineData: {
+                mimeType: 'image/png',
+                data: analysisBuffer.toString('base64')
+              }
             }
-          }
-        ]
+          ]
+        }
+      ],
+      config: {
+        systemInstruction: buildDirectorSystemInstruction(),
+        responseMimeType: 'application/json',
+        responseJsonSchema: ANALYSIS_RESPONSE_SCHEMA,
+        temperature: 0.2,
+        topP: 0.9,
+        maxOutputTokens: 1400
       }
-    ],
-    config: {
-      systemInstruction: buildDirectorSystemInstruction(),
-      responseMimeType: 'application/json',
-      responseJsonSchema: ANALYSIS_RESPONSE_SCHEMA,
-      temperature: 0.2,
-      topP: 0.9,
-      maxOutputTokens: 1400
-    }
-  });
+    });
+  } catch (error) {
+    throw parseGoogleApiError(error);
+  }
 
   const rawText = responseText(response);
   let parsed;
@@ -598,18 +633,22 @@ async function analyzeArtworkWithGlm(analysisBuffer, settings, aiConfig, preproc
 }
 
 async function generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta) {
-  const response = await client.models.generateImages({
-    model: aiConfig.generationModel,
-    prompt: technicalPrompt,
-    config: {
-      numberOfImages: 1,
-      aspectRatio: preprocessMeta.aspectRatio,
-      outputMimeType: 'image/png',
-      includeRaiReason: true,
-      enhancePrompt: false,
-      guidanceScale: aiConfig.resolutionPolicy === 'high' ? 15 : aiConfig.resolutionPolicy === 'standard' ? 13 : 11
-    }
-  });
+  let response;
+  try {
+    response = await client.models.generateImages({
+      model: aiConfig.generationModel,
+      prompt: technicalPrompt,
+      config: {
+        numberOfImages: 1,
+        aspectRatio: preprocessMeta.aspectRatio,
+        outputMimeType: 'image/png',
+        includeRaiReason: true,
+        guidanceScale: aiConfig.resolutionPolicy === 'high' ? 15 : aiConfig.resolutionPolicy === 'standard' ? 13 : 11
+      }
+    });
+  } catch (error) {
+    throw parseGoogleApiError(error);
+  }
 
   const b64 = response?.generatedImages?.[0]?.image?.imageBytes;
   if (!b64) {
@@ -618,6 +657,32 @@ async function generateWithImagen(client, technicalPrompt, aiConfig, preprocessM
   }
 
   return Buffer.from(b64, 'base64');
+}
+
+async function generateWithGeminiImage(client, technicalPrompt, aiConfig) {
+  let response;
+  try {
+    response = await client.models.generateContent({
+      model: aiConfig.generationModel,
+      contents: technicalPrompt,
+      config: {
+        responseModalities: ['TEXT', 'IMAGE']
+      }
+    });
+  } catch (error) {
+    throw parseGoogleApiError(error);
+  }
+
+  const parts = response?.candidates?.[0]?.content?.parts || [];
+  const inlineData = parts.find((part) => part?.inlineData?.data)?.inlineData;
+  if (!inlineData?.data) {
+    const text = parts.map((part) => part?.text).filter(Boolean).join(' ').trim();
+    const error = new Error(text || 'Gemini image model tidak mengembalikan gambar.');
+    error.status = 502;
+    throw error;
+  }
+
+  return Buffer.from(inlineData.data, 'base64');
 }
 
 async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
@@ -704,13 +769,17 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
   const technicalPrompt = analysis.technicalPrompt || buildRedrawPrompt(settings, analysis);
   let generated = useGlm
     ? await generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta)
-    : await generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta);
+    : aiConfig.generationModel.startsWith('gemini-')
+      ? await generateWithGeminiImage(client, technicalPrompt, aiConfig)
+      : await generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta);
   let retryUsed = false;
 
   if (shouldRetryHybrid(aiConfig, analysis)) {
     generated = useGlm
       ? await generateWithGlmImage(buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta)
-      : await generateWithImagen(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
+      : aiConfig.generationModel.startsWith('gemini-')
+        ? await generateWithGeminiImage(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig)
+        : await generateWithImagen(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
     retryUsed = true;
   }
 
