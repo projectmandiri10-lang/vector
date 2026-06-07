@@ -53,19 +53,23 @@ function encodeMetadataHeader(metadata) {
   return Buffer.from(JSON.stringify(metadata), 'utf8').toString('base64url');
 }
 
-router.post('/hybrid', uploadLimiter, handleUpload, async (req, res) => {
-  if (!req.file?.buffer) {
-    res.status(400).json({ error: 'File gambar wajib diisi.' });
-    return;
+router.post('/hybrid', uploadLimiter, handleUpload, async (req, res, next) => {
+  try {
+    if (!req.file?.buffer) {
+      res.status(400).json({ error: 'File gambar wajib diisi.' });
+      return;
+    }
+
+    const rawSettings = typeof req.body?.settings === 'string' ? JSON.parse(req.body.settings || '{}') : req.body?.settings || {};
+    const settings = validateSettings(rawSettings);
+    const result = await hybridRedrawBuffer(req.file.buffer, settings, rawSettings.aiRedrawModel || {});
+
+    res.setHeader('Content-Type', 'image/png');
+    res.setHeader('X-AI-Redraw-Metadata', encodeMetadataHeader(result.metadata));
+    res.send(result.imageBuffer);
+  } catch (error) {
+    next(error);
   }
-
-  const rawSettings = typeof req.body?.settings === 'string' ? JSON.parse(req.body.settings || '{}') : req.body?.settings || {};
-  const settings = validateSettings(rawSettings);
-  const result = await hybridRedrawBuffer(req.file.buffer, settings, rawSettings.aiRedrawModel || {});
-
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('X-AI-Redraw-Metadata', encodeMetadataHeader(result.metadata));
-  res.send(result.imageBuffer);
 });
 
 export default router;

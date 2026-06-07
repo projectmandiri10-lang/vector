@@ -452,7 +452,25 @@ async function zaiJsonFetch(path, body) {
   });
 
   const text = await response.text();
-  const data = text ? JSON.parse(text) : null;
+  let data = null;
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      if (!response.ok) {
+        const error = new Error(`Z.AI mengembalikan respons non-JSON (${response.status}).`);
+        error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
+        error.upstream = 'zai';
+        error.responseText = text.slice(0, 500);
+        throw error;
+      }
+      const error = new Error('Respons Z.AI tidak valid JSON.');
+      error.status = 502;
+      error.upstream = 'zai';
+      error.responseText = text.slice(0, 500);
+      throw error;
+    }
+  }
   if (!response.ok) {
     const upstreamMessage = data?.error?.message || data?.message || data?.error || `Z.AI request gagal: ${response.status}`;
     const message = /insufficient balance|no resource package|recharge/i.test(upstreamMessage)
