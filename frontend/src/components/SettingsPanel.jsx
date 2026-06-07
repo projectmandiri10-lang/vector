@@ -145,6 +145,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
                       step="0.1"
                       value={settings.actualWidthCm}
                       onChange={(event) => update('actualWidthCm', event.target.value)}
+                      onWheel={(event) => event.currentTarget.blur()}
                       disabled={disabled}
                       className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                     />
@@ -215,6 +216,7 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
                   step="0.1"
                   value={settings.actualWidthCm}
                   onChange={(event) => update('actualWidthCm', event.target.value)}
+                  onWheel={(event) => event.currentTarget.blur()}
                   disabled={disabled}
                   className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                 />
