@@ -67,7 +67,7 @@ export const HYBRID_REDRAW_PRESETS = {
     preset: 'gemini_quality',
     label: 'Gemini fallback',
     provider: GEMINI_IMAGEN_REDRAW_PROVIDER,
-    analysisModel: 'gemini-3-pro-preview',
+    analysisModel: 'gemini-3.1-flash-preview',
     generationModel: 'imagen-3.0-generate-002',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
