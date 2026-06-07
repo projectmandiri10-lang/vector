@@ -111,7 +111,7 @@ export function validateSettings(body = {}) {
     colorLimitMode,
     maxColors,
     whiteAsBackground: parseBoolean(body.whiteAsBackground, false),
-    removeBackground: parseBoolean(body.removeBackground, false),
+    removeBackground: parseBoolean(body.removeBackground, true),
     aiQuality: 'standard',
     actualWidthCm: normalizeActualWidthCm(body.actualWidthCm, 10),
     includeBackgroundInFilmSize: parseBoolean(body.includeBackgroundInFilmSize, false),

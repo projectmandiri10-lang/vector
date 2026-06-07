@@ -510,7 +510,7 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(settings.aiQuality, 'standard');
   assert.equal(settings.includeBackgroundInFilmSize, false);
   assert.equal(settings.whiteAsBackground, false);
-  assert.equal(settings.removeBackground, false);
+  assert.equal(settings.removeBackground, true);
   assert.equal(settings.inputMode, 'ready_trace');
   assert.equal(settings.colorLimitMode, 'auto');
   assert.equal(settings.stickerCutlineEnabled, true);
@@ -519,6 +519,9 @@ test('validateSettings normalizes print sizing options', () => {
 
   const includeBackground = validateSettings({ includeBackgroundInFilmSize: 'true' });
   assert.equal(includeBackground.includeBackgroundInFilmSize, true);
+
+  const keepBackground = validateSettings({ removeBackground: 'false' });
+  assert.equal(keepBackground.removeBackground, false);
 
   const removeBackground = validateSettings({ removeBackground: 'true' });
   assert.equal(removeBackground.removeBackground, true);
