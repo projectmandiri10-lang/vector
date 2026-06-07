@@ -116,24 +116,25 @@ VITE_GOOGLE_OAUTH_REDIRECT_TO=http://localhost:5173
 
 `GOOGLE_OAUTH_CLIENT_SECRET` jangan dimasukkan ke Cloudflare Pages/frontend. Secret tersebut cukup disimpan di Supabase Google provider dan catatan `.env` lokal.
 
-## 3. Siapkan Gemini API
+## 3. Siapkan GLM API
 
-Worker memakai Gemini API langsung:
+Worker memeriksa auth/credit, lalu meneruskan redraw ke processor backend. Processor memakai Z.AI API:
 
 ```text
-POST https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_IMAGE_MODEL}:generateContent
+POST https://api.z.ai/api/paas/v4/chat/completions
+POST https://api.z.ai/api/paas/v4/images/generations
 ```
 
 Env yang dibutuhkan:
 
 ```text
-GEMINI_API_KEY=...
-GEMINI_ANALYSIS_MODEL=gemini-3.1-pro-preview
-GEMINI_IMAGE_MODEL=gemini-3.1-flash-image-preview
-GEMINI_IMAGE_SIZE=2K
+GLM_API_KEY=...
+GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
+GLM_ANALYSIS_MODEL=glm-5v-turbo
+GLM_IMAGE_MODEL=glm-image
 ```
 
-Catatan: file gambar ulang hanya transit dari browser ke Worker lalu ke Gemini API. Aplikasi tidak menyimpan file permanen di server.
+Catatan: file gambar ulang hanya transit dari browser ke Worker lalu ke processor dan Z.AI API. Aplikasi tidak menyimpan file permanen di server.
 
 ## 4. Deploy Cloudflare Worker API
 
@@ -179,7 +180,7 @@ Jika Cloudflare tidak mengizinkan `Build command` kosong, isi:
 npm ci
 ```
 
-Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, atau `GEMINI_API_KEY`. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/Gemini diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
+Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, `PROCESSOR_API_KEY`, atau `GLM_API_KEY`. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/processor diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
 
 Nama Worker harus sama dengan `name` di `cloudflare-worker/wrangler.toml`, yaitu `design-mudah`.
 
@@ -190,16 +191,16 @@ Masih di folder `cloudflare-worker`, set secrets satu per satu:
 ```powershell
 npx wrangler secret put SUPABASE_URL
 npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
-npx wrangler secret put GEMINI_API_KEY
+npx wrangler secret put PROCESSOR_API_KEY
 ```
 
 Saat terminal meminta value:
 
 - `SUPABASE_URL`: isi `https://PROJECT-REF.supabase.co`
 - `SUPABASE_SERVICE_ROLE_KEY`: isi service role key dari Supabase `Project Settings > API`
-- `GEMINI_API_KEY`: isi API key dari Google AI Studio.
+- `PROCESSOR_API_KEY`: isi key yang sama dengan backend processor.
 
-`GEMINI_IMAGE_MODEL` sudah ada di `cloudflare-worker/wrangler.toml` sebagai non-secret var. Default-nya `gemini-3.1-flash-image-preview`. Untuk kualitas lebih tinggi, bisa diganti ke `gemini-3-pro-image-preview`.
+`GLM_ANALYSIS_MODEL` dan `GLM_IMAGE_MODEL` ada di konfigurasi processor/backend, bukan dipanggil langsung oleh Worker.
 
 ### 4.3 Deploy Worker
 
@@ -418,9 +419,9 @@ Saldo tidak terbaca:
 
 AI redraw gagal:
 
-- Cek Worker secret `GEMINI_API_KEY`.
-- Cek model `GEMINI_IMAGE_MODEL`.
-- Cek akun Gemini API punya akses ke image generation.
+- Cek Worker secret `PROCESSOR_API_KEY` dan `PROCESSOR_BASE_URL`.
+- Cek processor secret `GLM_API_KEY`.
+- Cek akun Z.AI punya akses ke `glm-5v-turbo` dan `glm-image`.
 
 Admin tidak muncul:
 

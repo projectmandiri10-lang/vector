@@ -709,7 +709,7 @@ export default function AdminPanel({ session, enabled }) {
               </label>
               <div className="grid gap-3 md:grid-cols-3">
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-ink">Gemini director</span>
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Model analisis</span>
                   <input
                     value={aiModelDraft.analysisModel}
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', analysisModel: event.target.value }))}
@@ -717,7 +717,7 @@ export default function AdminPanel({ session, enabled }) {
                   />
                 </label>
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-ink">Imagen painter</span>
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Model gambar</span>
                   <input
                     value={aiModelDraft.generationModel}
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', generationModel: event.target.value }))}
@@ -763,7 +763,7 @@ export default function AdminPanel({ session, enabled }) {
                   Aktif: <strong>{aiModelDraft.label}</strong> | {aiModelDraft.analysisModel} to {aiModelDraft.generationModel}
                 </p>
                 <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
-                <p>Pipeline: Gemini menganalisis niat desain dan menulis prompt teknis, lalu Imagen 3 menggambar ulang dari nol sebelum hasilnya di-trace.</p>
+                <p>Pipeline: model analisis membaca niat desain dan menulis prompt teknis, lalu model gambar menggambar ulang dari nol sebelum hasilnya di-trace.</p>
                 <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen pipeline hybrid.'}</p>
                 <p>
                   Kebijakan tetap: aspect mengikuti sumber, preprocess Node heuristic, prompt disimpan ke manifest,

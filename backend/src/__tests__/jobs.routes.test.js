@@ -12,6 +12,8 @@ process.env.NODE_ENV = 'test';
 process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
+process.env.GLM_ANALYSIS_MODEL = 'glm-5v-turbo';
+process.env.GLM_IMAGE_MODEL = 'glm-image';
 process.env.GEMINI_ANALYSIS_MODEL = 'gemini-3-pro-preview';
 process.env.IMAGEN_GENERATION_MODEL = 'imagen-3.0-generate-002';
 
@@ -163,27 +165,39 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.match(response.headers['content-type'], /image\/png/);
     assert.ok(response.headers['x-ai-redraw-metadata']);
     const metadata = JSON.parse(Buffer.from(response.headers['x-ai-redraw-metadata'], 'base64url').toString('utf8'));
-    assert.equal(metadata.provider, 'gemini_api_key_imagen3');
-    assert.equal(metadata.analysisModel, 'gemini-3-pro-preview');
-    assert.equal(metadata.generationModel, 'imagen-3.0-generate-002');
+    assert.equal(metadata.provider, 'zai_glm5v_glm_image');
+    assert.equal(metadata.analysisModel, 'glm-5v-turbo');
+    assert.equal(metadata.generationModel, 'glm-image');
   } finally {
     delete process.env.PROCESSOR_API_KEY;
   }
 });
 
-test('Gemini API key mode reports clear missing key error', async () => {
+test('GLM API key mode reports clear missing key error', async () => {
   const previousMock = process.env.AI_REDRAW_MOCK;
-  const previousKey = process.env.GEMINI_API_KEY;
+  const previousKey = process.env.GLM_API_KEY;
   delete process.env.AI_REDRAW_MOCK;
-  delete process.env.GEMINI_API_KEY;
+  delete process.env.GLM_API_KEY;
 
   try {
     await assert.rejects(
       () => hybridRedrawBuffer(makePngBuffer(), { productionType: 'sablon', inputMode: 'ai_redraw' }),
-      /GEMINI_API_KEY atau GOOGLE_API_KEY belum dikonfigurasi/
+      /GLM_API_KEY atau ZAI_API_KEY belum dikonfigurasi/
     );
   } finally {
     process.env.AI_REDRAW_MOCK = previousMock;
-    if (previousKey) process.env.GEMINI_API_KEY = previousKey;
+    if (previousKey) process.env.GLM_API_KEY = previousKey;
   }
+});
+
+test('Gemini fallback preset still reports Gemini + Imagen metadata in mock mode', async () => {
+  const result = await hybridRedrawBuffer(
+    makePngBuffer(),
+    { productionType: 'sablon', inputMode: 'ai_redraw' },
+    { mode: 'gemini_quality', provider: 'gemini_api_key_imagen3' }
+  );
+
+  assert.equal(result.metadata.provider, 'gemini_api_key_imagen3');
+  assert.equal(result.metadata.analysisModel, 'gemini-3-pro-preview');
+  assert.equal(result.metadata.generationModel, 'imagen-3.0-generate-002');
 });

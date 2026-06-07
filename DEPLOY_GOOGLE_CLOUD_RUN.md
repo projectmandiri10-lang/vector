@@ -14,7 +14,7 @@ Referensi resmi yang dipakai:
 User Browser
   -> Cloudflare Pages frontend: https://designmudah.pages.dev
   -> Cloudflare Worker API: login, credit, admin, contoh job, dan proxy redraw
-  -> Google Cloud Run processor: Gemini director, Imagen 3 painter, trace, cutline, separasi warna, PDF, ZIP, registration mark
+  -> Google Cloud Run processor: GLM-5V Turbo director, GLM-Image painter, trace, cutline, separasi warna, PDF, ZIP, registration mark
   -> Supabase: auth, credit, metadata, bucket contoh
 ```
 
@@ -47,15 +47,15 @@ Pipeline redraw sekarang tetap:
 - Worker `/api/image-retouch` hanya memeriksa auth dan credit, lalu meneruskan upload ke Cloud Run.
 - Cloud Run route internal `POST /api/redraw/hybrid` melakukan:
   - preprocess Node heuristic
-  - analisis desain dengan Gemini
-  - generasi ulang dari nol dengan Imagen 3
+  - analisis desain dengan GLM-5V Turbo
+  - generasi ulang dari nol dengan GLM-Image
 - Setelah PNG redraw jadi, trace/cutline/separasi warna tetap dikerjakan engine deterministik.
 
 Health endpoint backend sekarang menampilkan:
 
 ```json
 {
-  "redrawProvider": "vertex_hybrid_imagen3",
+  "redrawProvider": "zai_glm5v_glm_image",
   "redrawPreset": "quality",
   "redrawScope": "worker /api/image-retouch and backend /api/jobs inputMode=ai_redraw"
 }
@@ -109,7 +109,7 @@ Jika repository sudah ada, command ini boleh dilewati.
 
 ## 6. Auth dan Secret
 
-Untuk Cloud Run, akses Vertex AI memakai service account Cloud Run lewat Application Default Credentials. Jadi Anda tidak perlu menyimpan `GEMINI_API_KEY` di Cloud Run.
+Untuk Cloud Run/Fly, simpan `GLM_API_KEY` sebagai secret runtime. `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, dan `GLM_IMAGE_MODEL` bisa menjadi env non-secret.
 
 Pastikan service account runtime punya izin minimal:
 
@@ -286,7 +286,7 @@ $JOB_ID = ($CREATE_JSON | ConvertFrom-Json).jobId
 Invoke-RestMethod "$PROCESSOR_URL/api/jobs/$JOB_ID" -Headers @{ "x-processor-api-key" = $PROCESSOR_KEY }
 ```
 
-Untuk mode redraw, ganti `inputMode` menjadi `ai_redraw`. Hanya mode ini yang akan memakai Gemini di backend.
+Untuk mode redraw, ganti `inputMode` menjadi `ai_redraw`. Hanya mode ini yang akan memakai pipeline AI di backend.
 
 ## 12. Rollback
 

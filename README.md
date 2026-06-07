@@ -1,19 +1,28 @@
 # Design Mudah Vector untuk Sablon dan Sticker
 
-Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `Gemini director + Imagen 3 painter` di Cloud Run.
+Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `GLM-5V Turbo director + GLM-Image painter` di Railway, dengan preset fallback Gemini bila dibutuhkan.
 
-## Mode SaaS Cloudflare + Supabase
+## Mode SaaS Railway + Supabase
 
-Repo ini juga sudah berisi jalur SaaS baru:
+Repo ini memakai jalur fullstack Railway:
 
-- Frontend React/Vite untuk Cloudflare Pages.
-- Cloudflare Worker di `cloudflare-worker/` untuk credit, admin, AI proxy, dan metadata job.
+- Frontend React/Vite dibuild ke `frontend/dist`.
+- Backend Express serve frontend sekaligus API `/api/...`.
+- Logic credit/admin/metadata tetap memakai modul Worker yang di-embed oleh backend, tanpa deploy Cloudflare Worker terpisah.
 - Supabase migration di `supabase/migrations/` untuk auth profile, credit ledger, job metadata, pricing, dan pembayaran manual Shopee.
 - Processing trace siap produksi berjalan di browser agar file hasil tetap di PC user dan tidak membebani storage server.
 
-Panduan deploy lengkap ada di `DEPLOY_CLOUDFLARE_SUPABASE.md`.
+Panduan deploy Railway lengkap ada di `DEPLOY_RAILWAY.md`.
 
-Backend Express di folder `backend/` tetap tersedia untuk workflow lokal dan sekarang menjadi processor Cloud Run untuk redraw hybrid, trace, cutline, separasi warna, PDF, ZIP, dan registration mark. Panduan lengkap ada di `DEPLOY_GOOGLE_CLOUD_RUN.md`.
+Ringkasnya:
+
+1. Hubungkan repo ke Railway.
+2. Railway akan memakai `railway.json` dan `Dockerfile.fly`.
+3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `GLM_API_KEY`, `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, `GLM_IMAGE_MODEL`, `AI_REDRAW_PRESET`, `GOOGLE_OAUTH_REDIRECT_TO`.
+4. Kosongkan `VITE_API_BASE_URL` di production agar frontend memakai same-origin `/api`.
+5. Set Supabase Auth Site URL dan Google OAuth redirect ke domain Railway/custom domain.
+
+Backend Express di folder `backend/` tersedia untuk workflow lokal dan Railway production untuk redraw hybrid, trace, cutline, separasi warna, PDF, ZIP, dan registration mark.
 
 ## 1. Install Backend
 
@@ -26,30 +35,26 @@ npm run dev
 
 `npm run dev` menjalankan backend tanpa file watcher agar proses AI/vector tidak terputus saat backend menulis file hasil ke storage. Jika perlu watcher untuk edit kode backend, gunakan `npm run dev:watch`.
 
-Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid di Cloud Run/Vertex AI, isi minimalnya:
+Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid GLM, isi minimalnya:
 
 ```env
-VERTEX_AI_PROJECT=project-id-anda
-VERTEX_AI_LOCATION=us-central1
-GEMINI_ANALYSIS_MODEL=gemini-3-pro-preview
-IMAGEN_GENERATION_MODEL=imagen-3.0-generate-002
+GLM_API_KEY=key-zai-anda
+GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
+GLM_ANALYSIS_MODEL=glm-5v-turbo
+GLM_IMAGE_MODEL=glm-image
 AI_REDRAW_PRESET=quality
 ```
 
-Autentikasi lokal memakai Application Default Credentials dari Google Cloud CLI:
-
-```bash
-gcloud auth application-default login
-```
+Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
 ```env
 PORT=3001
-VERTEX_AI_PROJECT=project-id-anda
-VERTEX_AI_LOCATION=us-central1
-GEMINI_ANALYSIS_MODEL=gemini-3-pro-preview
-IMAGEN_GENERATION_MODEL=imagen-3.0-generate-002
+GLM_API_KEY=key-zai-anda
+GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
+GLM_ANALYSIS_MODEL=glm-5v-turbo
+GLM_IMAGE_MODEL=glm-image
 AI_REDRAW_PRESET=quality
 STORAGE_DIR=./storage
 MAX_UPLOAD_MB=10
@@ -148,7 +153,7 @@ Halaman arsip menampilkan preview kecil, tombol download SVG, tombol download fi
 
 ## 9. Catatan Biaya Gambar Ulang
 
-Gambar ulang memakai Gemini API langsung tanpa LiteLLM. Default model image adalah `gemini-3.1-flash-image-preview` untuk menekan biaya. Jika ingin kualitas lebih tinggi, gunakan `gemini-3-pro-image-preview`.
+Gambar ulang default memakai Z.AI API langsung tanpa LiteLLM: `glm-5v-turbo` untuk analisis dan `glm-image` untuk generasi PNG. Jika hasil GLM kalah pada jenis gambar tertentu, pilih preset `Gemini fallback` di halaman superadmin.
 
 Kualitas AI:
 

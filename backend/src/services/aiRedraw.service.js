@@ -1,11 +1,11 @@
 import fs from 'fs-extra';
 import sharp from 'sharp';
 import { GoogleGenAI } from '@google/genai';
-import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
+import { HYBRID_REDRAW_PROVIDER, normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 
 const DIRECTOR_SYSTEM_INSTRUCTION = `You are a technical art director with 20 years of experience preparing artwork for sticker printing, manual screen printing, DTF, decal, and vector tracing workflows.
 
-Your job is to inspect a messy uploaded image, recover the original design intent, and produce structured analysis plus one strict English technical redraw prompt for Imagen 3.
+Your job is to inspect a messy uploaded image, recover the original design intent, and produce structured analysis plus one strict English technical redraw prompt for the image generation model.
 
 Rules:
 1. Recover the actual artwork, not the camera background or paper backdrop.
@@ -315,7 +315,7 @@ export function buildRedrawPrompt(settings = {}, analysis = {}) {
 function buildAnalysisUserPrompt(settings, preprocessMeta) {
   return [
     'Analyze the uploaded artwork and recover the original design intent.',
-    'Output structured JSON and include one final English technical redraw prompt for Imagen 3 in the technicalPrompt field.',
+    'Output structured JSON and include one final English technical redraw prompt for the image generation model in the technicalPrompt field.',
     `Production target: ${settings.productionType === 'sablon' ? 'manual screen printing and vector tracing' : 'sticker production and vector tracing'}.`,
     settings.colorLimitMode === 'manual' && settings.maxColors
       ? `The final redraw should preserve only about ${settings.maxColors} dominant printable artwork colors after removing background and lighting colors.`
@@ -325,7 +325,7 @@ function buildAnalysisUserPrompt(settings, preprocessMeta) {
       : 'White can stay only when it is clearly intentional artwork inside the design. Empty background must still be non-printing.',
     `The preprocessed reference is already cropped and background-cleaned with a ${preprocessMeta.preprocess} heuristic.`,
     'Preserve readable text, composition, color placement, and silhouette. Reject camera border color, paper tone, table tone, blur noise, compression artifacts, and lighting gradients as artwork.',
-    'The final technicalPrompt must instruct Imagen 3 to redraw from scratch as clean flat vector-like artwork with smooth trace-ready contours.'
+    'The final technicalPrompt must instruct the image model to redraw from scratch as clean flat vector-like artwork with smooth trace-ready contours.'
   ].join(' ');
 }
 
@@ -396,6 +396,72 @@ function createVertexClient() {
     throw new Error('GEMINI_API_KEY atau GOOGLE_API_KEY belum dikonfigurasi.');
   }
   return new GoogleGenAI({ apiKey });
+}
+
+function zaiBaseUrl() {
+  return (process.env.GLM_API_BASE_URL || process.env.ZAI_API_BASE_URL || 'https://api.z.ai/api/paas/v4').replace(/\/+$/, '');
+}
+
+function zaiApiKey() {
+  const apiKey = process.env.GLM_API_KEY || process.env.ZAI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GLM_API_KEY atau ZAI_API_KEY belum dikonfigurasi.');
+  }
+  return apiKey;
+}
+
+async function zaiJsonFetch(path, body) {
+  const response = await fetch(`${zaiBaseUrl()}${path}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${zaiApiKey()}`,
+      'Content-Type': 'application/json',
+      'Accept-Language': 'en-US,en'
+    },
+    body: JSON.stringify(body)
+  });
+
+  const text = await response.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!response.ok) {
+    throw new Error(data?.error?.message || data?.message || data?.error || `Z.AI request gagal: ${response.status}`);
+  }
+  return data;
+}
+
+function extractJsonObject(text) {
+  const raw = String(text || '').trim();
+  if (!raw) return {};
+  const fenced = raw.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced?.[1]?.trim() || raw;
+  try {
+    return JSON.parse(candidate);
+  } catch {
+    const start = candidate.indexOf('{');
+    const end = candidate.lastIndexOf('}');
+    if (start >= 0 && end > start) {
+      return JSON.parse(candidate.slice(start, end + 1));
+    }
+    return {};
+  }
+}
+
+function glmImageSize(aspectRatio, resolutionPolicy) {
+  const high = {
+    '1:1': '1280x1280',
+    '3:4': '1056x1568',
+    '4:3': '1568x1056',
+    '9:16': '960x1728',
+    '16:9': '1728x960'
+  };
+  const standard = {
+    '1:1': '1024x1024',
+    '3:4': '768x1024',
+    '4:3': '1024x768',
+    '9:16': '768x1376',
+    '16:9': '1376x768'
+  };
+  return (resolutionPolicy === 'high' ? high : standard)[aspectRatio] || (resolutionPolicy === 'high' ? high['1:1'] : standard['1:1']);
 }
 
 async function preprocessForHybridRedraw(buffer, preprocessName) {
@@ -489,6 +555,41 @@ async function analyzeArtworkWithGemini(client, analysisBuffer, settings, aiConf
   return normalizeAnalysisPayload(parsed, settings);
 }
 
+async function analyzeArtworkWithGlm(analysisBuffer, settings, aiConfig, preprocessMeta) {
+  const data = await zaiJsonFetch('/chat/completions', {
+    model: aiConfig.analysisModel,
+    messages: [
+      {
+        role: 'system',
+        content: `${buildDirectorSystemInstruction()}\nReturn only valid JSON with these top-level fields: subjectSummary, style, textDescription, dominantColors, backgroundPolicy, confidence, printNotes, technicalPrompt, shouldRetryTextCarefully.`
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/png;base64,${analysisBuffer.toString('base64')}`
+            }
+          },
+          {
+            type: 'text',
+            text: buildAnalysisUserPrompt(settings, preprocessMeta)
+          }
+        ]
+      }
+    ],
+    thinking: { type: 'disabled' },
+    temperature: 0.2,
+    top_p: 0.9,
+    max_tokens: 1800,
+    stream: false
+  });
+
+  const rawText = data?.choices?.[0]?.message?.content || '';
+  return normalizeAnalysisPayload(extractJsonObject(rawText), settings);
+}
+
 async function generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta) {
   const response = await client.models.generateImages({
     model: aiConfig.generationModel,
@@ -510,6 +611,24 @@ async function generateWithImagen(client, technicalPrompt, aiConfig, preprocessM
   }
 
   return Buffer.from(b64, 'base64');
+}
+
+async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
+  const data = await zaiJsonFetch('/images/generations', {
+    model: aiConfig.generationModel,
+    prompt: technicalPrompt,
+    size: glmImageSize(preprocessMeta.aspectRatio, aiConfig.resolutionPolicy)
+  });
+  const imageUrl = data?.data?.[0]?.url;
+  if (!imageUrl) {
+    throw new Error('GLM-Image tidak mengembalikan URL gambar.');
+  }
+
+  const imageResponse = await fetch(imageUrl);
+  if (!imageResponse.ok) {
+    throw new Error(`Gagal mengunduh hasil GLM-Image: ${imageResponse.status}`);
+  }
+  return Buffer.from(await imageResponse.arrayBuffer());
 }
 
 async function postprocessGeneratedImage(buffer, preprocessName) {
@@ -570,14 +689,21 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
     };
   }
 
-  const client = createVertexClient();
-  const analysis = await analyzeArtworkWithGemini(client, preprocessMeta.analysisBuffer, settings, aiConfig, preprocessMeta);
+  const useGlm = aiConfig.provider === HYBRID_REDRAW_PROVIDER;
+  const client = useGlm ? null : createVertexClient();
+  const analysis = useGlm
+    ? await analyzeArtworkWithGlm(preprocessMeta.analysisBuffer, settings, aiConfig, preprocessMeta)
+    : await analyzeArtworkWithGemini(client, preprocessMeta.analysisBuffer, settings, aiConfig, preprocessMeta);
   const technicalPrompt = analysis.technicalPrompt || buildRedrawPrompt(settings, analysis);
-  let generated = await generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta);
+  let generated = useGlm
+    ? await generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta)
+    : await generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta);
   let retryUsed = false;
 
   if (shouldRetryHybrid(aiConfig, analysis)) {
-    generated = await generateWithImagen(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
+    generated = useGlm
+      ? await generateWithGlmImage(buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta)
+      : await generateWithImagen(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
     retryUsed = true;
   }
 

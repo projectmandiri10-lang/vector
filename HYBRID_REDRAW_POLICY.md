@@ -2,8 +2,9 @@
 
 Design Mudah uses a fixed redraw architecture:
 
-- `Gemini = director`
-- `Imagen 3 = painter`
+- `GLM-5V Turbo = director`
+- `GLM-Image = painter`
+- `Gemini + Imagen 3 = fallback when GLM quality is not good enough`
 - deterministic trace, vector, cutline, film, PDF, and ZIP stay outside AI
 
 ## Pipeline
@@ -15,15 +16,15 @@ Design Mudah uses a fixed redraw architecture:
    - crop and resize
    - remove border-connected background
    - preserve enclosed artwork
-4. Gemini analyzes the cleaned upload and returns:
+4. GLM-5V Turbo analyzes the cleaned upload and returns:
    - structured JSON analysis
    - one strict English technical redraw prompt
-5. Imagen 3 redraws from that prompt only.
+5. GLM-Image redraws from that prompt only.
 6. The resulting PNG is returned to the existing trace and separation flow.
 
 ## Invariants
 
-- Do not use Imagen as direct image editing for uploaded redraw jobs.
+- Do not use GLM-Image or Imagen as direct image editing for uploaded redraw jobs.
 - Do not let Worker generate redraw prompts locally.
 - Persist redraw metadata to the job manifest:
   - provider
@@ -38,4 +39,4 @@ Design Mudah uses a fixed redraw architecture:
 ## Admin Setting
 
 The active pipeline config lives in `app_settings.ai_redraw_model`.
-It must stay backward-safe with legacy Gemini-only records, but new saves should always normalize to the hybrid config shape.
+It must stay backward-safe with legacy Gemini records, while new default saves normalize to the GLM hybrid config shape.
