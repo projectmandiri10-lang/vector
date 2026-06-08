@@ -16,6 +16,7 @@ process.env.GLM_ANALYSIS_MODEL ||= 'glm-5v-turbo';
 process.env.GLM_IMAGE_MODEL ||= 'glm-image';
 process.env.GLM_IMAGE_QUALITY ||= 'hd';
 process.env.LOGO_RESTORE_ENABLED ||= '1';
+process.env.LOGO_RESTORE_STRICT_SPOTS ||= '1';
 process.env.TRACE_SMOOTH_ENABLED ||= '1';
 process.env.TRACE_SMOOTH_SIGMA ||= '0.7';
 process.env.TRACE_SMOOTH_THRESHOLD ||= '180';

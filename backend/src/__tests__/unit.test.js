@@ -11,7 +11,7 @@ import { createLogoRestoreArtifacts, logoRestoreBuffer } from '../services/logoR
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
-import { canonicalizeSpotPixel, isLowChroma, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
+import { canonicalizeSpotPixel, colorDistance, isLowChroma, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
 import { buildPrintLayout, getPaperSizeMm } from '../utils/paper.js';
 import { createRegistrationMarks } from '../utils/registrationMarks.js';
 
@@ -54,6 +54,48 @@ function makeFlatLogoBuffer() {
       png.data[idx] = 236;
       png.data[idx + 1] = 200;
       png.data[idx + 2] = 12;
+      png.data[idx + 3] = 255;
+    }
+  }
+
+  return PNG.sync.write(png);
+}
+
+function makeHaloLogoBuffer() {
+  const png = new PNG({ width: 220, height: 140, colorType: 6 });
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const idx = (png.width * y + x) << 2;
+      png.data[idx] = 8;
+      png.data[idx + 1] = 8;
+      png.data[idx + 2] = 10;
+      png.data[idx + 3] = 255;
+    }
+  }
+
+  for (let y = 40; y < 96; y += 1) {
+    for (let x = 26; x < 174; x += 1) {
+      const edge = x < 34 || x >= 166 || y < 48 || y >= 88;
+      const idx = (png.width * y + x) << 2;
+      if (edge) {
+        png.data[idx] = 122;
+        png.data[idx + 1] = 102;
+        png.data[idx + 2] = 40;
+      } else {
+        png.data[idx] = 252;
+        png.data[idx + 1] = 215;
+        png.data[idx + 2] = 1;
+      }
+      png.data[idx + 3] = 255;
+    }
+  }
+
+  for (let y = 18; y < 34; y += 1) {
+    for (let x = 50; x < 168; x += 1) {
+      const idx = (png.width * y + x) << 2;
+      png.data[idx] = 236;
+      png.data[idx + 1] = 236;
+      png.data[idx + 2] = 236;
       png.data[idx + 3] = 255;
     }
   }
@@ -180,6 +222,42 @@ test('createLogoRestoreArtifacts returns backend vector artifacts for logo resto
   assert.ok(result.artifacts.zip.base64.length > 100);
   assert.match(Buffer.from(result.artifacts.fullSvg.base64, 'base64').toString('utf8'), /<path/);
   assert.equal(result.manifest.aiRedraw.artifactsGenerated, true);
+});
+
+test('logoRestore strict spots merge dark yellow halo into printable yellow', async () => {
+  const restore = await logoRestoreBuffer(makeHaloLogoBuffer(), {
+    productionType: 'sablon',
+    removeBackground: true,
+    separateColors: true
+  });
+
+  assert.equal(restore.canRestore, true);
+  assert.equal(restore.metadata.strictSpotColors, true);
+  assert.ok(restore.metadata.palette.some((color) => color.hex === '#FFDA00'));
+  assert.ok(!restore.metadata.palette.some((color) => color.hex === '#7A6628'));
+
+  const output = PNG.sync.read(restore.imageBuffer);
+  let darkHaloPixels = 0;
+  for (let i = 0; i < output.data.length; i += 4) {
+    if (output.data[i + 3] < 16) continue;
+    const pixel = { r: output.data[i], g: output.data[i + 1], b: output.data[i + 2] };
+    if (colorDistance(pixel, { r: 122, g: 102, b: 40 }) <= 5) darkHaloPixels += 1;
+  }
+  assert.equal(darkHaloPixels, 0);
+
+  const artifacts = await createLogoRestoreArtifacts({
+    imageBuffer: restore.imageBuffer,
+    settings: {
+      productionType: 'sablon',
+      removeBackground: true,
+      separateColors: true,
+      stickerCutlineEnabled: false
+    },
+    metadata: restore.metadata
+  });
+  const svg = Buffer.from(artifacts.artifacts.fullSvg.base64, 'base64').toString('utf8');
+  assert.doesNotMatch(svg, /#7A6628/i);
+  assert.match(svg, /#FFDA00/i);
 });
 
 test('color helpers detect near white background and nearest palette', () => {

@@ -135,12 +135,93 @@ function canonicalLogoPixel(pixel, settings = {}) {
   const avg = averageChannel(pixel);
   const chroma = colorChroma(pixel);
   if (chroma <= 34) {
-    return avg >= 150 ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
+    const whiteThreshold = strictSpotModeEnabled(settings) ? 118 : 150;
+    return avg >= whiteThreshold ? { r: 255, g: 255, b: 255 } : { r: 0, g: 0, b: 0 };
   }
   if (settings.productionType === 'sablon' || settings.separateColors === true) {
-    if (pixel.r > 150 && pixel.g > 120 && pixel.b < 110) return { r: 255, g: 218, b: 0 };
+    const isYellowInk =
+      pixel.r > 150 && pixel.g > 120 && pixel.b < 110;
+    const isYellowShadow =
+      strictSpotModeEnabled(settings) &&
+      pixel.r >= 88 &&
+      pixel.g >= 70 &&
+      pixel.b <= 125 &&
+      pixel.r + pixel.g >= pixel.b * 2.7 &&
+      pixel.r >= pixel.b + 35 &&
+      pixel.g >= pixel.b + 28;
+    if (isYellowInk || isYellowShadow) return { r: 255, g: 218, b: 0 };
   }
   return pixel;
+}
+
+function strictSpotModeEnabled(settings = {}) {
+  if (settings.logoRestoreStrictSpots === false) return false;
+  if (settings.strictSpotColors === false) return false;
+  return process.env.LOGO_RESTORE_STRICT_SPOTS !== '0';
+}
+
+function colorSignature(color) {
+  const channels = [
+    ['r', color.r],
+    ['g', color.g],
+    ['b', color.b]
+  ].sort((left, right) => right[1] - left[1]);
+  return `${channels[0][0]}-${channels[2][0]}`;
+}
+
+function isDarkPrintableShadow(color) {
+  return averageChannel(color) <= 122 && colorChroma(color) >= 36;
+}
+
+function isBrightPrintableSpot(color) {
+  return averageChannel(color) >= 135 && colorChroma(color) >= 24;
+}
+
+function normalizePaletteIndex(colors) {
+  return colors.map((color, index) => ({ ...color, index: index + 1 }));
+}
+
+function cleanStrictSpotPalette(colors, settings = {}) {
+  if (!strictSpotModeEnabled(settings) || colors.length <= 2) {
+    return { palette: normalizePaletteIndex(colors), removed: [], merged: [] };
+  }
+
+  const palette = colors.map((color) => ({ ...color }));
+  const removed = [];
+  const merged = [];
+  const total = Math.max(1, palette.reduce((sum, color) => sum + color.count, 0));
+
+  for (let index = palette.length - 1; index >= 0; index -= 1) {
+    const color = palette[index];
+    const ratio = color.count / total;
+    const signature = colorSignature(color);
+    const brighterSameHue = palette.find(
+      (candidate, candidateIndex) =>
+        candidateIndex !== index &&
+        colorSignature(candidate) === signature &&
+        isBrightPrintableSpot(candidate) &&
+        averageChannel(candidate) > averageChannel(color) + 36
+    );
+
+    if (brighterSameHue && (isDarkPrintableShadow(color) || ratio <= 0.08)) {
+      brighterSameHue.count += color.count;
+      merged.push({ from: rgbToHex(color), to: rgbToHex(brighterSameHue), pixelCount: color.count });
+      palette.splice(index, 1);
+      continue;
+    }
+
+    const tinyDarkSpot = ratio <= 0.012 && averageChannel(color) <= 132;
+    if (tinyDarkSpot && palette.length > 2) {
+      removed.push({ hex: rgbToHex(color), pixelCount: color.count });
+      palette.splice(index, 1);
+    }
+  }
+
+  return {
+    palette: normalizePaletteIndex(palette.sort((a, b) => b.count - a.count)),
+    removed,
+    merged
+  };
 }
 
 function buildPalette(raw, backgroundMask, width, height, settings = {}) {
@@ -170,7 +251,8 @@ function buildPalette(raw, backgroundMask, width, height, settings = {}) {
 
   const total = Math.max(1, colors.reduce((sum, color) => sum + color.count, 0));
   const filtered = colors.filter((color) => color.count / total >= 0.003).slice(0, 6);
-  return filtered.length > 0 ? filtered : [{ r: 255, g: 255, b: 255, count: 0 }];
+  const palette = filtered.length > 0 ? filtered : [{ r: 255, g: 255, b: 255, count: 0 }];
+  return cleanStrictSpotPalette(palette, settings);
 }
 
 function nearestColor(pixel, palette) {
@@ -241,7 +323,8 @@ export async function logoRestoreBuffer(uploadedBuffer, settings = {}, options =
   const background = estimateBorderColor(raw, width, height);
   const backgroundMask = edgeConnectedBackground(raw, width, height, background);
   const bounds = foregroundBounds(backgroundMask, width, height);
-  const palette = buildPalette(raw, backgroundMask, width, height, settings);
+  const paletteResult = buildPalette(raw, backgroundMask, width, height, settings);
+  const palette = paletteResult.palette;
   const canRestore = options.force === true || isLogoLike({ width, height, bounds, palette, background });
   if (!canRestore) {
     return {
@@ -250,7 +333,10 @@ export async function logoRestoreBuffer(uploadedBuffer, settings = {}, options =
         provider: 'logo_restore_trace_first',
         reason: 'not_logo_like',
         backgroundColor: rgbToHex(background),
-        palette: palette.map((color) => ({ hex: rgbToHex(color), pixelCount: color.count }))
+        palette: palette.map((color) => ({ hex: rgbToHex(color), pixelCount: color.count })),
+        strictSpotColors: strictSpotModeEnabled(settings),
+        removedSpotColors: paletteResult.removed,
+        mergedSpotColors: paletteResult.merged
       }
     };
   }
@@ -283,6 +369,9 @@ export async function logoRestoreBuffer(uploadedBuffer, settings = {}, options =
       generationQuality: 'trace_first',
       backgroundColor: rgbToHex(background),
       palette: palette.map((color) => ({ hex: rgbToHex(color), pixelCount: color.count })),
+      strictSpotColors: strictSpotModeEnabled(settings),
+      removedSpotColors: paletteResult.removed,
+      mergedSpotColors: paletteResult.merged,
       crop,
       width: outputWidth,
       height: outputHeight
