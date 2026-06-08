@@ -452,7 +452,8 @@ export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, m
       makeVector: true,
       colorLimitMode: settings.colorLimitMode || 'manual',
       maxColors: settings.maxColors || 4,
-      removeBackground: settings.removeBackground !== false
+      removeBackground: settings.removeBackground !== false,
+      curveCleanup: metadata.strictSpotColors !== false
     };
     const quantized = await quantizeImage(sourcePath, effectiveSettings);
     const palette = quantized.palette;
@@ -462,7 +463,8 @@ export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, m
     const vectorResult = await vectorizeMasks(masks, {
       width: quantized.width,
       height: quantized.height,
-      outputPath: fullSvgPath
+      outputPath: fullSvgPath,
+      curveCleanup: metadata.strictSpotColors !== false
     });
     let pathsByColor = vectorResult.pathsByColor;
 

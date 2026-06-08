@@ -4,6 +4,7 @@ import path from 'node:path';
 import sharp from 'sharp';
 import { optimize } from 'svgo';
 import potrace from 'potrace';
+import { PNG } from 'pngjs';
 import { escapeXml } from '../utils/svg.js';
 
 function numberFromEnv(key, fallback, min, max) {
@@ -12,13 +13,27 @@ function numberFromEnv(key, fallback, min, max) {
   return Math.min(max, Math.max(min, parsed));
 }
 
-function traceOptions() {
+function integerFromEnv(key, fallback, min, max) {
+  const parsed = Number.parseInt(process.env[key], 10);
+  if (!Number.isInteger(parsed)) return fallback;
+  return Math.min(max, Math.max(min, parsed));
+}
+
+function traceCurveCleanupEnabled(options = {}) {
+  if (options.curveCleanup === false) return false;
+  return options.curveCleanup === true && process.env.TRACE_CURVE_CLEANUP_ENABLED !== '0';
+}
+
+function traceOptions(options = {}) {
+  const cleanup = traceCurveCleanupEnabled(options);
   return {
     color: '#000000',
     background: 'transparent',
     threshold: numberFromEnv('TRACE_THRESHOLD', 180, 1, 254),
-    turdSize: numberFromEnv('TRACE_TURD_SIZE', 4, 0, 100),
-    optTolerance: numberFromEnv('TRACE_OPT_TOLERANCE', 0.18, 0.05, 1)
+    turdSize: cleanup ? numberFromEnv('TRACE_CURVE_TURD_SIZE', 12, 0, 100) : numberFromEnv('TRACE_TURD_SIZE', 4, 0, 100),
+    alphaMax: cleanup ? numberFromEnv('TRACE_CURVE_ALPHA_MAX', 1.25, 0, 2) : numberFromEnv('TRACE_ALPHA_MAX', 1, 0, 2),
+    optCurve: true,
+    optTolerance: cleanup ? numberFromEnv('TRACE_CURVE_OPT_TOLERANCE', 0.32, 0.05, 1) : numberFromEnv('TRACE_OPT_TOLERANCE', 0.18, 0.05, 1)
   };
 }
 
@@ -26,20 +41,119 @@ function traceSmoothingEnabled() {
   return process.env.TRACE_SMOOTH_ENABLED !== '0';
 }
 
-async function prepareTraceMask(filePath) {
-  if (!traceSmoothingEnabled()) return { filePath, cleanup: async () => {} };
+async function readPng(filePath) {
+  return new Promise((resolve, reject) => {
+    fs.createReadStream(filePath)
+      .pipe(new PNG())
+      .on('parsed', function onParsed() {
+        resolve(this);
+      })
+      .on('error', reject);
+  });
+}
+
+async function writePng(png, filePath) {
+  await fs.ensureDir(path.dirname(filePath));
+  return new Promise((resolve, reject) => {
+    png.pack().pipe(fs.createWriteStream(filePath)).on('finish', resolve).on('error', reject);
+  });
+}
+
+function activeMaskPixels(png) {
+  const mask = new Uint8Array(png.width * png.height);
+  for (let index = 0; index < mask.length; index += 1) {
+    const offset = index << 2;
+    mask[index] = png.data[offset + 3] >= 16 && png.data[offset] < 128 && png.data[offset + 1] < 128 && png.data[offset + 2] < 128 ? 1 : 0;
+  }
+  return mask;
+}
+
+function morphMask(mask, width, height, radius, mode) {
+  const output = new Uint8Array(mask.length);
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let value = mode === 'dilate' ? 0 : 1;
+      for (let dy = -radius; dy <= radius; dy += 1) {
+        for (let dx = -radius; dx <= radius; dx += 1) {
+          const nextX = x + dx;
+          const nextY = y + dy;
+          const active = nextX >= 0 && nextY >= 0 && nextX < width && nextY < height ? mask[nextY * width + nextX] : 0;
+          if (mode === 'dilate') {
+            value ||= active;
+          } else {
+            value &&= active;
+          }
+        }
+      }
+      output[y * width + x] = value ? 1 : 0;
+    }
+  }
+  return output;
+}
+
+function writeMaskToPng(mask, width, height) {
+  const png = new PNG({ width, height, colorType: 6 });
+  for (let index = 0; index < mask.length; index += 1) {
+    const offset = index << 2;
+    const value = mask[index] ? 0 : 255;
+    png.data[offset] = value;
+    png.data[offset + 1] = value;
+    png.data[offset + 2] = value;
+    png.data[offset + 3] = 255;
+  }
+  return png;
+}
+
+async function cleanupCurveMask(filePath, outputPath, options = {}) {
+  const radius = integerFromEnv('TRACE_CURVE_MORPH_RADIUS', 1, 1, 3);
+  const iterations = integerFromEnv('TRACE_CURVE_MORPH_ITERATIONS', 1, 1, 3);
+  const png = await readPng(filePath);
+  let mask = activeMaskPixels(png);
+
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    mask = morphMask(mask, png.width, png.height, radius, 'dilate');
+    mask = morphMask(mask, png.width, png.height, radius, 'erode');
+    mask = morphMask(mask, png.width, png.height, radius, 'erode');
+    mask = morphMask(mask, png.width, png.height, radius, 'dilate');
+  }
+
+  await writePng(writeMaskToPng(mask, png.width, png.height), outputPath);
+}
+
+async function prepareTraceMask(filePath, options = {}) {
+  if (!traceSmoothingEnabled() && !traceCurveCleanupEnabled(options)) return { filePath, cleanup: async () => {} };
 
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-trace-mask-'));
+  const cleanupPath = path.join(tempDir, 'curve-cleanup.png');
   const smoothedPath = path.join(tempDir, 'mask.png');
-  const sigma = numberFromEnv('TRACE_SMOOTH_SIGMA', 0.7, 0.1, 2);
-  const threshold = numberFromEnv('TRACE_SMOOTH_THRESHOLD', 180, 1, 254);
+  const shouldCleanupCurves = traceCurveCleanupEnabled(options);
+  const traceSourcePath = shouldCleanupCurves ? cleanupPath : filePath;
+  const resampleScale = shouldCleanupCurves ? numberFromEnv('TRACE_CURVE_RESAMPLE_SCALE', 0.65, 0.35, 1) : 1;
+  const sigma = shouldCleanupCurves ? numberFromEnv('TRACE_CURVE_SMOOTH_SIGMA', 0.85, 0.1, 2) : numberFromEnv('TRACE_SMOOTH_SIGMA', 0.7, 0.1, 2);
+  const threshold = shouldCleanupCurves
+    ? numberFromEnv('TRACE_CURVE_SMOOTH_THRESHOLD', 180, 1, 254)
+    : numberFromEnv('TRACE_SMOOTH_THRESHOLD', 180, 1, 254);
 
-  await sharp(filePath, { failOn: 'error' })
-    .median(3)
-    .blur(sigma)
-    .threshold(threshold)
-    .png()
-    .toFile(smoothedPath);
+  if (shouldCleanupCurves) {
+    await cleanupCurveMask(filePath, cleanupPath, options);
+  }
+
+  let pipeline = sharp(traceSourcePath, { failOn: 'error' });
+  if (resampleScale < 1) {
+    const metadata = await pipeline.metadata();
+    const width = Math.max(1, metadata.width || 1);
+    const height = Math.max(1, metadata.height || 1);
+    pipeline = pipeline
+      .resize({
+        width: Math.max(1, Math.round(width * resampleScale)),
+        height: Math.max(1, Math.round(height * resampleScale)),
+        fit: 'fill',
+        kernel: 'lanczos3'
+      })
+      .resize({ width, height, fit: 'fill', kernel: 'lanczos3' });
+  }
+
+  await pipeline.median(3).blur(sigma).threshold(threshold).png().toFile(smoothedPath);
 
   return {
     filePath: smoothedPath,
@@ -47,13 +161,13 @@ async function prepareTraceMask(filePath) {
   };
 }
 
-async function traceMask(filePath) {
-  const prepared = await prepareTraceMask(filePath);
+async function traceMask(filePath, options = {}) {
+  const prepared = await prepareTraceMask(filePath, options);
   try {
     return await new Promise((resolve, reject) => {
       potrace.trace(
         prepared.filePath,
-        traceOptions(),
+        traceOptions(options),
         (error, svg) => {
           if (error) reject(error);
           else resolve(svg);
@@ -76,11 +190,26 @@ function extractPaths(svg) {
   return paths;
 }
 
-export async function traceMaskToPaths(filePath) {
-  return extractPaths(await traceMask(filePath));
+function formatPathNumber(value, precision) {
+  const rounded = Number.parseFloat(value).toFixed(precision);
+  return rounded
+    .replace(/\.0+$/, '')
+    .replace(/(\.\d*?)0+$/, '$1')
+    .replace(/^-0$/, '0');
 }
 
-function optimizeSvg(svg) {
+function roundPathData(pathData, options = {}) {
+  if (!traceCurveCleanupEnabled(options)) return pathData;
+  const precision = integerFromEnv('TRACE_CURVE_FLOAT_PRECISION', 1, 0, 4);
+  return pathData.replace(/-?\d+\.\d+/g, (value) => formatPathNumber(value, precision));
+}
+
+export async function traceMaskToPaths(filePath, options = {}) {
+  return extractPaths(await traceMask(filePath, options));
+}
+
+function optimizeSvg(svg, options = {}) {
+  const cleanup = traceCurveCleanupEnabled(options);
   return optimize(svg, {
     multipass: true,
     plugins: [
@@ -94,7 +223,19 @@ function optimizeSvg(svg) {
             cleanupIds: false
           }
         }
-      }
+      },
+      ...(cleanup
+        ? [
+            {
+              name: 'convertPathData',
+              params: {
+                floatPrecision: integerFromEnv('TRACE_CURVE_FLOAT_PRECISION', 1, 0, 4),
+                transformPrecision: integerFromEnv('TRACE_CURVE_FLOAT_PRECISION', 1, 0, 4),
+                noSpaceAfterFlags: false
+              }
+            }
+          ]
+        : [])
     ]
   }).data;
 }
@@ -119,7 +260,7 @@ export async function vectorizeMasks(masks, options) {
   const pathsByColor = [];
 
   for (const mask of masks) {
-    const paths = await traceMaskToPaths(mask.filePath);
+    const paths = (await traceMaskToPaths(mask.filePath, options)).map((pathData) => roundPathData(pathData, options));
     if (paths.length > 0) {
       pathsByColor.push({
         index: mask.index,
@@ -132,7 +273,7 @@ export async function vectorizeMasks(masks, options) {
     }
   }
 
-  const svg = optimizeSvg(buildFullColorSvg(pathsByColor, options.width, options.height));
+  const svg = optimizeSvg(buildFullColorSvg(pathsByColor, options.width, options.height), options);
   await fs.writeFile(options.outputPath, svg, 'utf8');
 
   return { pathsByColor, svg };

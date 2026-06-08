@@ -197,7 +197,7 @@ export async function createStickerCutline({ masks, pathsByColor, width, height,
   const pdfPath = path.join(outputDir, 'sticker-cutline.pdf');
 
   await writePng(dilated, maskPath);
-  const cutlinePaths = await traceMaskToPaths(maskPath);
+  const cutlinePaths = await traceMaskToPaths(maskPath, { curveCleanup: settings.curveCleanup === true });
   if (cutlinePaths.length === 0) return null;
 
   await fs.writeFile(

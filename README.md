@@ -18,7 +18,7 @@ Ringkasnya:
 
 1. Hubungkan repo ke Railway.
 2. Railway akan memakai `railway.json` dan `Dockerfile.fly`.
-3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `GLM_API_KEY`, `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, `GLM_IMAGE_MODEL`, `GLM_IMAGE_QUALITY`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `GOOGLE_OAUTH_REDIRECT_TO`.
+3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `GLM_API_KEY`, `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, `GLM_IMAGE_MODEL`, `GLM_IMAGE_QUALITY`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `GOOGLE_OAUTH_REDIRECT_TO`.
 4. Kosongkan `VITE_API_BASE_URL` di production agar frontend memakai same-origin `/api`.
 5. Set Supabase Auth Site URL dan Google OAuth redirect ke domain Railway/custom domain.
 
@@ -49,9 +49,19 @@ LOGO_RESTORE_STRICT_SPOTS=1
 TRACE_SMOOTH_ENABLED=1
 TRACE_SMOOTH_SIGMA=0.7
 TRACE_SMOOTH_THRESHOLD=180
+TRACE_CURVE_CLEANUP_ENABLED=1
+TRACE_CURVE_MORPH_RADIUS=1
+TRACE_CURVE_MORPH_ITERATIONS=1
+TRACE_CURVE_RESAMPLE_SCALE=0.65
+TRACE_CURVE_SMOOTH_SIGMA=0.85
+TRACE_CURVE_SMOOTH_THRESHOLD=180
+TRACE_CURVE_TURD_SIZE=12
+TRACE_CURVE_ALPHA_MAX=1.25
+TRACE_CURVE_OPT_TOLERANCE=0.32
+TRACE_CURVE_FLOAT_PRECISION=1
 ```
 
-Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa GLM-Image agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. `LOGO_RESTORE_STRICT_SPOTS=1` membuang/merge warna halo tepi yang bukan tinta cetak, misalnya bayangan coklat di sekitar kuning. Preview PNG transparan tetap raster untuk tampilan, jadi cek file SVG/PDF untuk menilai kehalusan vector. Untuk gambar non-logo, GLM-5V Turbo melihat gambar upload secara langsung dan menulis prompt teknis ketat, lalu GLM-Image resmi dengan `quality=hd` menggambar ulang dari prompt tersebut. Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
+Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa GLM-Image agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. `LOGO_RESTORE_STRICT_SPOTS=1` membuang/merge warna halo tepi yang bukan tinta cetak, misalnya bayangan coklat di sekitar kuning. `TRACE_CURVE_CLEANUP_ENABLED=1` menambahkan cleanup mask dan simplifikasi path agar outline huruf/sabit lebih terasa seperti vector manual. Preview PNG transparan tetap raster untuk tampilan, jadi cek file SVG/PDF untuk menilai kehalusan vector. Untuk gambar non-logo, GLM-5V Turbo melihat gambar upload secara langsung dan menulis prompt teknis ketat, lalu GLM-Image resmi dengan `quality=hd` menggambar ulang dari prompt tersebut. Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
@@ -68,6 +78,16 @@ LOGO_RESTORE_STRICT_SPOTS=1
 TRACE_SMOOTH_ENABLED=1
 TRACE_SMOOTH_SIGMA=0.7
 TRACE_SMOOTH_THRESHOLD=180
+TRACE_CURVE_CLEANUP_ENABLED=1
+TRACE_CURVE_MORPH_RADIUS=1
+TRACE_CURVE_MORPH_ITERATIONS=1
+TRACE_CURVE_RESAMPLE_SCALE=0.65
+TRACE_CURVE_SMOOTH_SIGMA=0.85
+TRACE_CURVE_SMOOTH_THRESHOLD=180
+TRACE_CURVE_TURD_SIZE=12
+TRACE_CURVE_ALPHA_MAX=1.25
+TRACE_CURVE_OPT_TOLERANCE=0.32
+TRACE_CURVE_FLOAT_PRECISION=1
 STORAGE_DIR=./storage
 MAX_UPLOAD_MB=10
 ```

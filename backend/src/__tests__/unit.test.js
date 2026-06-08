@@ -258,6 +258,7 @@ test('logoRestore strict spots merge dark yellow halo into printable yellow', as
   const svg = Buffer.from(artifacts.artifacts.fullSvg.base64, 'base64').toString('utf8');
   assert.doesNotMatch(svg, /#7A6628/i);
   assert.match(svg, /#FFDA00/i);
+  assert.doesNotMatch(svg, /\d+\.\d{3,}/);
 });
 
 test('color helpers detect near white background and nearest palette', () => {

@@ -68,7 +68,17 @@ app.get('/api/health', (_req, res) => {
       optTolerance: Number.parseFloat(process.env.TRACE_OPT_TOLERANCE || '0.18'),
       smoothing: process.env.TRACE_SMOOTH_ENABLED !== '0',
       smoothSigma: Number.parseFloat(process.env.TRACE_SMOOTH_SIGMA || '0.7'),
-      smoothThreshold: Number.parseFloat(process.env.TRACE_SMOOTH_THRESHOLD || '180')
+      smoothThreshold: Number.parseFloat(process.env.TRACE_SMOOTH_THRESHOLD || '180'),
+      curveCleanup: process.env.TRACE_CURVE_CLEANUP_ENABLED !== '0',
+      curveMorphRadius: Number.parseInt(process.env.TRACE_CURVE_MORPH_RADIUS || '1', 10),
+      curveMorphIterations: Number.parseInt(process.env.TRACE_CURVE_MORPH_ITERATIONS || '1', 10),
+      curveResampleScale: Number.parseFloat(process.env.TRACE_CURVE_RESAMPLE_SCALE || '0.65'),
+      curveSmoothSigma: Number.parseFloat(process.env.TRACE_CURVE_SMOOTH_SIGMA || '0.85'),
+      curveSmoothThreshold: Number.parseFloat(process.env.TRACE_CURVE_SMOOTH_THRESHOLD || '180'),
+      curveTurdSize: Number.parseFloat(process.env.TRACE_CURVE_TURD_SIZE || '12'),
+      curveAlphaMax: Number.parseFloat(process.env.TRACE_CURVE_ALPHA_MAX || '1.25'),
+      curveOptTolerance: Number.parseFloat(process.env.TRACE_CURVE_OPT_TOLERANCE || '0.32'),
+      curveFloatPrecision: Number.parseInt(process.env.TRACE_CURVE_FLOAT_PRECISION || '1', 10)
     },
     redrawProvider: redrawConfig.provider,
     redrawAnalysisModel: redrawConfig.analysisModel,
