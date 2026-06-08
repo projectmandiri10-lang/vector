@@ -46,7 +46,7 @@ GLM_IMAGE_QUALITY=hd
 AI_REDRAW_PRESET=quality
 ```
 
-Preset default memakai GLM-5V Turbo untuk melihat gambar upload secara langsung dan menulis prompt teknis ketat, lalu GLM-Image resmi dengan `quality=hd` menggambar ulang dari prompt tersebut. Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
+Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar: backend mengambil bentuk langsung dari source, membuang background edge-connected, dan menjaga warna spot tanpa GLM-Image agar layout tidak berubah seperti OCR. Untuk gambar non-logo, GLM-5V Turbo melihat gambar upload secara langsung dan menulis prompt teknis ketat, lalu GLM-Image resmi dengan `quality=hd` menggambar ulang dari prompt tersebut. Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
@@ -58,6 +58,7 @@ GLM_ANALYSIS_MODEL=glm-5v-turbo
 GLM_IMAGE_MODEL=glm-image
 GLM_IMAGE_QUALITY=hd
 AI_REDRAW_PRESET=quality
+LOGO_RESTORE_ENABLED=1
 STORAGE_DIR=./storage
 MAX_UPLOAD_MB=10
 ```

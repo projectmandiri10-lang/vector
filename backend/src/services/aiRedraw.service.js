@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import sharp from 'sharp';
 import { GoogleGenAI } from '@google/genai';
 import { HYBRID_REDRAW_PROVIDER, normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
+import { logoRestoreBuffer } from './logoRestore.service.js';
 
 const DIRECTOR_SYSTEM_INSTRUCTION = `You are a technical art director with 20 years of experience preparing artwork for sticker printing, manual screen printing, DTF, decal, and vector tracing workflows.
 
@@ -871,6 +872,38 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
   }
 
   const useGlm = aiConfig.provider === HYBRID_REDRAW_PROVIDER;
+  if (useGlm && process.env.LOGO_RESTORE_ENABLED !== '0') {
+    const logoRestore = await logoRestoreBuffer(uploadedBuffer, settings);
+    if (logoRestore.canRestore) {
+      return {
+        imageBuffer: logoRestore.imageBuffer,
+        metadata: {
+          provider: logoRestore.metadata.provider,
+          analysisModel: aiConfig.analysisModel,
+          generationModel: logoRestore.metadata.generationModel,
+          generationQuality: logoRestore.metadata.generationQuality,
+          preset: aiConfig.preset,
+          preprocess: aiConfig.preprocess,
+          aspectPolicy: aiConfig.aspectPolicy,
+          resolutionPolicy: aiConfig.resolutionPolicy,
+          analysisSummary: {
+            subjectSummary: 'Flat logo restored from source pixels without generative redraw.',
+            style: 'Trace-first logo restoration',
+            textDescription: 'Text/logo shapes are preserved from the uploaded artwork instead of reconstructed as OCR.',
+            dominantColors: logoRestore.metadata.palette,
+            backgroundPolicy: 'Edge-connected background was removed before vector tracing.',
+            confidence: { overall: 0.86, text: 0.82, shapes: 0.86, colors: 0.9 },
+            printNotes: ['GLM-Image skipped because the input was detected as a flat logo/text artwork.']
+          },
+          logoRestore: logoRestore.metadata,
+          technicalPrompt: 'Trace-first logo restore: preserve source shapes directly; GLM-Image generation skipped for text/logo fidelity.',
+          retryUsed: false,
+          sourceAspectRatio: preprocessMeta.aspectRatio
+        }
+      };
+    }
+  }
+
   const client = useGlm ? null : createVertexClient();
   const analysis = useGlm
     ? await analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig)

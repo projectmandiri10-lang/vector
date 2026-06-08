@@ -70,6 +70,7 @@ app.get('/api/health', (_req, res) => {
     redrawProvider: redrawConfig.provider,
     redrawAnalysisModel: redrawConfig.analysisModel,
     redrawGenerationModel: redrawConfig.generationModel,
+    redrawLogoRestore: process.env.LOGO_RESTORE_ENABLED !== '0',
     redrawPreset: redrawConfig.preset,
     redrawPreprocess: redrawConfig.preprocess,
     redrawScope: 'backend /api/image-retouch and /api/jobs inputMode=ai_redraw'

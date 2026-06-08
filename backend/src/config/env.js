@@ -15,6 +15,7 @@ process.env.GLM_API_BASE_URL ||= 'https://api.z.ai/api/paas/v4';
 process.env.GLM_ANALYSIS_MODEL ||= 'glm-5v-turbo';
 process.env.GLM_IMAGE_MODEL ||= 'glm-image';
 process.env.GLM_IMAGE_QUALITY ||= 'hd';
+process.env.LOGO_RESTORE_ENABLED ||= '1';
 process.env.GEMINI_ANALYSIS_MODEL ||= 'gemini-3.1-flash-lite-preview';
 process.env.GEMINI_IMAGE_MODEL ||= 'gemini-3.1-flash-image-preview';
 process.env.AI_REDRAW_PRESET ||= 'quality';

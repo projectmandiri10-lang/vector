@@ -7,6 +7,7 @@ import { PNG } from 'pngjs';
 import { validateSettings } from '../routes/jobs.routes.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { buildGlmImageGenerationRequest, buildRedrawPrompt } from '../services/aiRedraw.service.js';
+import { logoRestoreBuffer } from '../services/logoRestore.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
@@ -22,6 +23,42 @@ function activeMaskPixelCount(png) {
     }
   }
   return count;
+}
+
+function makeFlatLogoBuffer() {
+  const png = new PNG({ width: 180, height: 120, colorType: 6 });
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const idx = (png.width * y + x) << 2;
+      png.data[idx] = 8;
+      png.data[idx + 1] = 8;
+      png.data[idx + 2] = 10;
+      png.data[idx + 3] = 255;
+    }
+  }
+
+  for (let y = 28; y < 54; y += 1) {
+    for (let x = 48; x < 145; x += 1) {
+      const idx = (png.width * y + x) << 2;
+      png.data[idx] = 245;
+      png.data[idx + 1] = 245;
+      png.data[idx + 2] = 245;
+      png.data[idx + 3] = 255;
+    }
+  }
+
+  for (let y = 68; y < 96; y += 1) {
+    for (let x = 24; x < 122; x += 1) {
+      if (x < 48 && y < 82) continue;
+      const idx = (png.width * y + x) << 2;
+      png.data[idx] = 236;
+      png.data[idx + 1] = 200;
+      png.data[idx + 2] = 12;
+      png.data[idx + 3] = 255;
+    }
+  }
+
+  return PNG.sync.write(png);
 }
 
 test('buildRedrawPrompt appends sablon and max color instructions', () => {
@@ -86,6 +123,34 @@ test('GLM image generation request sends hd quality with existing size policy', 
     quality: 'hd',
     size: '1568x1056'
   });
+});
+
+test('logoRestoreBuffer preserves flat logo colors without generative redraw', async () => {
+  const result = await logoRestoreBuffer(makeFlatLogoBuffer(), {
+    productionType: 'sablon',
+    removeBackground: true,
+    separateColors: true
+  });
+
+  assert.equal(result.canRestore, true);
+  assert.equal(result.metadata.provider, 'logo_restore_trace_first');
+  assert.ok(result.metadata.palette.some((color) => color.hex === '#FFFFFF'));
+  assert.ok(result.metadata.palette.some((color) => color.hex === '#FFDA00'));
+
+  const output = PNG.sync.read(result.imageBuffer);
+  let transparentPixels = 0;
+  let whitePixels = 0;
+  let yellowPixels = 0;
+  for (let i = 0; i < output.data.length; i += 4) {
+    const alpha = output.data[i + 3];
+    if (alpha < 16) transparentPixels += 1;
+    if (alpha >= 250 && output.data[i] >= 245 && output.data[i + 1] >= 245 && output.data[i + 2] >= 245) whitePixels += 1;
+    if (alpha >= 250 && output.data[i] >= 245 && output.data[i + 1] >= 190 && output.data[i + 2] <= 40) yellowPixels += 1;
+  }
+
+  assert.ok(transparentPixels > 0);
+  assert.ok(whitePixels > 0);
+  assert.ok(yellowPixels > 0);
 });
 
 test('color helpers detect near white background and nearest palette', () => {
