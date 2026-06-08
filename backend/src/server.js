@@ -65,7 +65,10 @@ app.get('/api/health', (_req, res) => {
       maxDimension: Number.parseInt(process.env.PREPROCESS_MAX_DIMENSION || '2048', 10),
       threshold: Number.parseFloat(process.env.TRACE_THRESHOLD || '180'),
       turdSize: Number.parseFloat(process.env.TRACE_TURD_SIZE || '4'),
-      optTolerance: Number.parseFloat(process.env.TRACE_OPT_TOLERANCE || '0.18')
+      optTolerance: Number.parseFloat(process.env.TRACE_OPT_TOLERANCE || '0.18'),
+      smoothing: process.env.TRACE_SMOOTH_ENABLED !== '0',
+      smoothSigma: Number.parseFloat(process.env.TRACE_SMOOTH_SIGMA || '0.7'),
+      smoothThreshold: Number.parseFloat(process.env.TRACE_SMOOTH_THRESHOLD || '180')
     },
     redrawProvider: redrawConfig.provider,
     redrawAnalysisModel: redrawConfig.analysisModel,

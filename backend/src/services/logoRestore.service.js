@@ -1,4 +1,13 @@
 import sharp from 'sharp';
+import fs from 'fs-extra';
+import os from 'node:os';
+import path from 'node:path';
+import { createMasksForPalette, quantizeImage } from './quantize.service.js';
+import { buildFullColorSvg, vectorizeMasks } from './vectorize.service.js';
+import { createFilmPlan, createSeparations } from './separation.service.js';
+import { createStickerCutline } from './stickerCutline.service.js';
+import { exportSvgToPdf, exportSvgToPng } from './export.service.js';
+import { createResultZip, createSeparationZip } from './zip.service.js';
 import { colorChroma, colorDistance, rgbToHex } from '../utils/colors.js';
 
 function clamp(value, min, max) {
@@ -279,4 +288,163 @@ export async function logoRestoreBuffer(uploadedBuffer, settings = {}, options =
       height: outputHeight
     }
   };
+}
+
+function artifactFile(buffer, filename, mimeType) {
+  return {
+    filename,
+    mimeType,
+    base64: buffer.toString('base64')
+  };
+}
+
+async function artifactIfExists(filePath, filename, mimeType) {
+  if (!(await fs.pathExists(filePath))) return null;
+  return artifactFile(await fs.readFile(filePath), filename, mimeType);
+}
+
+async function buildArtifactResponse(jobDir, settings, manifest, palette, separations, stickerCutline) {
+  const artifacts = {
+    fullPng: await artifactIfExists(path.join(jobDir, 'preview-full-color.png'), 'preview-full-color.png', 'image/png'),
+    fullSvg: await artifactIfExists(path.join(jobDir, 'full-vector.svg'), 'full-vector.svg', 'image/svg+xml'),
+    fullPdf: await artifactIfExists(path.join(jobDir, 'full-vector.pdf'), 'full-vector.pdf', 'application/pdf'),
+    stickerCutlineSvg: await artifactIfExists(path.join(jobDir, 'sticker-cutline.svg'), 'sticker-cutline.svg', 'image/svg+xml'),
+    stickerCutlinePdf: await artifactIfExists(path.join(jobDir, 'sticker-cutline.pdf'), 'sticker-cutline.pdf', 'application/pdf'),
+    zip: await artifactIfExists(path.join(jobDir, 'result.zip'), 'result.zip', 'application/zip'),
+    separationZip: await artifactIfExists(path.join(jobDir, 'separation-films.zip'), 'separation-films.zip', 'application/zip'),
+    separations: []
+  };
+
+  for (const film of separations) {
+    artifacts.separations.push({
+      index: film.index,
+      kind: film.kind || 'color',
+      hex: film.hex,
+      label: film.label,
+      svg: await artifactIfExists(film.svgPath, path.basename(film.svgPath), 'image/svg+xml'),
+      pdf: await artifactIfExists(film.pdfPath, path.basename(film.pdfPath), 'application/pdf'),
+      preview: await artifactIfExists(film.previewPath, path.basename(film.previewPath), 'image/png')
+    });
+  }
+
+  return {
+    mode: 'logo_restore_artifacts',
+    status: 'done',
+    message: 'Logo restore selesai diproses backend dengan Potrace smoothing.',
+    settings,
+    palette,
+    separationFilmCount: separations.length,
+    manifest,
+    artifacts,
+    stickerCutline: stickerCutline
+      ? {
+          offsetMm: stickerCutline.offsetMm,
+          radiusPx: stickerCutline.radiusPx,
+          label: stickerCutline.label
+        }
+      : null
+  };
+}
+
+export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, metadata = {} }) {
+  const jobDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-logo-restore-'));
+  try {
+    const sourcePath = path.join(jobDir, 'trace-source.png');
+    const fullPreviewPath = path.join(jobDir, 'preview-full-color.png');
+    const fullSvgPath = path.join(jobDir, 'full-vector.svg');
+    const fullPdfPath = path.join(jobDir, 'full-vector.pdf');
+
+    await fs.writeFile(sourcePath, imageBuffer);
+    const sourceMeta = await sharp(imageBuffer, { failOn: 'error' }).metadata();
+    await fs.writeFile(fullPreviewPath, imageBuffer);
+
+    const effectiveSettings = {
+      ...settings,
+      makeVector: true,
+      colorLimitMode: settings.colorLimitMode || 'manual',
+      maxColors: settings.maxColors || 4,
+      removeBackground: settings.removeBackground !== false
+    };
+    const quantized = await quantizeImage(sourcePath, effectiveSettings);
+    const palette = quantized.palette;
+    await fs.writeJson(path.join(jobDir, 'palette.json'), palette, { spaces: 2 });
+
+    const masks = await createMasksForPalette(sourcePath, palette, path.join(jobDir, 'masks'), effectiveSettings);
+    const vectorResult = await vectorizeMasks(masks, {
+      width: quantized.width,
+      height: quantized.height,
+      outputPath: fullSvgPath
+    });
+    let pathsByColor = vectorResult.pathsByColor;
+
+    if (effectiveSettings.removeBackground === true) {
+      const filmPlan = createFilmPlan({
+        pathsByColor,
+        width: quantized.width,
+        height: quantized.height,
+        settings: effectiveSettings
+      });
+      pathsByColor = filmPlan.colors;
+      await fs.writeFile(fullSvgPath, buildFullColorSvg(pathsByColor, quantized.width, quantized.height), 'utf8');
+    }
+
+    await exportSvgToPdf(fullSvgPath, fullPdfPath);
+
+    const stickerCutline = await createStickerCutline({
+      masks,
+      pathsByColor,
+      width: quantized.width,
+      height: quantized.height,
+      outputDir: jobDir,
+      settings: effectiveSettings
+    });
+    if (stickerCutline) {
+      await exportSvgToPdf(stickerCutline.svgPath, stickerCutline.pdfPath);
+    }
+
+    let separations = [];
+    if (effectiveSettings.separateColors && pathsByColor.length > 0) {
+      separations = await createSeparations({
+        pathsByColor,
+        width: quantized.width,
+        height: quantized.height,
+        outputDir: path.join(jobDir, 'separations'),
+        settings: effectiveSettings
+      });
+      for (const film of separations) {
+        await exportSvgToPdf(film.svgPath, film.pdfPath);
+        await exportSvgToPng(film.svgPath, film.previewPath);
+      }
+    }
+
+    await createResultZip(jobDir, path.join(jobDir, 'result.zip'));
+    if (separations.length > 0) {
+      await createSeparationZip(path.join(jobDir, 'separations'), path.join(jobDir, 'separation-films.zip'));
+    }
+
+    return await buildArtifactResponse(
+      jobDir,
+      effectiveSettings,
+      {
+        width: sourceMeta.width || quantized.width,
+        height: sourceMeta.height || quantized.height,
+        palette,
+        aiRedraw: { ...metadata, artifactsGenerated: true },
+        generatedFiles: [
+          'preview-full-color.png',
+          'full-vector.svg',
+          'full-vector.pdf',
+          stickerCutline ? 'sticker-cutline.svg' : null,
+          stickerCutline ? 'sticker-cutline.pdf' : null,
+          separations.length > 0 ? 'separation-films.zip' : null,
+          'result.zip'
+        ].filter(Boolean)
+      },
+      palette,
+      separations,
+      stickerCutline
+    );
+  } finally {
+    await fs.remove(jobDir);
+  }
 }

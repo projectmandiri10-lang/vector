@@ -34,6 +34,95 @@ function decodeBase64UrlJson(value) {
   }
 }
 
+function base64ToBlob(base64, mimeType = 'application/octet-stream') {
+  const binary = window.atob(base64 || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mimeType });
+}
+
+function artifactToBlob(artifact) {
+  if (!artifact?.base64) return null;
+  return base64ToBlob(artifact.base64, artifact.mimeType);
+}
+
+function blobUrl(blob) {
+  return blob instanceof Blob ? URL.createObjectURL(blob) : '';
+}
+
+function hydrateBackendRetouchResult(data, settings) {
+  const artifacts = data.artifacts || {};
+  const fullPngBlob = artifactToBlob(artifacts.fullPng);
+  const fullSvgBlob = artifactToBlob(artifacts.fullSvg);
+  const fullPdfBlob = artifactToBlob(artifacts.fullPdf);
+  const stickerCutlineSvgBlob = artifactToBlob(artifacts.stickerCutlineSvg);
+  const stickerCutlinePdfBlob = artifactToBlob(artifacts.stickerCutlinePdf);
+  const zipBlob = artifactToBlob(artifacts.zip);
+  const separationZipBlob = artifactToBlob(artifacts.separationZip);
+  const separations = (artifacts.separations || []).map((film) => {
+    const svgBlob = artifactToBlob(film.svg);
+    const pdfBlob = artifactToBlob(film.pdf);
+    const previewBlob = artifactToBlob(film.preview);
+    return {
+      index: film.index,
+      kind: film.kind || 'color',
+      hex: film.hex || '#000000',
+      label: film.label || '',
+      svg: blobUrl(svgBlob),
+      pdf: blobUrl(pdfBlob),
+      preview: blobUrl(previewBlob),
+      svgBlob,
+      pdfBlob,
+      previewBlob
+    };
+  });
+
+  const artifactBlobs = {
+    fullPng: fullPngBlob,
+    fullSvg: fullSvgBlob,
+    fullPdf: fullPdfBlob,
+    stickerCutlineSvg: stickerCutlineSvgBlob,
+    stickerCutlinePdf: stickerCutlinePdfBlob,
+    zip: zipBlob,
+    separationZip: separationZipBlob,
+    separations
+  };
+
+  const localResult = {
+    jobId: `backend-logo-${Date.now()}`,
+    status: 'done',
+    progress: 100,
+    message: data.message || 'Selesai diproses backend.',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    localOnly: true,
+    backendVectorized: true,
+    separationFilmCount: data.separationFilmCount || 0,
+    palette: data.palette || [],
+    settings: data.settings || settings,
+    files: {
+      fullPng: blobUrl(fullPngBlob),
+      fullSvg: blobUrl(fullSvgBlob),
+      fullPdf: blobUrl(fullPdfBlob),
+      stickerCutlineSvg: blobUrl(stickerCutlineSvgBlob),
+      stickerCutlinePdf: blobUrl(stickerCutlinePdfBlob),
+      zip: blobUrl(zipBlob),
+      separationZip: blobUrl(separationZipBlob),
+      separations
+    },
+    artifactBlobs,
+    manifest: data.manifest || {}
+  };
+
+  const pngFile = fullPngBlob
+    ? new File([fullPngBlob], artifacts.fullPng?.filename || 'gambar-ulang.png', { type: fullPngBlob.type || 'image/png' })
+    : null;
+
+  return { localResult, pngFile };
+}
+
 async function apiFetch(path, { accessToken, method = 'GET', body, headers = {} } = {}) {
   let response;
   try {
@@ -117,6 +206,18 @@ export async function requestImageRetouch(file, settings, accessToken) {
   }
   const retouchLedgerId = response.headers.get('x-ai-ledger-id') || '';
   const aiRedrawMetadata = decodeBase64UrlJson(response.headers.get('x-ai-redraw-metadata') || '');
+  const contentType = response.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) {
+    const data = await response.json();
+    const hydrated = hydrateBackendRetouchResult(data, settings);
+    return {
+      file: hydrated.pngFile || file,
+      retouchLedgerId: data.retouchLedgerId || retouchLedgerId,
+      aiRedrawMetadata: data.aiRedrawMetadata || aiRedrawMetadata,
+      localResult: hydrated.localResult
+    };
+  }
+
   const blob = await response.blob();
   return {
     file: new File([blob], 'gambar-ulang.png', { type: blob.type || 'image/png' }),

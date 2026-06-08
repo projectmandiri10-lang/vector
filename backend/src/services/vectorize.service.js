@@ -1,4 +1,7 @@
 import fs from 'fs-extra';
+import os from 'node:os';
+import path from 'node:path';
+import sharp from 'sharp';
 import { optimize } from 'svgo';
 import potrace from 'potrace';
 import { escapeXml } from '../utils/svg.js';
@@ -19,17 +22,47 @@ function traceOptions() {
   };
 }
 
-function traceMask(filePath) {
-  return new Promise((resolve, reject) => {
-    potrace.trace(
-      filePath,
-      traceOptions(),
-      (error, svg) => {
-        if (error) reject(error);
-        else resolve(svg);
-      }
-    );
-  });
+function traceSmoothingEnabled() {
+  return process.env.TRACE_SMOOTH_ENABLED !== '0';
+}
+
+async function prepareTraceMask(filePath) {
+  if (!traceSmoothingEnabled()) return { filePath, cleanup: async () => {} };
+
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-trace-mask-'));
+  const smoothedPath = path.join(tempDir, 'mask.png');
+  const sigma = numberFromEnv('TRACE_SMOOTH_SIGMA', 0.7, 0.1, 2);
+  const threshold = numberFromEnv('TRACE_SMOOTH_THRESHOLD', 180, 1, 254);
+
+  await sharp(filePath, { failOn: 'error' })
+    .median(3)
+    .blur(sigma)
+    .threshold(threshold)
+    .png()
+    .toFile(smoothedPath);
+
+  return {
+    filePath: smoothedPath,
+    cleanup: async () => fs.remove(tempDir)
+  };
+}
+
+async function traceMask(filePath) {
+  const prepared = await prepareTraceMask(filePath);
+  try {
+    return await new Promise((resolve, reject) => {
+      potrace.trace(
+        prepared.filePath,
+        traceOptions(),
+        (error, svg) => {
+          if (error) reject(error);
+          else resolve(svg);
+        }
+      );
+    });
+  } finally {
+    await prepared.cleanup();
+  }
 }
 
 function extractPaths(svg) {

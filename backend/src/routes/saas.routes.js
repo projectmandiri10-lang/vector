@@ -5,6 +5,7 @@ import { Readable } from 'node:stream';
 import workerApi from '../../../cloudflare-worker/src/index.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { hybridRedrawBuffer } from '../services/aiRedraw.service.js';
+import { createLogoRestoreArtifacts } from '../services/logoRestore.service.js';
 
 const router = express.Router();
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -315,9 +316,27 @@ async function imageRetouchHandler(req, res, next) {
     try {
       const aiRedrawModel = settings.aiRedrawModel || (await getAiRedrawModelConfig());
       const result = await hybridRedrawBuffer(req.file.buffer, settings, aiRedrawModel);
+      const encodedMetadata = encodeMetadataHeader(result.metadata);
+      if (result.metadata?.provider === 'logo_restore_trace_first') {
+        const artifactResult = await createLogoRestoreArtifacts({
+          imageBuffer: result.imageBuffer,
+          settings,
+          metadata: result.metadata
+        });
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('X-AI-Ledger-Id', ledger?.id || '');
+        res.setHeader('X-AI-Redraw-Metadata', encodedMetadata);
+        res.json({
+          ...artifactResult,
+          aiRedrawMetadata: result.metadata,
+          retouchLedgerId: ledger?.id || ''
+        });
+        return;
+      }
+
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('X-AI-Ledger-Id', ledger?.id || '');
-      res.setHeader('X-AI-Redraw-Metadata', encodeMetadataHeader(result.metadata));
+      res.setHeader('X-AI-Redraw-Metadata', encodedMetadata);
       res.send(result.imageBuffer);
     } catch (error) {
       if (ledger?.id) {

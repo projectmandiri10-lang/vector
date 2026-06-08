@@ -502,6 +502,7 @@ export default function App() {
       let processingFile = file;
       let retouchLedgerId = '';
       let aiRedrawMetadata = null;
+      let backendVectorResult = null;
 
       if (settings.inputMode === INPUT_MODE_RETOUCH) {
         setJob(statusJob('processing_image', 'Menggambar ulang gambar tanpa penyimpanan permanen server.', 25));
@@ -509,10 +510,19 @@ export default function App() {
         processingFile = retouchResult.file;
         retouchLedgerId = retouchResult.retouchLedgerId;
         aiRedrawMetadata = retouchResult.aiRedrawMetadata || null;
+        backendVectorResult = retouchResult.localResult || null;
       }
 
-      setJob(statusJob('vectorizing', 'Membuat vector, cutline, film, PDF, dan ZIP di browser.', 60));
-      const localResult = await processImageLocally(processingFile, settings);
+      setJob(
+        statusJob(
+          'vectorizing',
+          backendVectorResult
+            ? 'Memakai vector backend berbasis Potrace smoothing.'
+            : 'Membuat vector, cutline, film, PDF, dan ZIP di browser.',
+          60
+        )
+      );
+      const localResult = backendVectorResult || (await processImageLocally(processingFile, settings));
       const manifest = {
         ...(localResult.manifest || {}),
         aiRedraw: aiRedrawMetadata

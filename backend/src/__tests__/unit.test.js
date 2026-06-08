@@ -7,7 +7,7 @@ import { PNG } from 'pngjs';
 import { validateSettings } from '../routes/jobs.routes.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { buildGlmImageGenerationRequest, buildRedrawPrompt } from '../services/aiRedraw.service.js';
-import { logoRestoreBuffer } from '../services/logoRestore.service.js';
+import { createLogoRestoreArtifacts, logoRestoreBuffer } from '../services/logoRestore.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
@@ -151,6 +151,35 @@ test('logoRestoreBuffer preserves flat logo colors without generative redraw', a
   assert.ok(transparentPixels > 0);
   assert.ok(whitePixels > 0);
   assert.ok(yellowPixels > 0);
+});
+
+test('createLogoRestoreArtifacts returns backend vector artifacts for logo restore', async () => {
+  const restore = await logoRestoreBuffer(makeFlatLogoBuffer(), {
+    productionType: 'sablon',
+    removeBackground: true,
+    separateColors: false,
+    stickerCutlineEnabled: false
+  });
+
+  const result = await createLogoRestoreArtifacts({
+    imageBuffer: restore.imageBuffer,
+    settings: {
+      productionType: 'sablon',
+      removeBackground: true,
+      separateColors: false,
+      stickerCutlineEnabled: false
+    },
+    metadata: restore.metadata
+  });
+
+  assert.equal(result.mode, 'logo_restore_artifacts');
+  assert.equal(result.status, 'done');
+  assert.ok(result.artifacts.fullPng.base64.length > 100);
+  assert.ok(result.artifacts.fullSvg.base64.length > 100);
+  assert.ok(result.artifacts.fullPdf.base64.length > 100);
+  assert.ok(result.artifacts.zip.base64.length > 100);
+  assert.match(Buffer.from(result.artifacts.fullSvg.base64, 'base64').toString('utf8'), /<path/);
+  assert.equal(result.manifest.aiRedraw.artifactsGenerated, true);
 });
 
 test('color helpers detect near white background and nearest palette', () => {
