@@ -9,13 +9,14 @@ export const HYBRID_REDRAW_PRESETS = {
     provider: HYBRID_REDRAW_PROVIDER,
     analysisModel: 'glm-5v-turbo',
     generationModel: 'glm-image',
+    generationQuality: 'standard',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'economy',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.018,
-    note: 'GLM-5V Turbo menganalisis niat desain, lalu GLM-Image menggambar ulang dengan biaya hemat.'
+    note: 'GLM-5V Turbo menganalisis niat desain, lalu GLM-Image standard menggambar ulang dengan biaya hemat.'
   },
   standard: {
     mode: 'standard',
@@ -24,13 +25,14 @@ export const HYBRID_REDRAW_PRESETS = {
     provider: HYBRID_REDRAW_PROVIDER,
     analysisModel: 'glm-5v-turbo',
     generationModel: 'glm-image',
+    generationQuality: 'hd',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'standard',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.019,
-    note: 'Keseimbangan biaya dan kualitas untuk mayoritas logo, sticker, dan sablon lewat Z.AI.'
+    note: 'Keseimbangan biaya dan kualitas untuk mayoritas logo, sticker, dan sablon lewat GLM-Image HD resmi Z.AI.'
   },
   quality: {
     mode: 'quality',
@@ -39,13 +41,14 @@ export const HYBRID_REDRAW_PRESETS = {
     provider: HYBRID_REDRAW_PROVIDER,
     analysisModel: 'glm-5v-turbo',
     generationModel: 'glm-image',
+    generationQuality: 'hd',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0.02,
-    note: 'Default GLM untuk redraw halus yang nanti akan di-trace dan dipisah warna.'
+    note: 'Default GLM-5V Turbo + GLM-Image HD untuk redraw halus yang nanti akan di-trace dan dipisah warna.'
   },
   premium: {
     mode: 'premium',
@@ -54,13 +57,14 @@ export const HYBRID_REDRAW_PRESETS = {
     provider: HYBRID_REDRAW_PROVIDER,
     analysisModel: 'glm-5v-turbo',
     generationModel: 'glm-image',
+    generationQuality: 'hd',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: true,
     estimatedUsdPerImage: 0.035,
-    note: 'Menambah satu retry otomatis saat GLM menilai pembacaan teks atau bentuk masih kurang yakin.'
+    note: 'GLM-5V Turbo + GLM-Image HD dengan satu retry otomatis saat pembacaan teks atau bentuk masih kurang yakin.'
   },
   gemini_quality: {
     mode: 'gemini_quality',
@@ -69,6 +73,7 @@ export const HYBRID_REDRAW_PRESETS = {
     provider: GEMINI_IMAGEN_REDRAW_PROVIDER,
     analysisModel: 'gemini-3.1-flash-lite-preview',
     generationModel: 'gemini-3.1-flash-image-preview',
+    generationQuality: '',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
     preprocess: 'node_heuristic',
@@ -103,6 +108,11 @@ function normalizeGeminiImageModel(env, fallback) {
   if (geminiImageModel) return geminiImageModel;
   const legacyImagenModel = normalizeText(env.IMAGEN_GENERATION_MODEL, '');
   return legacyImagenModel && !legacyImagenModel.startsWith('imagen-') ? legacyImagenModel : fallback;
+}
+
+function normalizeGenerationQuality(value, fallback) {
+  const normalized = normalizeText(value, fallback).toLowerCase();
+  return normalized === 'standard' || normalized === 'hd' ? normalized : fallback;
 }
 
 function inferLegacyPreset(input) {
@@ -151,6 +161,10 @@ export function normalizeHybridRedrawConfig(value = {}, env = {}) {
     provider === GEMINI_IMAGEN_REDRAW_PROVIDER
       ? normalizeText(env.GEMINI_ANALYSIS_MODEL, preset.analysisModel)
       : normalizeText(env.GLM_ANALYSIS_MODEL, preset.analysisModel);
+  const generationQuality =
+    provider === HYBRID_REDRAW_PROVIDER
+      ? normalizeGenerationQuality(input.generationQuality || env.GLM_IMAGE_QUALITY || preset.generationQuality, 'hd')
+      : normalizeText(input.generationQuality, preset.generationQuality || '');
 
   return {
     mode: preset.mode,
@@ -159,6 +173,7 @@ export function normalizeHybridRedrawConfig(value = {}, env = {}) {
     provider,
     analysisModel: normalizeText(input.analysisModel, analysisCandidate),
     generationModel: normalizeText(generationCandidate, preset.generationModel),
+    generationQuality,
     aspectPolicy: normalizeText(input.aspectPolicy, preset.aspectPolicy),
     resolutionPolicy: normalizeText(input.resolutionPolicy, preset.resolutionPolicy),
     preprocess: normalizeText(input.preprocess, preset.preprocess),

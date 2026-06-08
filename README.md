@@ -1,6 +1,6 @@
 # Design Mudah Vector untuk Sablon dan Sticker
 
-Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `GLM-5V Turbo director + GLM-Image painter` di Railway, dengan preset fallback Gemini bila dibutuhkan.
+Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `GLM-5V Turbo director + GLM-Image HD painter` di Railway, dengan preset fallback Gemini bila dibutuhkan.
 
 ## Mode SaaS Railway + Supabase
 
@@ -18,7 +18,7 @@ Ringkasnya:
 
 1. Hubungkan repo ke Railway.
 2. Railway akan memakai `railway.json` dan `Dockerfile.fly`.
-3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `GLM_API_KEY`, `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, `GLM_IMAGE_MODEL`, `AI_REDRAW_PRESET`, `GOOGLE_OAUTH_REDIRECT_TO`.
+3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `GLM_API_KEY`, `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, `GLM_IMAGE_MODEL`, `GLM_IMAGE_QUALITY`, `AI_REDRAW_PRESET`, `GOOGLE_OAUTH_REDIRECT_TO`.
 4. Kosongkan `VITE_API_BASE_URL` di production agar frontend memakai same-origin `/api`.
 5. Set Supabase Auth Site URL dan Google OAuth redirect ke domain Railway/custom domain.
 
@@ -42,10 +42,11 @@ GLM_API_KEY=key-zai-anda
 GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
 GLM_ANALYSIS_MODEL=glm-5v-turbo
 GLM_IMAGE_MODEL=glm-image
+GLM_IMAGE_QUALITY=hd
 AI_REDRAW_PRESET=quality
 ```
 
-Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
+Preset default memakai GLM-5V Turbo untuk melihat gambar upload secara langsung dan menulis prompt teknis ketat, lalu GLM-Image resmi dengan `quality=hd` menggambar ulang dari prompt tersebut. Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
@@ -55,6 +56,7 @@ GLM_API_KEY=key-zai-anda
 GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
 GLM_ANALYSIS_MODEL=glm-5v-turbo
 GLM_IMAGE_MODEL=glm-image
+GLM_IMAGE_QUALITY=hd
 AI_REDRAW_PRESET=quality
 STORAGE_DIR=./storage
 MAX_UPLOAD_MB=10

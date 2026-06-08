@@ -9,15 +9,16 @@ Your job is to inspect a messy uploaded image, recover the original design inten
 
 Rules:
 1. Recover the actual artwork, not the camera background or paper backdrop.
-2. Read text carefully and preserve wording, hierarchy, and placement. Repair obvious blur or aliasing mistakes only when they are clearly unintended defects.
+2. Read text carefully and preserve exact wording, hierarchy, and placement. Repair obvious blur or aliasing mistakes only when they are clearly unintended defects.
 3. Preserve the recognizable subject, composition, proportions, color placement, and major silhouette of the original design.
 4. Reject photo gradients, shadows, glare, table color, paper color, compression noise, dust, and border-touching backdrop color as printable artwork.
 5. If the same background color appears inside enclosed holes, counters, rings, boxes, or letter interiors, keep those holes non-printing as well.
 6. Keep only dominant intentional artwork colors. Prefer flat solid color regions suitable for tracing and spot-color separation.
-7. The redraw must look freshly rebuilt from shapes and color intent, not repaired from pixels.
+7. The redraw must look freshly rebuilt from shapes and color intent, not repaired from pixels, OCR output, scan cleanup, sharpening, or upscaling.
 8. The outermost silhouette must be smooth, closed, continuous, crisp, and easy to trace.
 9. No photographic shading, no texture, no blur, no halftone, no accidental background layer.
-10. Output JSON only, matching the requested schema.`;
+10. The technicalPrompt must be strict enough that a text-to-image model rebuilds the artwork as clean flat vector-like art, not as a restored photo or scanned document.
+11. Output JSON only, matching the requested schema.`;
 
 const ANALYSIS_RESPONSE_SCHEMA = {
   type: 'object',
@@ -300,9 +301,10 @@ export function buildRedrawPrompt(settings = {}, analysis = {}) {
     backgroundPolicy,
     whiteInstruction,
     colorLimitInstruction,
-    'This is a true redraw from shape intent and color placement, not pixel repair, not sharpening, not upscaling, and not preserving rough raster noise.',
+    'Preserve exact readable text, lettering hierarchy, symbol placement, and layout from the source artwork as deliberate clean shapes.',
+    'This is a true redraw from shape intent and color placement, not pixel repair, not OCR reconstruction, not scan cleanup, not sharpening, not upscaling, and not preserving rough raster noise.',
     'Rebuild the outermost artwork silhouette as smooth, clean, closed, continuous, crisp, high-density contours with no jagged steps, no broken edges, and no accidental gaps.',
-    'Use solid flat colors only. No gradients, no glow, no texture, no paper, no table, no cast shadow, no camera lighting, and no rectangular background layer.',
+    'Use solid flat colors only. No gradients, no glow, no texture, no paper, no table, no cast shadow, no camera lighting, no scan artifacts, and no rectangular background layer.',
     'If the same background color appears through enclosed holes inside letters, rings, or boxes, keep those holes empty and non-printing instead of filling them as artwork.',
     printTargetInstruction(settings),
     printNotes,
@@ -314,7 +316,9 @@ export function buildRedrawPrompt(settings = {}, analysis = {}) {
 
 function buildAnalysisUserPrompt(settings, preprocessMeta) {
   return [
-    'Analyze the uploaded artwork and recover the original design intent.',
+    'Analyze the uploaded artwork references and recover the original design intent.',
+    'Reference image 1 is the normalized original upload. Use it to understand context, full composition, colors, and all text.',
+    'Reference image 2 is the cleaned/cropped trace target. Use it to identify the printable artwork area after rejecting border-connected background.',
     'Output structured JSON and include one final English technical redraw prompt for the image generation model in the technicalPrompt field.',
     `Production target: ${settings.productionType === 'sablon' ? 'manual screen printing and vector tracing' : 'sticker production and vector tracing'}.`,
     settings.colorLimitMode === 'manual' && settings.maxColors
@@ -323,9 +327,10 @@ function buildAnalysisUserPrompt(settings, preprocessMeta) {
     settings.whiteAsBackground
       ? 'White, near-white, paper, glare, and outside empty background should normally be treated as non-printing unless clearly enclosed inside the intentional design.'
       : 'White can stay only when it is clearly intentional artwork inside the design. Empty background must still be non-printing.',
-    `The preprocessed reference is already cropped and background-cleaned with a ${preprocessMeta.preprocess} heuristic.`,
-    'Preserve readable text, composition, color placement, and silhouette. Reject camera border color, paper tone, table tone, blur noise, compression artifacts, and lighting gradients as artwork.',
-    'The final technicalPrompt must instruct the image model to redraw from scratch as clean flat vector-like artwork with smooth trace-ready contours.'
+    `The cleaned reference is already cropped and background-cleaned with a ${preprocessMeta.preprocess} heuristic.`,
+    'Extract exact readable text, lettering hierarchy, composition, color placement, major silhouette, and trace-critical edges.',
+    'Reject camera border color, paper tone, table tone, blur noise, compression artifacts, lighting gradients, scan texture, and OCR-looking artifacts as artwork.',
+    'The final technicalPrompt must instruct the image model to redraw from scratch as clean flat vector-like artwork with smooth trace-ready contours, not to enhance, sharpen, upscale, OCR, or restore a scanned image.'
   ].join(' ');
 }
 
@@ -623,7 +628,7 @@ async function analyzeArtworkWithGemini(client, analysisBuffer, settings, aiConf
   return normalizeAnalysisPayload(parsed, settings);
 }
 
-async function analyzeArtworkWithGlm(analysisBuffer, settings, aiConfig, preprocessMeta) {
+async function analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig) {
   const data = await zaiJsonFetch('/chat/completions', {
     model: aiConfig.analysisModel,
     messages: [
@@ -635,9 +640,23 @@ async function analyzeArtworkWithGlm(analysisBuffer, settings, aiConfig, preproc
         role: 'user',
         content: [
           {
+            type: 'text',
+            text: 'Reference image 1: normalized original upload. Preserve context, full composition, original text, and intended color placement from this image.'
+          },
+          {
             type: 'image_url',
             image_url: {
-              url: `data:image/png;base64,${analysisBuffer.toString('base64')}`
+              url: `data:image/png;base64,${preprocessMeta.normalizedBuffer.toString('base64')}`
+            }
+          },
+          {
+            type: 'text',
+            text: 'Reference image 2: cleaned and cropped trace target after background cleanup. Use this to decide the printable artwork area and smooth trace-ready silhouette.'
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: `data:image/png;base64,${preprocessMeta.analysisBuffer.toString('base64')}`
             }
           },
           {
@@ -711,12 +730,17 @@ async function generateWithGeminiImage(client, technicalPrompt, aiConfig) {
   return Buffer.from(inlineData.data, 'base64');
 }
 
-async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
-  const data = await zaiJsonFetch('/images/generations', {
+export function buildGlmImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta) {
+  return {
     model: aiConfig.generationModel,
     prompt: technicalPrompt,
+    quality: aiConfig.generationQuality || 'hd',
     size: glmImageSize(preprocessMeta.aspectRatio, aiConfig.resolutionPolicy)
-  });
+  };
+}
+
+async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
+  const data = await zaiJsonFetch('/images/generations', buildGlmImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta));
   const imageResult = data?.data?.[0] || {};
   const inlineImage = imageResult.b64_json || imageResult.base64 || imageResult.image_base64;
   if (inlineImage) {
@@ -807,6 +831,7 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
         provider: aiConfig.provider,
         analysisModel: aiConfig.analysisModel,
         generationModel: aiConfig.generationModel,
+        generationQuality: aiConfig.generationQuality,
         preset: aiConfig.preset,
         preprocess: aiConfig.preprocess,
         aspectPolicy: aiConfig.aspectPolicy,
@@ -822,7 +847,7 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
   const useGlm = aiConfig.provider === HYBRID_REDRAW_PROVIDER;
   const client = useGlm ? null : createVertexClient();
   const analysis = useGlm
-    ? await analyzeArtworkWithGlm(preprocessMeta.analysisBuffer, settings, aiConfig, preprocessMeta)
+    ? await analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig)
     : await analyzeArtworkWithGemini(client, preprocessMeta.analysisBuffer, settings, aiConfig, preprocessMeta);
   const technicalPrompt = analysis.technicalPrompt || buildRedrawPrompt(settings, analysis);
   let generated = useGlm
@@ -849,6 +874,7 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
       provider: aiConfig.provider,
       analysisModel: aiConfig.analysisModel,
       generationModel: aiConfig.generationModel,
+      generationQuality: aiConfig.generationQuality,
       preset: aiConfig.preset,
       preprocess: aiConfig.preprocess,
       aspectPolicy: aiConfig.aspectPolicy,

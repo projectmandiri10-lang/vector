@@ -707,7 +707,7 @@ export default function AdminPanel({ session, enabled }) {
                   <option value="custom">Custom</option>
                 </select>
               </label>
-              <div className="grid gap-3 md:grid-cols-3">
+              <div className="grid gap-3 md:grid-cols-4">
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Model analisis</span>
                   <input
@@ -723,6 +723,18 @@ export default function AdminPanel({ session, enabled }) {
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', generationModel: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Quality gambar</span>
+                  <select
+                    value={aiModelDraft.generationQuality || ''}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', generationQuality: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="hd">HD</option>
+                    <option value="standard">Standard</option>
+                    <option value="">Provider default</option>
+                  </select>
                 </label>
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Estimasi USD/gambar</span>
@@ -761,6 +773,7 @@ export default function AdminPanel({ session, enabled }) {
               <div className="border border-line bg-white p-3 text-sm leading-6 text-gray-700">
                 <p>
                   Aktif: <strong>{aiModelDraft.label}</strong> | {aiModelDraft.analysisModel} to {aiModelDraft.generationModel}
+                  {aiModelDraft.generationQuality ? ` (${aiModelDraft.generationQuality.toUpperCase()})` : ''}
                 </p>
                 <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
                 <p>Pipeline: model analisis membaca niat desain dan menulis prompt teknis, lalu model gambar menggambar ulang dari nol sebelum hasilnya di-trace.</p>

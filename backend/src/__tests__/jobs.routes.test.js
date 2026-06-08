@@ -14,6 +14,7 @@ process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
 process.env.GLM_ANALYSIS_MODEL = 'glm-5v-turbo';
 process.env.GLM_IMAGE_MODEL = 'glm-image';
+process.env.GLM_IMAGE_QUALITY = 'hd';
 process.env.GEMINI_ANALYSIS_MODEL = 'gemini-3.1-flash-lite-preview';
 process.env.GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
 
@@ -168,6 +169,7 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.equal(metadata.provider, 'zai_glm5v_glm_image');
     assert.equal(metadata.analysisModel, 'glm-5v-turbo');
     assert.equal(metadata.generationModel, 'glm-image');
+    assert.equal(metadata.generationQuality, 'hd');
   } finally {
     delete process.env.PROCESSOR_API_KEY;
   }

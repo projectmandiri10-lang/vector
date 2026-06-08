@@ -5,7 +5,8 @@ import { test } from 'node:test';
 import fs from 'fs-extra';
 import { PNG } from 'pngjs';
 import { validateSettings } from '../routes/jobs.routes.js';
-import { buildRedrawPrompt } from '../services/aiRedraw.service.js';
+import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
+import { buildGlmImageGenerationRequest, buildRedrawPrompt } from '../services/aiRedraw.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
@@ -38,6 +39,9 @@ test('buildRedrawPrompt appends sablon and max color instructions', () => {
   assert.match(prompt, /Optimize for manual screen printing and backend vector tracing/);
   assert.match(prompt, /Keep the redraw within about 4 dominant printable solid colors/);
   assert.match(prompt, /outermost artwork silhouette as smooth, clean, closed, continuous/);
+  assert.match(prompt, /Preserve exact readable text/);
+  assert.match(prompt, /not OCR reconstruction, not scan cleanup, not sharpening, not upscaling/);
+  assert.match(prompt, /no scan artifacts/);
 });
 
 test('standard prompt prioritizes faithful color matching', () => {
@@ -52,6 +56,36 @@ test('standard prompt prioritizes faithful color matching', () => {
   assert.match(prompt, /Remove all camera background/);
   assert.match(prompt, /Treat white, near-white, and paper-like empty background as non-printing space/);
   assert.match(prompt, /no jagged steps, no broken edges, and no accidental gaps/);
+});
+
+test('GLM quality config defaults to official GLM-Image HD generation', () => {
+  const config = normalizeHybridRedrawConfig({}, { GLM_ANALYSIS_MODEL: 'glm-5v-turbo', GLM_IMAGE_MODEL: 'glm-image' });
+
+  assert.equal(config.provider, 'zai_glm5v_glm_image');
+  assert.equal(config.analysisModel, 'glm-5v-turbo');
+  assert.equal(config.generationModel, 'glm-image');
+  assert.equal(config.generationQuality, 'hd');
+});
+
+test('legacy GLM config without generation quality safely uses hd', () => {
+  const config = normalizeHybridRedrawConfig({ model: 'glm-image' }, { GLM_ANALYSIS_MODEL: 'glm-5v-turbo', GLM_IMAGE_MODEL: 'glm-image' });
+
+  assert.equal(config.generationQuality, 'hd');
+});
+
+test('GLM image generation request sends hd quality with existing size policy', () => {
+  const request = buildGlmImageGenerationRequest(
+    'Strict vector redraw prompt.',
+    { generationModel: 'glm-image', generationQuality: 'hd', resolutionPolicy: 'high' },
+    { aspectRatio: '4:3' }
+  );
+
+  assert.deepEqual(request, {
+    model: 'glm-image',
+    prompt: 'Strict vector redraw prompt.',
+    quality: 'hd',
+    size: '1568x1056'
+  });
 });
 
 test('color helpers detect near white background and nearest palette', () => {
