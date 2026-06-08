@@ -77,6 +77,10 @@ function responseText(response) {
   return typeof response.text === 'string' ? response.text : '';
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function estimateBackgroundColor(raw, width, height) {
   const border = Math.max(1, Math.round(Math.min(width, height) * 0.04));
   let totalWeight = 0;
@@ -739,6 +743,44 @@ export function buildGlmImageGenerationRequest(technicalPrompt, aiConfig, prepro
   };
 }
 
+async function downloadGlmImageResult(imageUrl) {
+  const retryDelaysMs = [0, 3000, 8000, 15000, 30000];
+  let lastError = null;
+
+  for (let attempt = 0; attempt < retryDelaysMs.length; attempt += 1) {
+    const delayMs = retryDelaysMs[attempt];
+    if (delayMs > 0) await sleep(delayMs);
+
+    const imageResponse = await fetch(imageUrl);
+    const contentType = imageResponse.headers.get('content-type') || '';
+    if (imageResponse.ok) {
+      if (contentType && !/^image\/|application\/octet-stream/i.test(contentType)) {
+        const error = new Error(`URL hasil GLM-Image tidak mengembalikan file gambar (${contentType}).`);
+        error.status = 502;
+        error.upstream = 'zai';
+        throw exposeAiError(error);
+      }
+
+      return Buffer.from(await imageResponse.arrayBuffer());
+    }
+
+    const responseText = await imageResponse.text().catch(() => '');
+    const isTransientMissingFile =
+      imageResponse.status === 404 && /file not exist|RetCode"?\s*:\s*-148654/i.test(responseText);
+    const isRetryableStatus = imageResponse.status === 429 || imageResponse.status >= 500 || isTransientMissingFile;
+    lastError = new Error(`Gagal mengunduh hasil GLM-Image: ${imageResponse.status}`);
+    lastError.status = imageResponse.status >= 400 && imageResponse.status < 500 && !isTransientMissingFile ? imageResponse.status : 502;
+    lastError.upstream = 'zai';
+    lastError.responseText = responseText.slice(0, 500);
+
+    if (!isRetryableStatus || attempt === retryDelaysMs.length - 1) {
+      throw exposeAiError(lastError);
+    }
+  }
+
+  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil GLM-Image.'), { status: 502, upstream: 'zai' }));
+}
+
 async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
   const data = await zaiJsonFetch('/images/generations', buildGlmImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta));
   const imageResult = data?.data?.[0] || {};
@@ -755,23 +797,7 @@ async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
     throw exposeAiError(error);
   }
 
-  const imageResponse = await fetch(imageUrl);
-  if (!imageResponse.ok) {
-    const error = new Error(`Gagal mengunduh hasil GLM-Image: ${imageResponse.status}`);
-    error.status = imageResponse.status >= 400 && imageResponse.status < 500 ? imageResponse.status : 502;
-    error.upstream = 'zai';
-    throw exposeAiError(error);
-  }
-
-  const contentType = imageResponse.headers.get('content-type') || '';
-  if (contentType && !/^image\/|application\/octet-stream/i.test(contentType)) {
-    const error = new Error(`URL hasil GLM-Image tidak mengembalikan file gambar (${contentType}).`);
-    error.status = 502;
-    error.upstream = 'zai';
-    throw exposeAiError(error);
-  }
-
-  return Buffer.from(await imageResponse.arrayBuffer());
+  return downloadGlmImageResult(imageUrl);
 }
 
 async function postprocessGeneratedImage(buffer, preprocessName) {
