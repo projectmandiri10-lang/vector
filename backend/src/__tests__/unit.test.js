@@ -7,10 +7,11 @@ import { PNG } from 'pngjs';
 import { validateSettings } from '../routes/jobs.routes.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import {
-  buildOpenRouterAnalysisRequest,
   buildOpenRouterImageGenerationRequest,
+  buildOpenRouterSafetyRequest,
   buildRedrawPrompt,
-  extractOpenRouterImageReference
+  extractOpenRouterImageReference,
+  parseOpenRouterSafetyResult
 } from '../services/aiRedraw.service.js';
 import { createLogoRestoreArtifacts, logoRestoreBuffer } from '../services/logoRestore.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
@@ -142,65 +143,98 @@ test('standard prompt prioritizes faithful color matching', () => {
   assert.match(prompt, /no jagged steps, no broken edges, and no accidental gaps/);
 });
 
-test('OpenRouter Qwen quality config defaults to Qwen VL and Qwen Image', () => {
+test('OpenRouter Riverflow config defaults to Riverflow generator and Nemotron safety', () => {
   const config = normalizeHybridRedrawConfig({}, {});
 
-  assert.equal(config.provider, 'openrouter_qwen_image');
-  assert.equal(config.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
-  assert.equal(config.generationModel, 'qwen/qwen-image-2512');
+  assert.equal(config.provider, 'openrouter_riverflow_image');
+  assert.equal(config.analysisModel, '');
+  assert.equal(config.generationModel, 'sourceful/riverflow-v2.5-pro:free');
+  assert.equal(config.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
   assert.equal(config.generationQuality, 'high');
+  assert.equal(config.imageSize, '2K');
+  assert.equal(config.reasoningEffort, 'medium');
+  assert.equal(config.backgroundMode, 'transparent');
+  assert.equal(config.safetyEnabled, true);
 });
 
-test('legacy AI config normalizes back to OpenRouter Qwen defaults', () => {
+test('OpenRouter Riverflow config accepts env overrides', () => {
   const config = normalizeHybridRedrawConfig(
-    { provider: 'old-provider', model: 'old-image-model', generationModel: 'old-image-model', analysisModel: 'old-analysis-model' },
-    {}
+    {},
+    {
+      OPENROUTER_IMAGE_MODEL: 'custom/image-model',
+      OPENROUTER_SAFETY_MODEL: 'custom/safety-model',
+      OPENROUTER_IMAGE_SIZE: '4K',
+      OPENROUTER_REASONING_EFFORT: 'high',
+      OPENROUTER_BACKGROUND_MODE: 'solid',
+      OPENROUTER_SAFETY_ENABLED: '0'
+    }
   );
 
-  assert.equal(config.provider, 'openrouter_qwen_image');
-  assert.equal(config.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
-  assert.equal(config.generationModel, 'qwen/qwen-image-2512');
-  assert.equal(config.generationQuality, 'high');
+  assert.equal(config.provider, 'openrouter_riverflow_image');
+  assert.equal(config.generationModel, 'custom/image-model');
+  assert.equal(config.safetyModel, 'custom/safety-model');
+  assert.equal(config.imageSize, '4K');
+  assert.equal(config.reasoningEffort, 'high');
+  assert.equal(config.backgroundMode, 'solid');
+  assert.equal(config.safetyEnabled, false);
 });
 
-test('OpenRouter analysis request sends normalized original and cleaned trace target images', () => {
-  const request = buildOpenRouterAnalysisRequest(
+test('OpenRouter safety request sends normalized original and cleaned trace target images', () => {
+  const request = buildOpenRouterSafetyRequest(
     {
       normalizedBuffer: Buffer.from('original'),
       analysisBuffer: Buffer.from('cleaned'),
       preprocess: 'node_heuristic'
     },
     { productionType: 'sablon' },
-    { analysisModel: 'qwen/qwen3-vl-235b-a22b-instruct' }
+    { safetyModel: 'nvidia/nemotron-3.5-content-safety:free' }
   );
 
   const userContent = request.messages[1].content;
   const imageInputs = userContent.filter((part) => part.type === 'image_url');
-  assert.equal(request.model, 'qwen/qwen3-vl-235b-a22b-instruct');
+  assert.equal(request.model, 'nvidia/nemotron-3.5-content-safety:free');
   assert.equal(imageInputs.length, 2);
   assert.match(imageInputs[0].image_url.url, /^data:image\/png;base64,/);
   assert.match(imageInputs[1].image_url.url, /^data:image\/png;base64,/);
   assert.match(userContent.map((part) => part.text || '').join(' '), /normalized original upload/);
-  assert.match(userContent.map((part) => part.text || '').join(' '), /cleaned and cropped trace target/);
+  assert.match(userContent.map((part) => part.text || '').join(' '), /cleaned trace target/);
 });
 
-test('OpenRouter image generation request sends image input and strict redraw instructions', () => {
+test('Riverflow image generation request sends image input, image config, reasoning, and strict redraw instructions', () => {
   const request = buildOpenRouterImageGenerationRequest(
     'Strict vector redraw prompt.',
-    { generationModel: 'qwen/qwen-image-2512', generationQuality: 'high', resolutionPolicy: 'high' },
+    {
+      generationModel: 'sourceful/riverflow-v2.5-pro:free',
+      generationQuality: 'high',
+      resolutionPolicy: 'high',
+      imageSize: '2K',
+      reasoningEffort: 'medium',
+      backgroundMode: 'transparent'
+    },
     { analysisBuffer: Buffer.from('cleaned') }
   );
 
   const content = request.messages[0].content;
   const promptText = content.find((part) => part.type === 'text').text;
-  assert.equal(request.model, 'qwen/qwen-image-2512');
+  assert.equal(request.model, 'sourceful/riverflow-v2.5-pro:free');
   assert.deepEqual(request.modalities, ['image', 'text']);
+  assert.equal(request.image_config.background_mode, 'transparent');
+  assert.equal(request.image_config.image_size, '2K');
+  assert.match(request.image_config.scoring_prompt, /Score high/);
+  assert.match(request.image_config.scoring_rubric, /manual-vector-like/);
+  assert.deepEqual(request.reasoning, { effort: 'medium' });
   assert.equal(content.filter((part) => part.type === 'image_url').length, 1);
-  assert.match(promptText, /not as OCR, scan repair, sharpening, enhancement, or upscaling/);
+  assert.match(promptText, /not as OCR, scan repair, sharpening, enhancement, upscaling/);
   assert.match(promptText, /smooth closed contours/);
   assert.match(promptText, /Preserve exact readable text/);
   assert.match(promptText, /flat color fills/);
   assert.match(promptText, /Remove all paper, table, camera background/);
+});
+
+test('Nemotron safety parser blocks unsafe results and accepts safe results', () => {
+  assert.equal(parseOpenRouterSafetyResult('{"safe":true,"reason":"ordinary logo"}').safe, true);
+  assert.equal(parseOpenRouterSafetyResult('{"safe":false,"reason":"graphic violence"}').safe, false);
+  assert.equal(parseOpenRouterSafetyResult('Allowed. No unsafe content detected.').safe, true);
 });
 
 test('OpenRouter image response parser accepts data URLs and remote URLs', () => {

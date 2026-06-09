@@ -12,9 +12,14 @@ process.env.NODE_ENV = 'test';
 process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
-process.env.OPENROUTER_ANALYSIS_MODEL = 'qwen/qwen3-vl-235b-a22b-instruct';
-process.env.OPENROUTER_IMAGE_MODEL = 'qwen/qwen-image-2512';
+process.env.OPENROUTER_ANALYSIS_MODEL = '';
+process.env.OPENROUTER_IMAGE_MODEL = 'sourceful/riverflow-v2.5-pro:free';
+process.env.OPENROUTER_SAFETY_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
 process.env.OPENROUTER_IMAGE_QUALITY = 'high';
+process.env.OPENROUTER_IMAGE_SIZE = '2K';
+process.env.OPENROUTER_REASONING_EFFORT = 'medium';
+process.env.OPENROUTER_BACKGROUND_MODE = 'transparent';
+process.env.OPENROUTER_SAFETY_ENABLED = '1';
 
 const { app } = await import('../server.js');
 const { ensureJobDir, safeJobPath, writeJobMeta } = await import('../utils/file.js');
@@ -164,10 +169,14 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.match(response.headers['content-type'], /image\/png/);
     assert.ok(response.headers['x-ai-redraw-metadata']);
     const metadata = JSON.parse(Buffer.from(response.headers['x-ai-redraw-metadata'], 'base64url').toString('utf8'));
-    assert.equal(metadata.provider, 'openrouter_qwen_image');
-    assert.equal(metadata.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
-    assert.equal(metadata.generationModel, 'qwen/qwen-image-2512');
+    assert.equal(metadata.provider, 'openrouter_riverflow_image');
+    assert.equal(metadata.analysisModel, '');
+    assert.equal(metadata.generationModel, 'sourceful/riverflow-v2.5-pro:free');
+    assert.equal(metadata.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
     assert.equal(metadata.generationQuality, 'high');
+    assert.equal(metadata.imageSize, '2K');
+    assert.equal(metadata.reasoningEffort, 'medium');
+    assert.equal(metadata.backgroundMode, 'transparent');
   } finally {
     delete process.env.PROCESSOR_API_KEY;
   }
@@ -190,14 +199,48 @@ test('OpenRouter API key mode reports clear missing key error', async () => {
   }
 });
 
-test('legacy provider override still reports OpenRouter Qwen metadata in mock mode', async () => {
+test('unsafe safety gate blocks before Riverflow generator', async () => {
+  const previousMock = process.env.AI_REDRAW_MOCK;
+  const previousKey = process.env.OPENROUTER_API_KEY;
+  const previousLogoRestore = process.env.LOGO_RESTORE_ENABLED;
+  const previousFetch = global.fetch;
+  delete process.env.AI_REDRAW_MOCK;
+  process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+  process.env.LOGO_RESTORE_ENABLED = '0';
+  let calls = 0;
+  global.fetch = async () => {
+    calls += 1;
+    return new Response(JSON.stringify({ choices: [{ message: { content: '{"safe":false,"reason":"blocked test image"}' } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  };
+
+  try {
+    await assert.rejects(
+      () => hybridRedrawBuffer(makePngBuffer(), { productionType: 'sablon', inputMode: 'ai_redraw' }),
+      /safety gate OpenRouter\/Nemotron/
+    );
+    assert.equal(calls, 1);
+  } finally {
+    process.env.AI_REDRAW_MOCK = previousMock;
+    if (previousKey) process.env.OPENROUTER_API_KEY = previousKey;
+    else delete process.env.OPENROUTER_API_KEY;
+    if (previousLogoRestore === undefined) delete process.env.LOGO_RESTORE_ENABLED;
+    else process.env.LOGO_RESTORE_ENABLED = previousLogoRestore;
+    global.fetch = previousFetch;
+  }
+});
+
+test('legacy provider override still reports OpenRouter Riverflow metadata in mock mode', async () => {
   const result = await hybridRedrawBuffer(
     makePngBuffer(),
     { productionType: 'sablon', inputMode: 'ai_redraw' },
     { mode: 'legacy_quality', provider: 'old-provider', analysisModel: 'old-analysis', generationModel: 'old-generation' }
   );
 
-  assert.equal(result.metadata.provider, 'openrouter_qwen_image');
-  assert.equal(result.metadata.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
-  assert.equal(result.metadata.generationModel, 'qwen/qwen-image-2512');
+  assert.equal(result.metadata.provider, 'openrouter_riverflow_image');
+  assert.equal(result.metadata.analysisModel, '');
+  assert.equal(result.metadata.generationModel, 'sourceful/riverflow-v2.5-pro:free');
+  assert.equal(result.metadata.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
 });

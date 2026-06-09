@@ -447,6 +447,62 @@ function imageDataUrl(buffer, mimeType = 'image/png') {
   return `data:${mimeType};base64,${buffer.toString('base64')}`;
 }
 
+function configuredMaxImageInputBytes() {
+  const configured = Number.parseInt(process.env.OPENROUTER_MAX_IMAGE_INPUT_BYTES || '3200000', 10);
+  return Number.isFinite(configured) && configured > 0 ? configured : 3200000;
+}
+
+async function compressedImageDataUrl(buffer, label, maxBytes = configuredMaxImageInputBytes()) {
+  const attempts = [
+    { format: 'png', scale: 1, quality: 100 },
+    { format: 'webp', scale: 1, quality: 92 },
+    { format: 'webp', scale: 0.85, quality: 90 },
+    { format: 'webp', scale: 0.7, quality: 88 },
+    { format: 'webp', scale: 0.55, quality: 86 },
+    { format: 'webp', scale: 0.4, quality: 84 }
+  ];
+  const metadata = await sharp(buffer, { failOn: 'none' }).metadata();
+  const sourceWidth = metadata.width || 0;
+  const sourceHeight = metadata.height || 0;
+
+  for (const attempt of attempts) {
+    let pipeline = sharp(buffer, { failOn: 'none' }).rotate();
+    if (attempt.scale < 1 && sourceWidth && sourceHeight) {
+      pipeline = pipeline.resize({
+        width: Math.max(1, Math.round(sourceWidth * attempt.scale)),
+        height: Math.max(1, Math.round(sourceHeight * attempt.scale)),
+        fit: 'inside'
+      });
+    }
+
+    const output =
+      attempt.format === 'webp'
+        ? await pipeline.webp({ quality: attempt.quality, alphaQuality: 100 }).toBuffer()
+        : await pipeline.png({ compressionLevel: 9, adaptiveFiltering: true }).toBuffer();
+
+    if (output.length <= maxBytes) {
+      return imageDataUrl(output, attempt.format === 'webp' ? 'image/webp' : 'image/png');
+    }
+  }
+
+  const error = new Error(
+    `Gambar referensi terlalu besar untuk Riverflow free (${label}). Turunkan PREPROCESS_MAX_DIMENSION atau OPENROUTER_IMAGE_SIZE lalu coba lagi.`
+  );
+  error.status = 413;
+  error.upstream = 'openrouter';
+  throw exposeAiError(error);
+}
+
+async function prepareOpenRouterImageReferences(preprocessMeta) {
+  const maxReferenceBytes = configuredMaxImageInputBytes();
+  const maxContextBytes = Math.min(1500000, Math.max(600000, Math.floor(maxReferenceBytes / 2)));
+  return {
+    ...preprocessMeta,
+    normalizedDataUrl: await compressedImageDataUrl(preprocessMeta.normalizedBuffer, 'normalized original', maxContextBytes),
+    analysisDataUrl: await compressedImageDataUrl(preprocessMeta.analysisBuffer, 'cleaned trace target', maxReferenceBytes)
+  };
+}
+
 async function preprocessForHybridRedraw(buffer, preprocessName) {
   const maxDimension = Math.min(3072, Math.max(1024, Number.parseInt(process.env.PREPROCESS_MAX_DIMENSION || '2048', 10)));
   const normalized = await sharp(buffer, { failOn: 'error' })
@@ -519,7 +575,7 @@ export function buildOpenRouterAnalysisRequest(preprocessMeta, settings, aiConfi
           {
             type: 'image_url',
             image_url: {
-              url: imageDataUrl(preprocessMeta.normalizedBuffer)
+              url: preprocessMeta.normalizedDataUrl || imageDataUrl(preprocessMeta.normalizedBuffer)
             }
           },
           {
@@ -529,7 +585,7 @@ export function buildOpenRouterAnalysisRequest(preprocessMeta, settings, aiConfi
           {
             type: 'image_url',
             image_url: {
-              url: imageDataUrl(preprocessMeta.analysisBuffer)
+              url: preprocessMeta.analysisDataUrl || imageDataUrl(preprocessMeta.analysisBuffer)
             }
           },
           {
@@ -547,6 +603,101 @@ export function buildOpenRouterAnalysisRequest(preprocessMeta, settings, aiConfi
   };
 }
 
+export function buildOpenRouterSafetyRequest(preprocessMeta, settings, aiConfig) {
+  return {
+    model: aiConfig.safetyModel,
+    messages: [
+      {
+        role: 'system',
+        content:
+          'You are a visual content safety classifier. Return only JSON with fields safe:boolean, reason:string, categories:string[]. Be conservative only for explicit policy-risk content.'
+      },
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: [
+              'Classify whether this artwork is safe to process in a custom print/vector redraw workflow.',
+              'Allow ordinary logos, product art, sticker designs, typography, brand-like artwork, and blurry photos of printable artwork.',
+              'Block only explicit sexual content, child sexual content, graphic violence, hate/extremism, self-harm instructions, illegal activity, personal ID documents, or private personal data.',
+              `Production target: ${settings.productionType === 'sablon' ? 'screen printing' : 'sticker/vector output'}.`
+            ].join(' ')
+          },
+          {
+            type: 'text',
+            text: 'Reference image 1: normalized original upload for full visual context.'
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: preprocessMeta.normalizedDataUrl || imageDataUrl(preprocessMeta.normalizedBuffer)
+            }
+          },
+          {
+            type: 'text',
+            text: 'Reference image 2: cleaned trace target for the actual printable artwork.'
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: preprocessMeta.analysisDataUrl || imageDataUrl(preprocessMeta.analysisBuffer)
+            }
+          }
+        ]
+      }
+    ],
+    temperature: 0,
+    max_tokens: 300,
+    response_format: { type: 'json_object' },
+    stream: false
+  };
+}
+
+export function parseOpenRouterSafetyResult(rawText) {
+  const text = String(rawText || '').trim();
+  const parsed = extractJsonObject(text);
+  const verdict = String(parsed.verdict || parsed.safety || parsed.result || parsed.status || '').toLowerCase();
+  const reason = String(parsed.reason || parsed.explanation || parsed.message || text || '').trim();
+  const safeValue = parsed.safe ?? parsed.is_safe ?? parsed.isSafe ?? parsed.allowed;
+
+  if (typeof safeValue === 'boolean') {
+    return { safe: safeValue, reason: reason || (safeValue ? 'Safe.' : 'Unsafe.'), rawText: text };
+  }
+  if (['safe', 'allowed', 'compliant', 'ok'].includes(verdict)) {
+    return { safe: true, reason: reason || 'Safe.', rawText: text };
+  }
+  if (['unsafe', 'blocked', 'disallowed', 'violation', 'not_safe'].includes(verdict)) {
+    return { safe: false, reason: reason || 'Unsafe.', rawText: text };
+  }
+
+  const lower = text.toLowerCase();
+  if (/no unsafe|not unsafe|safe to process|allowed|compliant/.test(lower)) {
+    return { safe: true, reason: reason || 'Safe.', rawText: text };
+  }
+  if (/\bunsafe\b|disallowed|violation|not safe|child sexual|graphic violence|self-harm|extremism|private personal data/.test(lower)) {
+    return { safe: false, reason: reason || 'Unsafe.', rawText: text };
+  }
+  return { safe: true, reason: reason || 'No safety issue detected.', rawText: text };
+}
+
+async function checkOpenRouterSafety(preprocessMeta, settings, aiConfig) {
+  if (!aiConfig.safetyEnabled) {
+    return { safe: true, reason: 'Safety gate disabled by config.', skipped: true };
+  }
+
+  const data = await openRouterJsonFetch('/chat/completions', buildOpenRouterSafetyRequest(preprocessMeta, settings, aiConfig));
+  const rawText = data?.choices?.[0]?.message?.content || '';
+  const result = parseOpenRouterSafetyResult(rawText);
+  if (!result.safe) {
+    const error = new Error(`Gambar tidak bisa diproses oleh safety gate OpenRouter/Nemotron. ${result.reason}`.trim());
+    error.status = 400;
+    error.upstream = 'openrouter';
+    throw exposeAiError(error);
+  }
+  return result;
+}
+
 async function analyzeArtworkWithOpenRouter(preprocessMeta, settings, aiConfig) {
   const data = await openRouterJsonFetch('/chat/completions', buildOpenRouterAnalysisRequest(preprocessMeta, settings, aiConfig));
 
@@ -557,12 +708,22 @@ async function analyzeArtworkWithOpenRouter(preprocessMeta, settings, aiConfig) 
 function buildOpenRouterGeneratorPrompt(technicalPrompt, aiConfig) {
   return [
     'Use the uploaded image as the direct visual reference for an image-to-image redraw.',
-    'Redraw the artwork faithfully as flat solid vector-like art, not as OCR, scan repair, sharpening, enhancement, or upscaling.',
+    'Redraw the artwork faithfully as flat solid vector-like art, not as OCR, scan repair, sharpening, enhancement, upscaling, or a cleaned screenshot.',
     'Preserve exact readable text, text placement, lettering hierarchy, dominant colors, silhouette, enclosed holes, and symbol positions from the reference.',
     'Create smooth closed contours, clean high-density edges, flat color fills, and trace-ready shapes for vectorization, screen printing, sticker cutting, and color separation.',
-    'Remove all paper, table, camera background, shadows, glare, texture, compression noise, pixel blocks, halftone, scan artifacts, and rectangular background layers.',
+    'Remove all paper, table, camera background, shadows, glare, texture, compression noise, pixel blocks, halftone, scan artifacts, rectangular background layers, and jagged mask noise.',
+    `Output background mode: ${aiConfig.backgroundMode || 'transparent'}.`,
+    `Target image size: ${aiConfig.imageSize || '2K'}.`,
     `Quality target: ${aiConfig.generationQuality || 'high'}.`,
     technicalPrompt
+  ].join(' ');
+}
+
+function riverflowScoringPrompt() {
+  return [
+    'Score high only if the output is a faithful rebuilt artwork, not scan cleanup.',
+    'Prefer smooth closed vector-like contours, exact text placement, flat solid colors, transparent/removed background, and no pixel blocks.',
+    'Score low for OCR-like substitutions, rough edges, shadows, paper/table background, blur, texture, and broken lettering.'
   ].join(' ');
 }
 
@@ -580,13 +741,22 @@ export function buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig,
           {
             type: 'image_url',
             image_url: {
-              url: imageDataUrl(preprocessMeta.analysisBuffer)
+              url: preprocessMeta.analysisDataUrl || imageDataUrl(preprocessMeta.analysisBuffer)
             }
           }
         ]
       }
     ],
     modalities: ['image', 'text'],
+    image_config: {
+      image_size: aiConfig.imageSize || '2K',
+      background_mode: aiConfig.backgroundMode || 'transparent',
+      scoring_prompt: riverflowScoringPrompt(),
+      scoring_rubric: '0-2: OCR/scan cleanup or noisy raster. 3-5: partially faithful but jagged or background remains. 6-8: clean redraw with mostly smooth contours and correct text/layout. 9-10: manual-vector-like, flat colors, exact text placement, transparent background, trace-ready.'
+    },
+    reasoning: {
+      effort: aiConfig.reasoningEffort || 'medium'
+    },
     temperature: 0.2,
     top_p: 0.9,
     stream: false
@@ -627,7 +797,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
     const contentType = imageResponse.headers.get('content-type') || '';
     if (imageResponse.ok) {
       if (contentType && !/^image\/|application\/octet-stream/i.test(contentType)) {
-        const error = new Error(`URL hasil OpenRouter/Qwen tidak mengembalikan file gambar (${contentType}).`);
+        const error = new Error(`URL hasil OpenRouter/Riverflow tidak mengembalikan file gambar (${contentType}).`);
         error.status = 502;
         error.upstream = 'openrouter';
         throw exposeAiError(error);
@@ -638,7 +808,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
 
     const responseText = await imageResponse.text().catch(() => '');
     const isRetryableStatus = imageResponse.status === 404 || imageResponse.status === 429 || imageResponse.status >= 500;
-    lastError = new Error(`Gagal mengunduh hasil OpenRouter/Qwen: ${imageResponse.status}`);
+    lastError = new Error(`Gagal mengunduh hasil OpenRouter/Riverflow: ${imageResponse.status}`);
     lastError.status = imageResponse.status >= 400 && imageResponse.status < 500 && imageResponse.status !== 404 ? imageResponse.status : 502;
     lastError.upstream = 'openrouter';
     lastError.responseText = responseText.slice(0, 500);
@@ -648,7 +818,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
     }
   }
 
-  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter/Qwen.'), { status: 502, upstream: 'openrouter' }));
+  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter/Riverflow.'), { status: 502, upstream: 'openrouter' }));
 }
 
 async function bufferFromOpenRouterImageReference(imageReference) {
@@ -664,7 +834,7 @@ async function bufferFromOpenRouterImageReference(imageReference) {
     return downloadOpenRouterImageResult(imageReference);
   }
 
-  const error = new Error('OpenRouter/Qwen mengembalikan referensi gambar yang tidak dikenali.');
+  const error = new Error('OpenRouter/Riverflow mengembalikan referensi gambar yang tidak dikenali.');
   error.status = 502;
   error.upstream = 'openrouter';
   throw exposeAiError(error);
@@ -677,8 +847,8 @@ async function generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocess
     const text = data?.choices?.[0]?.message?.content;
     const error = new Error(
       text
-        ? `OpenRouter/Qwen tidak mengembalikan gambar. Respons teks: ${String(text).slice(0, 500)}`
-        : 'OpenRouter/Qwen tidak mengembalikan URL gambar atau base64 image.'
+        ? `OpenRouter/Riverflow tidak mengembalikan gambar. Respons teks: ${String(text).slice(0, 500)}`
+        : 'OpenRouter/Riverflow tidak mengembalikan URL gambar atau base64 image.'
     );
     error.status = 502;
     error.upstream = 'openrouter';
@@ -696,7 +866,7 @@ async function postprocessGeneratedImage(buffer, preprocessName) {
     try {
       return await sharp(buffer, { failOn: 'none' }).rotate().png().toBuffer();
     } catch {
-      const next = new Error(`Gambar OpenRouter/Qwen berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
+      const next = new Error(`Gambar OpenRouter/Riverflow berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
       next.status = 502;
       next.upstream = 'openrouter';
       throw exposeAiError(next);
@@ -745,7 +915,12 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
         provider: aiConfig.provider,
         analysisModel: aiConfig.analysisModel,
         generationModel: aiConfig.generationModel,
+        safetyModel: aiConfig.safetyModel,
+        safetyEnabled: aiConfig.safetyEnabled,
         generationQuality: aiConfig.generationQuality,
+        imageSize: aiConfig.imageSize,
+        reasoningEffort: aiConfig.reasoningEffort,
+        backgroundMode: aiConfig.backgroundMode,
         preset: aiConfig.preset,
         preprocess: aiConfig.preprocess,
         aspectPolicy: aiConfig.aspectPolicy,
@@ -767,7 +942,12 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
           provider: logoRestore.metadata.provider,
           analysisModel: aiConfig.analysisModel,
           generationModel: logoRestore.metadata.generationModel,
+          safetyModel: aiConfig.safetyModel,
+          safetyEnabled: aiConfig.safetyEnabled,
           generationQuality: logoRestore.metadata.generationQuality,
+          imageSize: aiConfig.imageSize,
+          reasoningEffort: aiConfig.reasoningEffort,
+          backgroundMode: aiConfig.backgroundMode,
           preset: aiConfig.preset,
           preprocess: aiConfig.preprocess,
           aspectPolicy: aiConfig.aspectPolicy,
@@ -790,13 +970,25 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
     }
   }
 
-  const analysis = await analyzeArtworkWithOpenRouter(preprocessMeta, settings, aiConfig);
-  const technicalPrompt = analysis.technicalPrompt || buildRedrawPrompt(settings, analysis);
-  let generated = await generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocessMeta);
+  const preparedMeta = await prepareOpenRouterImageReferences(preprocessMeta);
+  const safety = await checkOpenRouterSafety(preparedMeta, settings, aiConfig);
+  const analysis = normalizeAnalysisPayload(
+    {
+      subjectSummary: 'Direct Riverflow image-to-image redraw from the cleaned trace target.',
+      style: 'Flat vector-like redraw',
+      textDescription: 'Preserve exact readable text, placement, and hierarchy from the uploaded artwork.',
+      backgroundPolicy: 'Remove camera/paper/table background and return isolated trace-ready artwork.',
+      confidence: { overall: 0.82, text: 0.78, shapes: 0.82, colors: 0.82 },
+      printNotes: [`Nemotron safety gate: ${safety.reason || 'safe'}`]
+    },
+    settings
+  );
+  const technicalPrompt = buildRedrawPrompt(settings, analysis);
+  let generated = await generateWithOpenRouterImage(technicalPrompt, aiConfig, preparedMeta);
   let retryUsed = false;
 
   if (shouldRetryHybrid(aiConfig, analysis)) {
-    generated = await generateWithOpenRouterImage(buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
+    generated = await generateWithOpenRouterImage(buildRetryPrompt(technicalPrompt, analysis), aiConfig, preparedMeta);
     retryUsed = true;
   }
 
@@ -808,7 +1000,13 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
       provider: aiConfig.provider,
       analysisModel: aiConfig.analysisModel,
       generationModel: aiConfig.generationModel,
+      safetyModel: aiConfig.safetyModel,
+      safetyEnabled: aiConfig.safetyEnabled,
+      safetySummary: safety,
       generationQuality: aiConfig.generationQuality,
+      imageSize: aiConfig.imageSize,
+      reasoningEffort: aiConfig.reasoningEffort,
+      backgroundMode: aiConfig.backgroundMode,
       preset: aiConfig.preset,
       preprocess: aiConfig.preprocess,
       aspectPolicy: aiConfig.aspectPolicy,

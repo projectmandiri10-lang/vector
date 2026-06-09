@@ -9,7 +9,7 @@ Browser user
   -> Railway service Express
      -> serve frontend build
      -> API /api/...
-     -> OpenRouter Qwen redraw
+     -> OpenRouter Nemotron safety + Riverflow redraw
      -> vector trace, cutline, separasi, PDF, ZIP
   -> Supabase auth, credit, metadata
 ```
@@ -48,9 +48,15 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 OPENROUTER_API_KEY=...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_ANALYSIS_MODEL=qwen/qwen3-vl-235b-a22b-instruct
-OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2512
+OPENROUTER_ANALYSIS_MODEL=
+OPENROUTER_IMAGE_MODEL=sourceful/riverflow-v2.5-pro:free
+OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
 OPENROUTER_IMAGE_QUALITY=high
+OPENROUTER_IMAGE_SIZE=2K
+OPENROUTER_REASONING_EFFORT=medium
+OPENROUTER_BACKGROUND_MODE=transparent
+OPENROUTER_SAFETY_ENABLED=1
+OPENROUTER_MAX_IMAGE_INPUT_BYTES=3200000
 OPENROUTER_APP_NAME=Design Mudah Vector
 AI_REDRAW_PRESET=quality
 
@@ -85,9 +91,9 @@ Invoke-RestMethod "https://DOMAIN-RAILWAY-ANDA/api/health"
 Pastikan respons menampilkan:
 
 - `ok: true`
-- `redrawProvider: openrouter_qwen_image`
-- `redrawAnalysisModel: qwen/qwen3-vl-235b-a22b-instruct`
-- `redrawGenerationModel: qwen/qwen-image-2512`
+- `redrawProvider: openrouter_riverflow_image`
+- `redrawGenerationModel: sourceful/riverflow-v2.5-pro:free`
+- `redrawSafetyModel: nvidia/nemotron-3.5-content-safety:free`
 - `openRouterConfigured: true`
 
-Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, dan model ID `OPENROUTER_IMAGE_MODEL`.
+Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, model ID `OPENROUTER_IMAGE_MODEL`, dan apakah model free Riverflow masih tersedia.

@@ -309,7 +309,7 @@ values
   ('shopee_payment', '{"url":"https://shopee.co.id/","note":"Checkout nominal credit di Shopee, lalu kirim email akun Design Mudah melalui chat Shopee. Admin top up manual 5-15 menit pada jam kerja.","contact":""}'::jsonb, true, 'Konfigurasi pembayaran manual Shopee'),
   ('app_status', '{"maintenance":false,"message":""}'::jsonb, true, 'Status aplikasi publik'),
   ('example_jobs', '{"sticker":null,"sablon":null}'::jsonb, true, 'Contoh gambar aktif untuk sticker dan sablon'),
-  ('ai_redraw_model', '{"mode":"quality","preset":"quality","label":"Kualitas","provider":"openrouter_qwen_image","analysisModel":"qwen/qwen3-vl-235b-a22b-instruct","generationModel":"qwen/qwen-image-2512","generationQuality":"high","aspectPolicy":"match_source","resolutionPolicy":"high","preprocess":"node_heuristic","persistPrompt":true,"retryOnLowConfidence":false,"estimatedUsdPerImage":0.05}'::jsonb, false, 'Pipeline OpenRouter Qwen redraw: Qwen VL analyzer + Qwen Image model')
+  ('ai_redraw_model', '{"mode":"quality","preset":"quality","label":"Kualitas","provider":"openrouter_riverflow_image","analysisModel":"","generationModel":"sourceful/riverflow-v2.5-pro:free","safetyModel":"nvidia/nemotron-3.5-content-safety:free","generationQuality":"high","imageSize":"2K","reasoningEffort":"medium","backgroundMode":"transparent","safetyEnabled":true,"aspectPolicy":"match_source","resolutionPolicy":"high","preprocess":"node_heuristic","persistPrompt":true,"retryOnLowConfidence":false,"estimatedUsdPerImage":0}'::jsonb, false, 'Pipeline OpenRouter Riverflow redraw: Riverflow image model + Nemotron safety gate')
 on conflict (key) do update
 set value = case
       when public.app_settings.value is null or public.app_settings.value = '{}'::jsonb then excluded.value

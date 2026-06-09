@@ -1,9 +1,9 @@
 # Hybrid Redraw Policy
 
-Design Mudah uses a fixed redraw architecture:
+Design Mudah uses an experimental OpenRouter redraw architecture:
 
-- `OpenRouter Qwen VL = analyzer`
-- `OpenRouter Qwen Image = image-to-image redraw`
+- `Nemotron Content Safety = visual safety gate`
+- `Riverflow V2.5 Pro = direct image-to-image redraw`
 - deterministic Logo Restore, trace, vector, cutline, film, PDF, and ZIP stay outside AI
 
 ## Pipeline
@@ -15,27 +15,28 @@ Design Mudah uses a fixed redraw architecture:
    - remove border-connected background
    - preserve enclosed artwork
 3. Logo Restore runs first for flat logo/text artwork and can return vector artifacts without generative redraw.
-4. For AI redraw, Qwen VL analyzes two references:
-   - normalized original upload for full context
-   - cleaned trace target for printable artwork boundaries
-5. Qwen Image redraws from the strict technical prompt and the cleaned image reference.
+4. For AI redraw, Nemotron checks the normalized original and cleaned trace target for safety.
+5. If safe, Riverflow redraws directly from the cleaned trace target with a strict vector-like prompt, `image_config`, and reasoning effort from env.
 6. The resulting PNG is postprocessed, then returned to the existing trace and separation flow.
 
 ## Invariants
 
 - Ready trace mode must stay local/backend trace only and must not call OpenRouter.
-- Do not let the Worker generate redraw prompts locally.
+- Redraw model IDs and Riverflow controls must stay env-editable.
 - Persist redraw metadata to the job manifest:
   - provider
-  - analysis model
   - generation model
+  - safety model
+  - image size
+  - reasoning effort
+  - background mode
   - preset
   - preprocess mode
-  - analysis summary
+  - safety summary
   - final technical prompt
 - Keep user-facing redraw pricing flat unless pricing policy is explicitly changed.
 
 ## Admin Setting
 
 The active pipeline config lives in `app_settings.ai_redraw_model`.
-Saved settings normalize to the OpenRouter Qwen config shape, including older records that used a previous provider.
+Saved settings normalize to the OpenRouter Riverflow config shape, including older records that used a previous provider.

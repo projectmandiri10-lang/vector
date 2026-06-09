@@ -11,25 +11,26 @@ Tanggal cek: 2026-06-09.
 
 ## Ringkasan
 
-Runtime project sekarang memakai OpenRouter Qwen saja:
+Runtime eksperimen project sekarang memakai OpenRouter:
 
-- Analyzer: `qwen/qwen3-vl-235b-a22b-instruct`
-- Generator default env: `qwen/qwen-image-2512`
-- Provider runtime: `openrouter_qwen_image`
+- Safety gate: `nvidia/nemotron-3.5-content-safety:free`
+- Generator: `sourceful/riverflow-v2.5-pro:free`
+- Provider runtime: `openrouter_riverflow_image`
 
-Catatan penting: saat pengecekan katalog publik OpenRouter pada 2026-06-09, `qwen/qwen3-vl-235b-a22b-instruct` tersedia sebagai `text,image -> text`, tetapi katalog publik belum menampilkan model Qwen dengan `output_modalities=image`. Karena itu, harga final Qwen Image 2.0/2512 harus dikunci dari halaman model OpenRouter yang benar setelah `OPENROUTER_IMAGE_MODEL` final tersedia/aktif.
+Catatan penting: Riverflow free dipakai sebagai eksperimen image-to-image dan model ID wajib tetap env-editable. Jika model free tidak tersedia atau berubah, ganti `OPENROUTER_IMAGE_MODEL` tanpa mengubah kode.
 
 ## Tabel Perbandingan
 
 | Provider/model | Fungsi di project | Pricing basis | Estimasi biaya per redraw | Risiko biaya | Catatan kualitas logo/sablon/sticker |
 |---|---|---:|---:|---|---|
-| OpenRouter `qwen/qwen3-vl-235b-a22b-instruct` | Analisis gambar: baca original + cleaned trace target | $0.20/M input tokens, $0.88/M output tokens | Biasanya kecil dibanding biaya generator gambar | Token naik bila prompt/metadata panjang atau gambar dihitung sebagai banyak token | Bagus sebagai analis visual untuk teks, layout, warna, dan prompt teknis ketat |
-| OpenRouter `qwen/qwen-image-2512` | Redraw image-to-image | Belum terverifikasi di katalog publik OpenRouter saat cek | Belum bisa dihitung akurat; gunakan billing OpenRouter setelah model ID benar | Risiko utama: model ID berubah, tidak tersedia, atau harga image-output berbeda antar provider | Dipilih karena hasil test prompt ketat lebih cocok untuk redraw logo daripada pipeline sebelumnya |
-| Gemini image models | Referensi harga saja, bukan runtime | Google native image pricing per output image/token | Contoh Google pricing: Gemini 3.1 Flash image sekitar $0.067 per 1K, $0.101 per 2K, $0.151 per 4K; Gemini 3 Pro Image sekitar $0.134 per 1K/2K dan $0.24 per 4K | Harga lebih mudah diprediksi per image, tetapi runtime project tidak lagi memakai Gemini | Kualitas bagus untuk beberapa image generation, tetapi dihapus dari runtime agar stack fokus ke Qwen/OpenRouter |
+| OpenRouter `nvidia/nemotron-3.5-content-safety:free` | Safety gate visual sebelum redraw | Free di katalog OpenRouter | $0 untuk safety gate selama model free tersedia | Bisa berubah, rate limit free, atau output terlalu konservatif | Tidak dipakai untuk analisis desain, hanya blok konten berisiko |
+| OpenRouter `sourceful/riverflow-v2.5-pro:free` | Redraw direct image-to-image | Free di halaman/katalog OpenRouter saat percobaan | $0 selama model free tersedia | Model free dapat hilang/limit berubah; request image dibatasi sekitar 4.5 MB | Cocok dicoba untuk input rendah karena melihat gambar langsung tanpa analyzer terpisah |
+| OpenRouter Qwen VL/Image | Alternatif non-default | Bergantung model Qwen aktif di OpenRouter | Perlu cek model ID final dan billing aktual | Model image-output Qwen bisa berubah/tidak tampil di katalog publik | Bisa dipakai ulang sebagai fallback jika Riverflow tidak stabil |
+| Gemini image models | Referensi harga saja, bukan runtime | Google native image pricing per output image/token | Contoh Google pricing: Gemini 3.1 Flash image sekitar $0.067 per 1K, $0.101 per 2K, $0.151 per 4K; Gemini 3 Pro Image sekitar $0.134 per 1K/2K dan $0.24 per 4K | Harga lebih mudah diprediksi per image, tetapi runtime project tidak memakai Gemini | Kualitas bagus untuk beberapa image generation, tetapi sudah dihapus dari runtime |
 
 ## Rekomendasi Operasional
 
-1. Tetapkan `OPENROUTER_IMAGE_MODEL` dari model Qwen image-output yang benar di OpenRouter.
-2. Jalankan 10-20 redraw test nyata dan catat usage OpenRouter per job.
-3. Update `estimatedUsdPerImage` di `app_settings.ai_redraw_model` dari angka billing aktual, bukan perkiraan.
+1. Jalankan 10-20 redraw test nyata dan catat hasil serta kegagalan safety/generator.
+2. Jika Riverflow free hilang, ganti `OPENROUTER_IMAGE_MODEL` ke image-to-image model OpenRouter lain.
+3. Update `estimatedUsdPerImage` di `app_settings.ai_redraw_model` dari billing aktual bila berpindah ke model berbayar.
 4. Pertahankan harga user flat sampai data biaya nyata cukup stabil.

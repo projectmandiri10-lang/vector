@@ -14,7 +14,7 @@ Referensi resmi yang dipakai:
 User Browser
   -> Cloudflare Pages frontend: https://designmudah.pages.dev
   -> Cloudflare Worker API: login, credit, admin, contoh job, dan proxy redraw
-  -> Google Cloud Run processor: OpenRouter Qwen redraw, trace, cutline, separasi warna, PDF, ZIP, registration mark
+  -> Google Cloud Run processor: OpenRouter Nemotron safety + Riverflow redraw, trace, cutline, separasi warna, PDF, ZIP, registration mark
   -> Supabase: auth, credit, metadata, bucket contoh
 ```
 
@@ -47,15 +47,15 @@ Pipeline redraw sekarang tetap:
 - Worker `/api/image-retouch` hanya memeriksa auth dan credit, lalu meneruskan upload ke Cloud Run.
 - Cloud Run route internal `POST /api/redraw/hybrid` melakukan:
   - preprocess Node heuristic
-  - analisis desain dengan Qwen VL via OpenRouter
-  - generasi ulang image-to-image dengan Qwen Image via OpenRouter
+  - safety gate visual dengan Nemotron via OpenRouter
+  - generasi ulang image-to-image dengan Riverflow via OpenRouter
 - Setelah PNG redraw jadi, trace/cutline/separasi warna tetap dikerjakan engine deterministik.
 
 Health endpoint backend sekarang menampilkan:
 
 ```json
 {
-  "redrawProvider": "openrouter_qwen_image",
+  "redrawProvider": "openrouter_riverflow_image",
   "redrawPreset": "quality",
   "redrawScope": "worker /api/image-retouch and backend /api/jobs inputMode=ai_redraw"
 }
@@ -109,7 +109,7 @@ Jika repository sudah ada, command ini boleh dilewati.
 
 ## 6. Auth dan Secret
 
-Untuk Cloud Run/Fly, simpan `OPENROUTER_API_KEY` sebagai secret runtime. `OPENROUTER_BASE_URL`, `OPENROUTER_ANALYSIS_MODEL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_IMAGE_QUALITY`, dan `OPENROUTER_APP_NAME` bisa menjadi env non-secret.
+Untuk Cloud Run/Fly, simpan `OPENROUTER_API_KEY` sebagai secret runtime. `OPENROUTER_BASE_URL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_SAFETY_MODEL`, `OPENROUTER_IMAGE_SIZE`, `OPENROUTER_REASONING_EFFORT`, `OPENROUTER_BACKGROUND_MODE`, `OPENROUTER_SAFETY_ENABLED`, dan `OPENROUTER_APP_NAME` bisa menjadi env non-secret.
 
 Pastikan service account runtime punya izin minimal:
 

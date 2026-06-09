@@ -318,7 +318,7 @@ export default function AdminPanel({ session, enabled }) {
           key: 'ai_redraw_model',
           value: nextValue,
           isPublic: false,
-          description: `Pipeline OpenRouter Qwen redraw: ${nextValue.analysisModel} analyzer + ${nextValue.generationModel} image model`
+          description: `Pipeline OpenRouter Riverflow redraw: ${nextValue.generationModel} image model + ${nextValue.safetyModel} safety gate`
         },
         accessToken
       );
@@ -707,9 +707,9 @@ export default function AdminPanel({ session, enabled }) {
                   <option value="custom">Custom</option>
                 </select>
               </label>
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="grid gap-3 md:grid-cols-3">
                 <label className="block">
-                  <span className="mb-1.5 block text-sm font-medium text-ink">Model analisis</span>
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Model analisis opsional</span>
                   <input
                     value={aiModelDraft.analysisModel}
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', analysisModel: event.target.value }))}
@@ -725,6 +725,16 @@ export default function AdminPanel({ session, enabled }) {
                   />
                 </label>
                 <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Model safety</span>
+                  <input
+                    value={aiModelDraft.safetyModel}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', safetyModel: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  />
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-4">
+                <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Quality gambar</span>
                   <select
                     value={aiModelDraft.generationQuality || ''}
@@ -737,6 +747,54 @@ export default function AdminPanel({ session, enabled }) {
                   </select>
                 </label>
                 <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran gambar</span>
+                  <select
+                    value={aiModelDraft.imageSize || '2K'}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', imageSize: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="1K">1K</option>
+                    <option value="2K">2K</option>
+                    <option value="4K">4K</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Reasoning</span>
+                  <select
+                    value={aiModelDraft.reasoningEffort || 'medium'}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', reasoningEffort: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="xhigh">XHigh</option>
+                  </select>
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Background</span>
+                  <select
+                    value={aiModelDraft.backgroundMode || 'transparent'}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', backgroundMode: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="transparent">Transparent</option>
+                    <option value="original">Original</option>
+                    <option value="solid">Solid</option>
+                  </select>
+                </label>
+                <label className="flex items-center gap-2 pt-7 text-sm font-medium text-ink">
+                  <input
+                    type="checkbox"
+                    checked={aiModelDraft.safetyEnabled !== false}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', safetyEnabled: event.target.checked }))}
+                    className="h-4 w-4 accent-spruce"
+                  />
+                  Safety gate
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Estimasi USD/gambar</span>
                   <input
                     type="number"
@@ -747,8 +805,6 @@ export default function AdminPanel({ session, enabled }) {
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   />
                 </label>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3">
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Resolusi policy</span>
                   <select
@@ -776,7 +832,10 @@ export default function AdminPanel({ session, enabled }) {
                   {aiModelDraft.generationQuality ? ` (${aiModelDraft.generationQuality.toUpperCase()})` : ''}
                 </p>
                 <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
-                <p>Pipeline: OpenRouter Qwen VL membaca niat desain, lalu Qwen Image menggambar ulang memakai input gambar referensi sebelum hasilnya di-trace.</p>
+                <p>Pipeline: Nemotron memeriksa safety visual, lalu Riverflow menggambar ulang langsung dari cleaned trace target sebelum hasilnya di-trace.</p>
+                <p>
+                  Riverflow: {aiModelDraft.imageSize || '2K'} | reasoning {aiModelDraft.reasoningEffort || 'medium'} | background {aiModelDraft.backgroundMode || 'transparent'} | safety {aiModelDraft.safetyEnabled === false ? 'mati' : 'aktif'}
+                </p>
                 <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen pipeline hybrid.'}</p>
                 <p>
                   Kebijakan tetap: aspect mengikuti sumber, preprocess Node heuristic, prompt disimpan ke manifest,

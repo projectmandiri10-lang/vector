@@ -116,7 +116,7 @@ VITE_GOOGLE_OAUTH_REDIRECT_TO=http://localhost:5173
 
 `GOOGLE_OAUTH_CLIENT_SECRET` jangan dimasukkan ke Cloudflare Pages/frontend. Secret tersebut cukup disimpan di Supabase Google provider dan catatan `.env` lokal.
 
-## 3. Siapkan OpenRouter Qwen
+## 3. Siapkan OpenRouter Riverflow
 
 Worker memeriksa auth/credit, lalu meneruskan redraw ke processor backend. Processor memakai OpenRouter API:
 
@@ -129,9 +129,14 @@ Env yang dibutuhkan:
 ```text
 OPENROUTER_API_KEY=...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
-OPENROUTER_ANALYSIS_MODEL=qwen/qwen3-vl-235b-a22b-instruct
-OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2512
+OPENROUTER_ANALYSIS_MODEL=
+OPENROUTER_IMAGE_MODEL=sourceful/riverflow-v2.5-pro:free
+OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
 OPENROUTER_IMAGE_QUALITY=high
+OPENROUTER_IMAGE_SIZE=2K
+OPENROUTER_REASONING_EFFORT=medium
+OPENROUTER_BACKGROUND_MODE=transparent
+OPENROUTER_SAFETY_ENABLED=1
 OPENROUTER_APP_NAME=Design Mudah Vector
 ```
 
@@ -201,7 +206,7 @@ Saat terminal meminta value:
 - `SUPABASE_SERVICE_ROLE_KEY`: isi service role key dari Supabase `Project Settings > API`
 - `PROCESSOR_API_KEY`: isi key yang sama dengan backend processor.
 
-`OPENROUTER_ANALYSIS_MODEL` dan `OPENROUTER_IMAGE_MODEL` ada di konfigurasi processor/backend, bukan dipanggil langsung oleh Worker.
+`OPENROUTER_IMAGE_MODEL`, `OPENROUTER_SAFETY_MODEL`, dan parameter Riverflow ada di konfigurasi processor/backend, bukan dipanggil langsung oleh Worker.
 
 ### 4.3 Deploy Worker
 
@@ -422,7 +427,7 @@ AI redraw gagal:
 
 - Cek Worker secret `PROCESSOR_API_KEY` dan `PROCESSOR_BASE_URL`.
 - Cek processor secret `OPENROUTER_API_KEY`.
-- Cek akun OpenRouter punya saldo dan akses ke model Qwen yang dipakai.
+- Cek akun OpenRouter punya saldo dan akses ke model Riverflow/Nemotron yang dipakai.
 
 Admin tidak muncul:
 

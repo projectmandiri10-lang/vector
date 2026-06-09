@@ -12,9 +12,14 @@ dotenv.config({ path: path.join(projectRoot, '.env'), override: false });
 dotenv.config({ path: path.join(backendDir, '.env'), override: false });
 
 process.env.OPENROUTER_BASE_URL ||= 'https://openrouter.ai/api/v1';
-process.env.OPENROUTER_ANALYSIS_MODEL ||= 'qwen/qwen3-vl-235b-a22b-instruct';
-process.env.OPENROUTER_IMAGE_MODEL ||= 'qwen/qwen-image-2512';
+process.env.OPENROUTER_ANALYSIS_MODEL ||= '';
+process.env.OPENROUTER_IMAGE_MODEL ||= 'sourceful/riverflow-v2.5-pro:free';
+process.env.OPENROUTER_SAFETY_MODEL ||= 'nvidia/nemotron-3.5-content-safety:free';
 process.env.OPENROUTER_IMAGE_QUALITY ||= 'high';
+process.env.OPENROUTER_IMAGE_SIZE ||= '2K';
+process.env.OPENROUTER_REASONING_EFFORT ||= 'medium';
+process.env.OPENROUTER_BACKGROUND_MODE ||= 'transparent';
+process.env.OPENROUTER_SAFETY_ENABLED ||= '1';
 process.env.OPENROUTER_APP_NAME ||= 'Design Mudah Vector';
 process.env.LOGO_RESTORE_ENABLED ||= '1';
 process.env.LOGO_RESTORE_STRICT_SPOTS ||= '1';
