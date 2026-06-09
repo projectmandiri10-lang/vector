@@ -6,7 +6,12 @@ import fs from 'fs-extra';
 import { PNG } from 'pngjs';
 import { validateSettings } from '../routes/jobs.routes.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
-import { buildGlmImageGenerationRequest, buildRedrawPrompt } from '../services/aiRedraw.service.js';
+import {
+  buildOpenRouterAnalysisRequest,
+  buildOpenRouterImageGenerationRequest,
+  buildRedrawPrompt,
+  extractOpenRouterImageReference
+} from '../services/aiRedraw.service.js';
 import { createLogoRestoreArtifacts, logoRestoreBuffer } from '../services/logoRestore.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
@@ -137,34 +142,83 @@ test('standard prompt prioritizes faithful color matching', () => {
   assert.match(prompt, /no jagged steps, no broken edges, and no accidental gaps/);
 });
 
-test('GLM quality config defaults to official GLM-Image HD generation', () => {
-  const config = normalizeHybridRedrawConfig({}, { GLM_ANALYSIS_MODEL: 'glm-5v-turbo', GLM_IMAGE_MODEL: 'glm-image' });
+test('OpenRouter Qwen quality config defaults to Qwen VL and Qwen Image', () => {
+  const config = normalizeHybridRedrawConfig({}, {});
 
-  assert.equal(config.provider, 'zai_glm5v_glm_image');
-  assert.equal(config.analysisModel, 'glm-5v-turbo');
-  assert.equal(config.generationModel, 'glm-image');
-  assert.equal(config.generationQuality, 'hd');
+  assert.equal(config.provider, 'openrouter_qwen_image');
+  assert.equal(config.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
+  assert.equal(config.generationModel, 'qwen/qwen-image-2512');
+  assert.equal(config.generationQuality, 'high');
 });
 
-test('legacy GLM config without generation quality safely uses hd', () => {
-  const config = normalizeHybridRedrawConfig({ model: 'glm-image' }, { GLM_ANALYSIS_MODEL: 'glm-5v-turbo', GLM_IMAGE_MODEL: 'glm-image' });
-
-  assert.equal(config.generationQuality, 'hd');
-});
-
-test('GLM image generation request sends hd quality with existing size policy', () => {
-  const request = buildGlmImageGenerationRequest(
-    'Strict vector redraw prompt.',
-    { generationModel: 'glm-image', generationQuality: 'hd', resolutionPolicy: 'high' },
-    { aspectRatio: '4:3' }
+test('legacy AI config normalizes back to OpenRouter Qwen defaults', () => {
+  const config = normalizeHybridRedrawConfig(
+    { provider: 'old-provider', model: 'old-image-model', generationModel: 'old-image-model', analysisModel: 'old-analysis-model' },
+    {}
   );
 
-  assert.deepEqual(request, {
-    model: 'glm-image',
-    prompt: 'Strict vector redraw prompt.',
-    quality: 'hd',
-    size: '1568x1056'
-  });
+  assert.equal(config.provider, 'openrouter_qwen_image');
+  assert.equal(config.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
+  assert.equal(config.generationModel, 'qwen/qwen-image-2512');
+  assert.equal(config.generationQuality, 'high');
+});
+
+test('OpenRouter analysis request sends normalized original and cleaned trace target images', () => {
+  const request = buildOpenRouterAnalysisRequest(
+    {
+      normalizedBuffer: Buffer.from('original'),
+      analysisBuffer: Buffer.from('cleaned'),
+      preprocess: 'node_heuristic'
+    },
+    { productionType: 'sablon' },
+    { analysisModel: 'qwen/qwen3-vl-235b-a22b-instruct' }
+  );
+
+  const userContent = request.messages[1].content;
+  const imageInputs = userContent.filter((part) => part.type === 'image_url');
+  assert.equal(request.model, 'qwen/qwen3-vl-235b-a22b-instruct');
+  assert.equal(imageInputs.length, 2);
+  assert.match(imageInputs[0].image_url.url, /^data:image\/png;base64,/);
+  assert.match(imageInputs[1].image_url.url, /^data:image\/png;base64,/);
+  assert.match(userContent.map((part) => part.text || '').join(' '), /normalized original upload/);
+  assert.match(userContent.map((part) => part.text || '').join(' '), /cleaned and cropped trace target/);
+});
+
+test('OpenRouter image generation request sends image input and strict redraw instructions', () => {
+  const request = buildOpenRouterImageGenerationRequest(
+    'Strict vector redraw prompt.',
+    { generationModel: 'qwen/qwen-image-2512', generationQuality: 'high', resolutionPolicy: 'high' },
+    { analysisBuffer: Buffer.from('cleaned') }
+  );
+
+  const content = request.messages[0].content;
+  const promptText = content.find((part) => part.type === 'text').text;
+  assert.equal(request.model, 'qwen/qwen-image-2512');
+  assert.deepEqual(request.modalities, ['image', 'text']);
+  assert.equal(content.filter((part) => part.type === 'image_url').length, 1);
+  assert.match(promptText, /not as OCR, scan repair, sharpening, enhancement, or upscaling/);
+  assert.match(promptText, /smooth closed contours/);
+  assert.match(promptText, /Preserve exact readable text/);
+  assert.match(promptText, /flat color fills/);
+  assert.match(promptText, /Remove all paper, table, camera background/);
+});
+
+test('OpenRouter image response parser accepts data URLs and remote URLs', () => {
+  const dataUrl = 'data:image/png;base64,AAA=';
+  const remoteUrl = 'https://example.com/redraw.png';
+
+  assert.equal(
+    extractOpenRouterImageReference({
+      choices: [{ message: { images: [{ type: 'image_url', image_url: { url: dataUrl } }] } }]
+    }),
+    dataUrl
+  );
+  assert.equal(
+    extractOpenRouterImageReference({
+      choices: [{ message: { content: [{ type: 'image_url', image_url: { url: remoteUrl } }] } }]
+    }),
+    remoteUrl
+  );
 });
 
 test('logoRestoreBuffer preserves flat logo colors without generative redraw', async () => {

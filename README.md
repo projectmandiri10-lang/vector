@@ -1,6 +1,6 @@
 # Design Mudah Vector untuk Sablon dan Sticker
 
-Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `GLM-5V Turbo director + GLM-Image HD painter` di Railway, dengan preset fallback Gemini bila dibutuhkan.
+Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid `OpenRouter Qwen VL analyzer + Qwen Image redraw` di Railway.
 
 ## Mode SaaS Railway + Supabase
 
@@ -18,7 +18,7 @@ Ringkasnya:
 
 1. Hubungkan repo ke Railway.
 2. Railway akan memakai `railway.json` dan `Dockerfile.fly`.
-3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `GLM_API_KEY`, `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, `GLM_IMAGE_MODEL`, `GLM_IMAGE_QUALITY`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `GOOGLE_OAUTH_REDIRECT_TO`.
+3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_ANALYSIS_MODEL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_IMAGE_QUALITY`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `GOOGLE_OAUTH_REDIRECT_TO`.
 4. Kosongkan `VITE_API_BASE_URL` di production agar frontend memakai same-origin `/api`.
 5. Set Supabase Auth Site URL dan Google OAuth redirect ke domain Railway/custom domain.
 
@@ -35,14 +35,15 @@ npm run dev
 
 `npm run dev` menjalankan backend tanpa file watcher agar proses AI/vector tidak terputus saat backend menulis file hasil ke storage. Jika perlu watcher untuk edit kode backend, gunakan `npm run dev:watch`.
 
-Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid GLM, isi minimalnya:
+Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid OpenRouter Qwen, isi minimalnya:
 
 ```env
-GLM_API_KEY=key-zai-anda
-GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
-GLM_ANALYSIS_MODEL=glm-5v-turbo
-GLM_IMAGE_MODEL=glm-image
-GLM_IMAGE_QUALITY=hd
+OPENROUTER_API_KEY=key-openrouter-anda
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_ANALYSIS_MODEL=qwen/qwen3-vl-235b-a22b-instruct
+OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2512
+OPENROUTER_IMAGE_QUALITY=high
+OPENROUTER_APP_NAME=Design Mudah Vector
 AI_REDRAW_PRESET=quality
 LOGO_RESTORE_ENABLED=1
 LOGO_RESTORE_STRICT_SPOTS=1
@@ -61,17 +62,18 @@ TRACE_CURVE_OPT_TOLERANCE=0.32
 TRACE_CURVE_FLOAT_PRECISION=1
 ```
 
-Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa GLM-Image agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. `LOGO_RESTORE_STRICT_SPOTS=1` membuang/merge warna halo tepi yang bukan tinta cetak, misalnya bayangan coklat di sekitar kuning. `TRACE_CURVE_CLEANUP_ENABLED=1` menambahkan cleanup mask dan simplifikasi path agar outline huruf/sabit lebih terasa seperti vector manual. Preview PNG transparan tetap raster untuk tampilan, jadi cek file SVG/PDF untuk menilai kehalusan vector. Untuk gambar non-logo, GLM-5V Turbo melihat gambar upload secara langsung dan menulis prompt teknis ketat, lalu GLM-Image resmi dengan `quality=hd` menggambar ulang dari prompt tersebut. Preset `gemini_quality` tetap tersedia sebagai fallback bila GLM belum sebagus Gemini untuk gambar tertentu.
+Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa model gambar agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. `LOGO_RESTORE_STRICT_SPOTS=1` membuang/merge warna halo tepi yang bukan tinta cetak, misalnya bayangan coklat di sekitar kuning. `TRACE_CURVE_CLEANUP_ENABLED=1` menambahkan cleanup mask dan simplifikasi path agar outline huruf/sabit lebih terasa seperti vector manual. Preview PNG transparan tetap raster untuk tampilan, jadi cek file SVG/PDF untuk menilai kehalusan vector. Untuk gambar non-logo atau kualitas rendah, Qwen VL melihat normalized original dan cleaned trace target, lalu Qwen Image menggambar ulang memakai input gambar referensi dan prompt teknis ketat.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
 ```env
 PORT=3001
-GLM_API_KEY=key-zai-anda
-GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
-GLM_ANALYSIS_MODEL=glm-5v-turbo
-GLM_IMAGE_MODEL=glm-image
-GLM_IMAGE_QUALITY=hd
+OPENROUTER_API_KEY=key-openrouter-anda
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_ANALYSIS_MODEL=qwen/qwen3-vl-235b-a22b-instruct
+OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2512
+OPENROUTER_IMAGE_QUALITY=high
+OPENROUTER_APP_NAME=Design Mudah Vector
 AI_REDRAW_PRESET=quality
 LOGO_RESTORE_ENABLED=1
 LOGO_RESTORE_STRICT_SPOTS=1
@@ -185,7 +187,7 @@ Halaman arsip menampilkan preview kecil, tombol download SVG, tombol download fi
 
 ## 9. Catatan Biaya Gambar Ulang
 
-Gambar ulang default memakai Z.AI API langsung tanpa LiteLLM: `glm-5v-turbo` untuk analisis dan `glm-image` untuk generasi PNG. Jika hasil GLM kalah pada jenis gambar tertentu, pilih preset `Gemini fallback` di halaman superadmin.
+Gambar ulang default memakai OpenRouter: Qwen VL untuk analisis gambar dan Qwen Image untuk redraw image-to-image. Rincian pembanding biaya ada di `AI_REDRAW_PRICE_COMPARISON.md`.
 
 Kualitas AI:
 

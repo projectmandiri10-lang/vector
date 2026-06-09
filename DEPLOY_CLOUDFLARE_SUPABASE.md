@@ -116,25 +116,26 @@ VITE_GOOGLE_OAUTH_REDIRECT_TO=http://localhost:5173
 
 `GOOGLE_OAUTH_CLIENT_SECRET` jangan dimasukkan ke Cloudflare Pages/frontend. Secret tersebut cukup disimpan di Supabase Google provider dan catatan `.env` lokal.
 
-## 3. Siapkan GLM API
+## 3. Siapkan OpenRouter Qwen
 
-Worker memeriksa auth/credit, lalu meneruskan redraw ke processor backend. Processor memakai Z.AI API:
+Worker memeriksa auth/credit, lalu meneruskan redraw ke processor backend. Processor memakai OpenRouter API:
 
 ```text
-POST https://api.z.ai/api/paas/v4/chat/completions
-POST https://api.z.ai/api/paas/v4/images/generations
+POST https://openrouter.ai/api/v1/chat/completions
 ```
 
 Env yang dibutuhkan:
 
 ```text
-GLM_API_KEY=...
-GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
-GLM_ANALYSIS_MODEL=glm-5v-turbo
-GLM_IMAGE_MODEL=glm-image
+OPENROUTER_API_KEY=...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_ANALYSIS_MODEL=qwen/qwen3-vl-235b-a22b-instruct
+OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2512
+OPENROUTER_IMAGE_QUALITY=high
+OPENROUTER_APP_NAME=Design Mudah Vector
 ```
 
-Catatan: file gambar ulang hanya transit dari browser ke Worker lalu ke processor dan Z.AI API. Aplikasi tidak menyimpan file permanen di server.
+Catatan: file gambar ulang hanya transit dari browser ke Worker lalu ke processor dan OpenRouter API. Aplikasi tidak menyimpan file permanen di server.
 
 ## 4. Deploy Cloudflare Worker API
 
@@ -180,7 +181,7 @@ Jika Cloudflare tidak mengizinkan `Build command` kosong, isi:
 npm ci
 ```
 
-Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, `PROCESSOR_API_KEY`, atau `GLM_API_KEY`. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/processor diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
+Jangan isi `API token` dengan `SUPABASE_ACCESS_TOKEN`, `SUPABASE_SERVICE_ROLE_KEY`, `PROCESSOR_API_KEY`, atau `OPENROUTER_API_KEY`. Field `API token` di layar ini adalah token milik Cloudflare untuk deploy Worker. Runtime secret Supabase/processor diisi setelah Worker dibuat, lewat bagian `Settings > Variables & Secrets` atau lewat `wrangler secret put`.
 
 Nama Worker harus sama dengan `name` di `cloudflare-worker/wrangler.toml`, yaitu `design-mudah`.
 
@@ -200,7 +201,7 @@ Saat terminal meminta value:
 - `SUPABASE_SERVICE_ROLE_KEY`: isi service role key dari Supabase `Project Settings > API`
 - `PROCESSOR_API_KEY`: isi key yang sama dengan backend processor.
 
-`GLM_ANALYSIS_MODEL` dan `GLM_IMAGE_MODEL` ada di konfigurasi processor/backend, bukan dipanggil langsung oleh Worker.
+`OPENROUTER_ANALYSIS_MODEL` dan `OPENROUTER_IMAGE_MODEL` ada di konfigurasi processor/backend, bukan dipanggil langsung oleh Worker.
 
 ### 4.3 Deploy Worker
 
@@ -420,8 +421,8 @@ Saldo tidak terbaca:
 AI redraw gagal:
 
 - Cek Worker secret `PROCESSOR_API_KEY` dan `PROCESSOR_BASE_URL`.
-- Cek processor secret `GLM_API_KEY`.
-- Cek akun Z.AI punya akses ke `glm-5v-turbo` dan `glm-image`.
+- Cek processor secret `OPENROUTER_API_KEY`.
+- Cek akun OpenRouter punya saldo dan akses ke model Qwen yang dipakai.
 
 Admin tidak muncul:
 

@@ -318,7 +318,7 @@ export default function AdminPanel({ session, enabled }) {
           key: 'ai_redraw_model',
           value: nextValue,
           isPublic: false,
-          description: `Pipeline hybrid redraw: ${nextValue.analysisModel} director + ${nextValue.generationModel} painter`
+          description: `Pipeline OpenRouter Qwen redraw: ${nextValue.analysisModel} analyzer + ${nextValue.generationModel} image model`
         },
         accessToken
       );
@@ -731,9 +731,9 @@ export default function AdminPanel({ session, enabled }) {
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', generationQuality: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   >
-                    <option value="hd">HD</option>
+                    <option value="high">High</option>
                     <option value="standard">Standard</option>
-                    <option value="">Provider default</option>
+                    <option value="low">Low</option>
                   </select>
                 </label>
                 <label className="block">
@@ -776,7 +776,7 @@ export default function AdminPanel({ session, enabled }) {
                   {aiModelDraft.generationQuality ? ` (${aiModelDraft.generationQuality.toUpperCase()})` : ''}
                 </p>
                 <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
-                <p>Pipeline: model analisis membaca niat desain dan menulis prompt teknis, lalu model gambar menggambar ulang dari nol sebelum hasilnya di-trace.</p>
+                <p>Pipeline: OpenRouter Qwen VL membaca niat desain, lalu Qwen Image menggambar ulang memakai input gambar referensi sebelum hasilnya di-trace.</p>
                 <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen pipeline hybrid.'}</p>
                 <p>
                   Kebijakan tetap: aspect mengikuti sumber, preprocess Node heuristic, prompt disimpan ke manifest,

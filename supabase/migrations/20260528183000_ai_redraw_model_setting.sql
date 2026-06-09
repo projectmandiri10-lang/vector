@@ -1,8 +1,8 @@
 insert into public.app_settings (key, value, is_public, description)
 values (
   'ai_redraw_model',
-  '{"mode":"quality","label":"Kualitas","model":"gemini-3.1-flash-image-preview","imageSize":"2K","estimatedUsdPerImage":0.101}'::jsonb,
+  '{"mode":"quality","preset":"quality","label":"Kualitas","provider":"openrouter_qwen_image","analysisModel":"qwen/qwen3-vl-235b-a22b-instruct","generationModel":"qwen/qwen-image-2512","generationQuality":"high","aspectPolicy":"match_source","resolutionPolicy":"high","preprocess":"node_heuristic","persistPrompt":true,"retryOnLowConfidence":false,"estimatedUsdPerImage":0.05}'::jsonb,
   false,
-  'Model dan ukuran output untuk gambar ulang AI'
+  'Pipeline OpenRouter Qwen redraw: Qwen VL analyzer + Qwen Image model'
 )
 on conflict (key) do nothing;

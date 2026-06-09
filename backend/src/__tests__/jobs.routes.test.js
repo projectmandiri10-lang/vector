@@ -12,11 +12,9 @@ process.env.NODE_ENV = 'test';
 process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
-process.env.GLM_ANALYSIS_MODEL = 'glm-5v-turbo';
-process.env.GLM_IMAGE_MODEL = 'glm-image';
-process.env.GLM_IMAGE_QUALITY = 'hd';
-process.env.GEMINI_ANALYSIS_MODEL = 'gemini-3.1-flash-lite-preview';
-process.env.GEMINI_IMAGE_MODEL = 'gemini-3.1-flash-image-preview';
+process.env.OPENROUTER_ANALYSIS_MODEL = 'qwen/qwen3-vl-235b-a22b-instruct';
+process.env.OPENROUTER_IMAGE_MODEL = 'qwen/qwen-image-2512';
+process.env.OPENROUTER_IMAGE_QUALITY = 'high';
 
 const { app } = await import('../server.js');
 const { ensureJobDir, safeJobPath, writeJobMeta } = await import('../utils/file.js');
@@ -166,40 +164,40 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.match(response.headers['content-type'], /image\/png/);
     assert.ok(response.headers['x-ai-redraw-metadata']);
     const metadata = JSON.parse(Buffer.from(response.headers['x-ai-redraw-metadata'], 'base64url').toString('utf8'));
-    assert.equal(metadata.provider, 'zai_glm5v_glm_image');
-    assert.equal(metadata.analysisModel, 'glm-5v-turbo');
-    assert.equal(metadata.generationModel, 'glm-image');
-    assert.equal(metadata.generationQuality, 'hd');
+    assert.equal(metadata.provider, 'openrouter_qwen_image');
+    assert.equal(metadata.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
+    assert.equal(metadata.generationModel, 'qwen/qwen-image-2512');
+    assert.equal(metadata.generationQuality, 'high');
   } finally {
     delete process.env.PROCESSOR_API_KEY;
   }
 });
 
-test('GLM API key mode reports clear missing key error', async () => {
+test('OpenRouter API key mode reports clear missing key error', async () => {
   const previousMock = process.env.AI_REDRAW_MOCK;
-  const previousKey = process.env.GLM_API_KEY;
+  const previousKey = process.env.OPENROUTER_API_KEY;
   delete process.env.AI_REDRAW_MOCK;
-  delete process.env.GLM_API_KEY;
+  delete process.env.OPENROUTER_API_KEY;
 
   try {
     await assert.rejects(
       () => hybridRedrawBuffer(makePngBuffer(), { productionType: 'sablon', inputMode: 'ai_redraw' }),
-      /GLM_API_KEY atau ZAI_API_KEY belum dikonfigurasi/
+      /OPENROUTER_API_KEY belum dikonfigurasi/
     );
   } finally {
     process.env.AI_REDRAW_MOCK = previousMock;
-    if (previousKey) process.env.GLM_API_KEY = previousKey;
+    if (previousKey) process.env.OPENROUTER_API_KEY = previousKey;
   }
 });
 
-test('Gemini fallback preset still reports Gemini + Gemini image metadata in mock mode', async () => {
+test('legacy provider override still reports OpenRouter Qwen metadata in mock mode', async () => {
   const result = await hybridRedrawBuffer(
     makePngBuffer(),
     { productionType: 'sablon', inputMode: 'ai_redraw' },
-    { mode: 'gemini_quality', provider: 'gemini_api_key_imagen3' }
+    { mode: 'legacy_quality', provider: 'old-provider', analysisModel: 'old-analysis', generationModel: 'old-generation' }
   );
 
-  assert.equal(result.metadata.provider, 'gemini_api_key_imagen3');
-  assert.equal(result.metadata.analysisModel, 'gemini-3.1-flash-lite-preview');
-  assert.equal(result.metadata.generationModel, 'gemini-3.1-flash-image-preview');
+  assert.equal(result.metadata.provider, 'openrouter_qwen_image');
+  assert.equal(result.metadata.analysisModel, 'qwen/qwen3-vl-235b-a22b-instruct');
+  assert.equal(result.metadata.generationModel, 'qwen/qwen-image-2512');
 });

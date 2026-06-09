@@ -1,7 +1,6 @@
 import fs from 'fs-extra';
 import sharp from 'sharp';
-import { GoogleGenAI } from '@google/genai';
-import { HYBRID_REDRAW_PROVIDER, normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
+import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { logoRestoreBuffer } from './logoRestore.service.js';
 
 const DIRECTOR_SYSTEM_INSTRUCTION = `You are a technical art director with 20 years of experience preparing artwork for sticker printing, manual screen printing, DTF, decal, and vector tracing workflows.
@@ -21,48 +20,6 @@ Rules:
 10. The technicalPrompt must be strict enough that a text-to-image model rebuilds the artwork as clean flat vector-like art, not as a restored photo or scanned document.
 11. Output JSON only, matching the requested schema.`;
 
-const ANALYSIS_RESPONSE_SCHEMA = {
-  type: 'object',
-  required: ['subjectSummary', 'style', 'textDescription', 'dominantColors', 'backgroundPolicy', 'confidence', 'printNotes', 'technicalPrompt'],
-  properties: {
-    subjectSummary: { type: 'string' },
-    style: { type: 'string' },
-    textDescription: { type: 'string' },
-    dominantColors: {
-      type: 'array',
-      minItems: 1,
-      maxItems: 8,
-      items: {
-        type: 'object',
-        required: ['name', 'hex', 'role'],
-        properties: {
-          name: { type: 'string' },
-          hex: { type: 'string' },
-          role: { type: 'string' }
-        }
-      }
-    },
-    backgroundPolicy: { type: 'string' },
-    confidence: {
-      type: 'object',
-      required: ['overall', 'text', 'shapes', 'colors'],
-      properties: {
-        overall: { type: 'number' },
-        text: { type: 'number' },
-        shapes: { type: 'number' },
-        colors: { type: 'number' }
-      }
-    },
-    printNotes: {
-      type: 'array',
-      items: { type: 'string' },
-      maxItems: 8
-    },
-    technicalPrompt: { type: 'string' },
-    shouldRetryTextCarefully: { type: 'boolean' }
-  }
-};
-
 function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -70,12 +27,6 @@ function clamp(value, min, max) {
 function roundTo(value, decimals = 3) {
   const factor = 10 ** decimals;
   return Math.round(value * factor) / factor;
-}
-
-function responseText(response) {
-  if (!response) return '';
-  if (typeof response.text === 'function') return response.text();
-  return typeof response.text === 'string' ? response.text : '';
 }
 
 function sleep(ms) {
@@ -400,72 +351,45 @@ function buildRetryPrompt(technicalPrompt, analysis) {
   return `${technicalPrompt} ${caution} Rebuild the outer contour even more smoothly, remove any leftover background-looking tone, and keep enclosed holes open and non-printing.`;
 }
 
-function createVertexClient() {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY atau GOOGLE_API_KEY belum dikonfigurasi.');
-  }
-  return new GoogleGenAI({ apiKey });
-}
-
-function parseGoogleApiError(error) {
-  const rawMessage = error instanceof Error ? error.message : String(error || '');
-  let upstreamMessage = rawMessage;
-  let upstreamStatus = error?.status || error?.statusCode || 502;
-
-  try {
-    const parsed = JSON.parse(rawMessage);
-    upstreamMessage = parsed?.error?.message || upstreamMessage;
-    upstreamStatus = parsed?.error?.code || upstreamStatus;
-  } catch {
-    // Some SDK errors are plain text.
-  }
-
-  if (/quota exceeded|RESOURCE_EXHAUSTED|rate-limits|free_tier/i.test(upstreamMessage)) {
-    const next = new Error('Kuota Gemini/Google AI untuk model gambar habis atau belum aktif. Periksa billing/quota Google AI Studio lalu coba lagi.');
-    next.status = 429;
-    return next;
-  }
-
-  if (/not found|not supported|models\//i.test(upstreamMessage)) {
-    const next = new Error(`Model Gemini tidak tersedia atau tidak mendukung operasi ini: ${upstreamMessage}`);
-    next.status = 400;
-    return next;
-  }
-
-  const next = new Error(upstreamMessage || 'Request Gemini/Google AI gagal.');
-  next.status = upstreamStatus >= 400 && upstreamStatus < 500 ? upstreamStatus : 502;
-  return next;
-}
-
-function zaiBaseUrl() {
-  return (process.env.GLM_API_BASE_URL || process.env.ZAI_API_BASE_URL || 'https://api.z.ai/api/paas/v4').replace(/\/+$/, '');
-}
-
-function zaiApiKey() {
-  const apiKey = process.env.GLM_API_KEY || process.env.ZAI_API_KEY;
-  if (!apiKey) {
-    const error = new Error('GLM_API_KEY atau ZAI_API_KEY belum dikonfigurasi.');
-    error.status = 500;
-    error.expose = true;
-    throw error;
-  }
-  return apiKey;
-}
-
 function exposeAiError(error) {
   error.expose = true;
   return error;
 }
 
-async function zaiJsonFetch(path, body) {
-  const response = await fetch(`${zaiBaseUrl()}${path}`, {
+function openRouterBaseUrl() {
+  return (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
+}
+
+function openRouterApiKey() {
+  const apiKey = process.env.OPENROUTER_API_KEY;
+  if (!apiKey) {
+    const error = new Error('OPENROUTER_API_KEY belum dikonfigurasi.');
+    error.status = 500;
+    error.upstream = 'openrouter';
+    throw exposeAiError(error);
+  }
+  return apiKey;
+}
+
+function openRouterHeaders() {
+  const headers = {
+    Authorization: `Bearer ${openRouterApiKey()}`,
+    'Content-Type': 'application/json',
+    'Accept-Language': 'en-US,en'
+  };
+  if (process.env.OPENROUTER_SITE_URL) {
+    headers['HTTP-Referer'] = process.env.OPENROUTER_SITE_URL;
+  }
+  if (process.env.OPENROUTER_APP_NAME) {
+    headers['X-Title'] = process.env.OPENROUTER_APP_NAME;
+  }
+  return headers;
+}
+
+async function openRouterJsonFetch(path, body) {
+  const response = await fetch(`${openRouterBaseUrl()}${path}`, {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${zaiApiKey()}`,
-      'Content-Type': 'application/json',
-      'Accept-Language': 'en-US,en'
-    },
+    headers: openRouterHeaders(),
     body: JSON.stringify(body)
   });
 
@@ -476,27 +400,27 @@ async function zaiJsonFetch(path, body) {
       data = JSON.parse(text);
     } catch {
       if (!response.ok) {
-        const error = new Error(`Z.AI mengembalikan respons non-JSON (${response.status}).`);
+        const error = new Error(`OpenRouter mengembalikan respons non-JSON (${response.status}).`);
         error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
-        error.upstream = 'zai';
+        error.upstream = 'openrouter';
         error.responseText = text.slice(0, 500);
         throw exposeAiError(error);
       }
-      const error = new Error('Respons Z.AI tidak valid JSON.');
+      const error = new Error('Respons OpenRouter tidak valid JSON.');
       error.status = 502;
-      error.upstream = 'zai';
+      error.upstream = 'openrouter';
       error.responseText = text.slice(0, 500);
       throw exposeAiError(error);
     }
   }
   if (!response.ok) {
-    const upstreamMessage = data?.error?.message || data?.message || data?.error || `Z.AI request gagal: ${response.status}`;
-    const message = /insufficient balance|no resource package|recharge/i.test(upstreamMessage)
-      ? 'Saldo atau paket resource Z.AI/GLM tidak cukup. Isi saldo Z.AI lalu coba gambar ulang lagi.'
+    const upstreamMessage = data?.error?.message || data?.message || data?.error || `OpenRouter request gagal: ${response.status}`;
+    const message = /insufficient balance|no credit|credits|quota|rate limit/i.test(upstreamMessage)
+      ? 'Saldo, kredit, atau rate limit OpenRouter tidak cukup. Periksa billing OpenRouter lalu coba gambar ulang lagi.'
       : upstreamMessage;
     const error = new Error(message);
     error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
-    error.upstream = 'zai';
+    error.upstream = 'openrouter';
     throw exposeAiError(error);
   }
   return data;
@@ -519,22 +443,8 @@ function extractJsonObject(text) {
   }
 }
 
-function glmImageSize(aspectRatio, resolutionPolicy) {
-  const high = {
-    '1:1': '1280x1280',
-    '3:4': '1056x1568',
-    '4:3': '1568x1056',
-    '9:16': '960x1728',
-    '16:9': '1728x960'
-  };
-  const standard = {
-    '1:1': '1024x1024',
-    '3:4': '768x1024',
-    '4:3': '1024x768',
-    '9:16': '768x1376',
-    '16:9': '1376x768'
-  };
-  return (resolutionPolicy === 'high' ? high : standard)[aspectRatio] || (resolutionPolicy === 'high' ? high['1:1'] : standard['1:1']);
+function imageDataUrl(buffer, mimeType = 'image/png') {
+  return `data:${mimeType};base64,${buffer.toString('base64')}`;
 }
 
 async function preprocessForHybridRedraw(buffer, preprocessName) {
@@ -591,50 +501,8 @@ async function preprocessForHybridRedraw(buffer, preprocessName) {
   };
 }
 
-async function analyzeArtworkWithGemini(client, analysisBuffer, settings, aiConfig, preprocessMeta) {
-  let response;
-  try {
-    response = await client.models.generateContent({
-      model: aiConfig.analysisModel,
-      contents: [
-        {
-          role: 'user',
-          parts: [
-            { text: buildAnalysisUserPrompt(settings, preprocessMeta) },
-            {
-              inlineData: {
-                mimeType: 'image/png',
-                data: analysisBuffer.toString('base64')
-              }
-            }
-          ]
-        }
-      ],
-      config: {
-        systemInstruction: buildDirectorSystemInstruction(),
-        responseMimeType: 'application/json',
-        responseJsonSchema: ANALYSIS_RESPONSE_SCHEMA,
-        temperature: 0.2,
-        topP: 0.9,
-        maxOutputTokens: 1400
-      }
-    });
-  } catch (error) {
-    throw parseGoogleApiError(error);
-  }
-
-  const rawText = responseText(response);
-  let parsed;
-  try {
-    parsed = JSON.parse(rawText);
-  } catch {
-    parsed = {};
-  }
-  return normalizeAnalysisPayload(parsed, settings);
-}
-
-async function analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig) {
-  const data = await zaiJsonFetch('/chat/completions', {
+export function buildOpenRouterAnalysisRequest(preprocessMeta, settings, aiConfig) {
+  return {
     model: aiConfig.analysisModel,
     messages: [
       {
@@ -651,7 +519,7 @@ async function analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig) {
           {
             type: 'image_url',
             image_url: {
-              url: `data:image/png;base64,${preprocessMeta.normalizedBuffer.toString('base64')}`
+              url: imageDataUrl(preprocessMeta.normalizedBuffer)
             }
           },
           {
@@ -661,7 +529,7 @@ async function analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig) {
           {
             type: 'image_url',
             image_url: {
-              url: `data:image/png;base64,${preprocessMeta.analysisBuffer.toString('base64')}`
+              url: imageDataUrl(preprocessMeta.analysisBuffer)
             }
           },
           {
@@ -671,80 +539,83 @@ async function analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig) {
         ]
       }
     ],
-    thinking: { type: 'disabled' },
     temperature: 0.2,
     top_p: 0.9,
     max_tokens: 1800,
+    response_format: { type: 'json_object' },
     stream: false
-  });
+  };
+}
+
+async function analyzeArtworkWithOpenRouter(preprocessMeta, settings, aiConfig) {
+  const data = await openRouterJsonFetch('/chat/completions', buildOpenRouterAnalysisRequest(preprocessMeta, settings, aiConfig));
 
   const rawText = data?.choices?.[0]?.message?.content || '';
   return normalizeAnalysisPayload(extractJsonObject(rawText), settings);
 }
 
-async function generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta) {
-  let response;
-  try {
-    response = await client.models.generateImages({
-      model: aiConfig.generationModel,
-      prompt: technicalPrompt,
-      config: {
-        numberOfImages: 1,
-        aspectRatio: preprocessMeta.aspectRatio,
-        outputMimeType: 'image/png',
-        includeRaiReason: true,
-        guidanceScale: aiConfig.resolutionPolicy === 'high' ? 15 : aiConfig.resolutionPolicy === 'standard' ? 13 : 11
-      }
-    });
-  } catch (error) {
-    throw parseGoogleApiError(error);
-  }
-
-  const b64 = response?.generatedImages?.[0]?.image?.imageBytes;
-  if (!b64) {
-    const raiReason = response?.generatedImages?.[0]?.raiFilteredReason || response?.generatedImages?.[0]?.raiReason || '';
-    throw new Error(`Imagen tidak mengembalikan gambar.${raiReason ? ` RAI: ${raiReason}` : ''}`);
-  }
-
-  return Buffer.from(b64, 'base64');
+function buildOpenRouterGeneratorPrompt(technicalPrompt, aiConfig) {
+  return [
+    'Use the uploaded image as the direct visual reference for an image-to-image redraw.',
+    'Redraw the artwork faithfully as flat solid vector-like art, not as OCR, scan repair, sharpening, enhancement, or upscaling.',
+    'Preserve exact readable text, text placement, lettering hierarchy, dominant colors, silhouette, enclosed holes, and symbol positions from the reference.',
+    'Create smooth closed contours, clean high-density edges, flat color fills, and trace-ready shapes for vectorization, screen printing, sticker cutting, and color separation.',
+    'Remove all paper, table, camera background, shadows, glare, texture, compression noise, pixel blocks, halftone, scan artifacts, and rectangular background layers.',
+    `Quality target: ${aiConfig.generationQuality || 'high'}.`,
+    technicalPrompt
+  ].join(' ');
 }
 
-async function generateWithGeminiImage(client, technicalPrompt, aiConfig) {
-  let response;
-  try {
-    response = await client.models.generateContent({
-      model: aiConfig.generationModel,
-      contents: technicalPrompt,
-      config: {
-        responseModalities: ['TEXT', 'IMAGE']
-      }
-    });
-  } catch (error) {
-    throw parseGoogleApiError(error);
-  }
-
-  const parts = response?.candidates?.[0]?.content?.parts || [];
-  const inlineData = parts.find((part) => part?.inlineData?.data)?.inlineData;
-  if (!inlineData?.data) {
-    const text = parts.map((part) => part?.text).filter(Boolean).join(' ').trim();
-    const error = new Error(text || 'Gemini image model tidak mengembalikan gambar.');
-    error.status = 502;
-    throw error;
-  }
-
-  return Buffer.from(inlineData.data, 'base64');
-}
-
-export function buildGlmImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta) {
+export function buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta) {
   return {
     model: aiConfig.generationModel,
-    prompt: technicalPrompt,
-    quality: aiConfig.generationQuality || 'hd',
-    size: glmImageSize(preprocessMeta.aspectRatio, aiConfig.resolutionPolicy)
+    messages: [
+      {
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: buildOpenRouterGeneratorPrompt(technicalPrompt, aiConfig)
+          },
+          {
+            type: 'image_url',
+            image_url: {
+              url: imageDataUrl(preprocessMeta.analysisBuffer)
+            }
+          }
+        ]
+      }
+    ],
+    modalities: ['image', 'text'],
+    temperature: 0.2,
+    top_p: 0.9,
+    stream: false
   };
 }
 
-async function downloadGlmImageResult(imageUrl) {
+export function extractOpenRouterImageReference(data) {
+  const message = data?.choices?.[0]?.message || {};
+  const images = Array.isArray(message.images) ? message.images : [];
+  for (const image of images) {
+    const url = image?.image_url?.url || image?.imageUrl?.url || image?.url;
+    if (url) return url;
+  }
+
+  const content = Array.isArray(message.content) ? message.content : [];
+  for (const part of content) {
+    const url = part?.image_url?.url || part?.imageUrl?.url || part?.url;
+    if (url) return url;
+  }
+
+  if (typeof message.content === 'string') {
+    const dataUrl = message.content.match(/data:image\/[a-z0-9.+-]+;base64,[A-Za-z0-9+/=]+/i)?.[0];
+    if (dataUrl) return dataUrl;
+  }
+
+  return data?.data?.[0]?.url || data?.url || '';
+}
+
+async function downloadOpenRouterImageResult(imageUrl) {
   const retryDelaysMs = [0, 3000, 8000, 15000, 30000];
   let lastError = null;
 
@@ -756,9 +627,9 @@ async function downloadGlmImageResult(imageUrl) {
     const contentType = imageResponse.headers.get('content-type') || '';
     if (imageResponse.ok) {
       if (contentType && !/^image\/|application\/octet-stream/i.test(contentType)) {
-        const error = new Error(`URL hasil GLM-Image tidak mengembalikan file gambar (${contentType}).`);
+        const error = new Error(`URL hasil OpenRouter/Qwen tidak mengembalikan file gambar (${contentType}).`);
         error.status = 502;
-        error.upstream = 'zai';
+        error.upstream = 'openrouter';
         throw exposeAiError(error);
       }
 
@@ -766,12 +637,10 @@ async function downloadGlmImageResult(imageUrl) {
     }
 
     const responseText = await imageResponse.text().catch(() => '');
-    const isTransientMissingFile =
-      imageResponse.status === 404 && /file not exist|RetCode"?\s*:\s*-148654/i.test(responseText);
-    const isRetryableStatus = imageResponse.status === 429 || imageResponse.status >= 500 || isTransientMissingFile;
-    lastError = new Error(`Gagal mengunduh hasil GLM-Image: ${imageResponse.status}`);
-    lastError.status = imageResponse.status >= 400 && imageResponse.status < 500 && !isTransientMissingFile ? imageResponse.status : 502;
-    lastError.upstream = 'zai';
+    const isRetryableStatus = imageResponse.status === 404 || imageResponse.status === 429 || imageResponse.status >= 500;
+    lastError = new Error(`Gagal mengunduh hasil OpenRouter/Qwen: ${imageResponse.status}`);
+    lastError.status = imageResponse.status >= 400 && imageResponse.status < 500 && imageResponse.status !== 404 ? imageResponse.status : 502;
+    lastError.upstream = 'openrouter';
     lastError.responseText = responseText.slice(0, 500);
 
     if (!isRetryableStatus || attempt === retryDelaysMs.length - 1) {
@@ -779,26 +648,44 @@ async function downloadGlmImageResult(imageUrl) {
     }
   }
 
-  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil GLM-Image.'), { status: 502, upstream: 'zai' }));
+  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter/Qwen.'), { status: 502, upstream: 'openrouter' }));
 }
 
-async function generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta) {
-  const data = await zaiJsonFetch('/images/generations', buildGlmImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta));
-  const imageResult = data?.data?.[0] || {};
-  const inlineImage = imageResult.b64_json || imageResult.base64 || imageResult.image_base64;
-  if (inlineImage) {
-    return Buffer.from(String(inlineImage).replace(/^data:image\/\w+;base64,/, ''), 'base64');
+async function bufferFromOpenRouterImageReference(imageReference) {
+  if (/^data:image\/[a-z0-9.+-]+;base64,/i.test(imageReference)) {
+    return Buffer.from(imageReference.replace(/^data:image\/[a-z0-9.+-]+;base64,/i, ''), 'base64');
   }
 
-  const imageUrl = imageResult.url;
-  if (!imageUrl) {
-    const error = new Error('GLM-Image tidak mengembalikan URL gambar atau base64 image.');
+  if (/^[A-Za-z0-9+/=]+$/.test(imageReference) && imageReference.length > 100) {
+    return Buffer.from(imageReference, 'base64');
+  }
+
+  if (/^https?:\/\//i.test(imageReference)) {
+    return downloadOpenRouterImageResult(imageReference);
+  }
+
+  const error = new Error('OpenRouter/Qwen mengembalikan referensi gambar yang tidak dikenali.');
+  error.status = 502;
+  error.upstream = 'openrouter';
+  throw exposeAiError(error);
+}
+
+async function generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocessMeta) {
+  const data = await openRouterJsonFetch('/chat/completions', buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta));
+  const imageReference = extractOpenRouterImageReference(data);
+  if (!imageReference) {
+    const text = data?.choices?.[0]?.message?.content;
+    const error = new Error(
+      text
+        ? `OpenRouter/Qwen tidak mengembalikan gambar. Respons teks: ${String(text).slice(0, 500)}`
+        : 'OpenRouter/Qwen tidak mengembalikan URL gambar atau base64 image.'
+    );
     error.status = 502;
-    error.upstream = 'zai';
+    error.upstream = 'openrouter';
     throw exposeAiError(error);
   }
 
-  return downloadGlmImageResult(imageUrl);
+  return bufferFromOpenRouterImageReference(imageReference);
 }
 
 async function postprocessGeneratedImage(buffer, preprocessName) {
@@ -809,9 +696,9 @@ async function postprocessGeneratedImage(buffer, preprocessName) {
     try {
       return await sharp(buffer, { failOn: 'none' }).rotate().png().toBuffer();
     } catch {
-      const next = new Error(`Gambar GLM berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
+      const next = new Error(`Gambar OpenRouter/Qwen berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
       next.status = 502;
-      next.upstream = 'zai';
+      next.upstream = 'openrouter';
       throw exposeAiError(next);
     }
   }
@@ -871,8 +758,7 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
     };
   }
 
-  const useGlm = aiConfig.provider === HYBRID_REDRAW_PROVIDER;
-  if (useGlm && process.env.LOGO_RESTORE_ENABLED !== '0') {
+  if (process.env.LOGO_RESTORE_ENABLED !== '0') {
     const logoRestore = await logoRestoreBuffer(uploadedBuffer, settings);
     if (logoRestore.canRestore) {
       return {
@@ -893,10 +779,10 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
             dominantColors: logoRestore.metadata.palette,
             backgroundPolicy: 'Edge-connected background was removed before vector tracing.',
             confidence: { overall: 0.86, text: 0.82, shapes: 0.86, colors: 0.9 },
-            printNotes: ['GLM-Image skipped because the input was detected as a flat logo/text artwork.']
+            printNotes: ['AI redraw skipped because the input was detected as a flat logo/text artwork.']
           },
           logoRestore: logoRestore.metadata,
-          technicalPrompt: 'Trace-first logo restore: preserve source shapes directly; GLM-Image generation skipped for text/logo fidelity.',
+          technicalPrompt: 'Trace-first logo restore: preserve source shapes directly; AI image generation skipped for text/logo fidelity.',
           retryUsed: false,
           sourceAspectRatio: preprocessMeta.aspectRatio
         }
@@ -904,24 +790,13 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
     }
   }
 
-  const client = useGlm ? null : createVertexClient();
-  const analysis = useGlm
-    ? await analyzeArtworkWithGlm(preprocessMeta, settings, aiConfig)
-    : await analyzeArtworkWithGemini(client, preprocessMeta.analysisBuffer, settings, aiConfig, preprocessMeta);
+  const analysis = await analyzeArtworkWithOpenRouter(preprocessMeta, settings, aiConfig);
   const technicalPrompt = analysis.technicalPrompt || buildRedrawPrompt(settings, analysis);
-  let generated = useGlm
-    ? await generateWithGlmImage(technicalPrompt, aiConfig, preprocessMeta)
-    : aiConfig.generationModel.startsWith('gemini-')
-      ? await generateWithGeminiImage(client, technicalPrompt, aiConfig)
-      : await generateWithImagen(client, technicalPrompt, aiConfig, preprocessMeta);
+  let generated = await generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocessMeta);
   let retryUsed = false;
 
   if (shouldRetryHybrid(aiConfig, analysis)) {
-    generated = useGlm
-      ? await generateWithGlmImage(buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta)
-      : aiConfig.generationModel.startsWith('gemini-')
-        ? await generateWithGeminiImage(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig)
-        : await generateWithImagen(client, buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
+    generated = await generateWithOpenRouterImage(buildRetryPrompt(technicalPrompt, analysis), aiConfig, preprocessMeta);
     retryUsed = true;
   }
 

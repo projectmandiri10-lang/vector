@@ -83,6 +83,7 @@ app.get('/api/health', (_req, res) => {
     redrawProvider: redrawConfig.provider,
     redrawAnalysisModel: redrawConfig.analysisModel,
     redrawGenerationModel: redrawConfig.generationModel,
+    openRouterConfigured: Boolean(process.env.OPENROUTER_API_KEY),
     redrawLogoRestore: process.env.LOGO_RESTORE_ENABLED !== '0',
     redrawLogoStrictSpots: process.env.LOGO_RESTORE_STRICT_SPOTS !== '0',
     redrawPreset: redrawConfig.preset,

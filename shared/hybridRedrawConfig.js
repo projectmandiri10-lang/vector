@@ -1,93 +1,74 @@
-export const HYBRID_REDRAW_PROVIDER = 'zai_glm5v_glm_image';
-export const GEMINI_IMAGEN_REDRAW_PROVIDER = 'gemini_api_key_imagen3';
+export const OPENROUTER_QWEN_REDRAW_PROVIDER = 'openrouter_qwen_image';
+export const HYBRID_REDRAW_PROVIDER = OPENROUTER_QWEN_REDRAW_PROVIDER;
+
+export const DEFAULT_OPENROUTER_ANALYSIS_MODEL = 'qwen/qwen3-vl-235b-a22b-instruct';
+export const DEFAULT_OPENROUTER_IMAGE_MODEL = 'qwen/qwen-image-2512';
 
 export const HYBRID_REDRAW_PRESETS = {
   budget: {
     mode: 'budget',
     preset: 'budget',
     label: 'Hemat',
-    provider: HYBRID_REDRAW_PROVIDER,
-    analysisModel: 'glm-5v-turbo',
-    generationModel: 'glm-image',
-    generationQuality: 'standard',
-    aspectPolicy: 'match_source',
-    resolutionPolicy: 'economy',
-    preprocess: 'node_heuristic',
-    persistPrompt: true,
-    retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0.018,
-    note: 'GLM-5V Turbo menganalisis niat desain, lalu GLM-Image standard menggambar ulang dengan biaya hemat.'
-  },
-  standard: {
-    mode: 'standard',
-    preset: 'standard',
-    label: 'Standar',
-    provider: HYBRID_REDRAW_PROVIDER,
-    analysisModel: 'glm-5v-turbo',
-    generationModel: 'glm-image',
-    generationQuality: 'hd',
+    provider: OPENROUTER_QWEN_REDRAW_PROVIDER,
+    analysisModel: DEFAULT_OPENROUTER_ANALYSIS_MODEL,
+    generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    generationQuality: 'high',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'standard',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0.019,
-    note: 'Keseimbangan biaya dan kualitas untuk mayoritas logo, sticker, dan sablon lewat GLM-Image HD resmi Z.AI.'
+    estimatedUsdPerImage: 0.03,
+    note: 'OpenRouter Qwen VL menganalisis gambar, lalu Qwen Image menggambar ulang dengan prompt ketat dan input gambar referensi.'
+  },
+  standard: {
+    mode: 'standard',
+    preset: 'standard',
+    label: 'Standar',
+    provider: OPENROUTER_QWEN_REDRAW_PROVIDER,
+    analysisModel: DEFAULT_OPENROUTER_ANALYSIS_MODEL,
+    generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    generationQuality: 'high',
+    aspectPolicy: 'match_source',
+    resolutionPolicy: 'standard',
+    preprocess: 'node_heuristic',
+    persistPrompt: true,
+    retryOnLowConfidence: false,
+    estimatedUsdPerImage: 0.04,
+    note: 'Keseimbangan biaya dan kualitas untuk logo, sticker, dan sablon lewat OpenRouter Qwen redraw.'
   },
   quality: {
     mode: 'quality',
     preset: 'quality',
     label: 'Kualitas',
-    provider: HYBRID_REDRAW_PROVIDER,
-    analysisModel: 'glm-5v-turbo',
-    generationModel: 'glm-image',
-    generationQuality: 'hd',
+    provider: OPENROUTER_QWEN_REDRAW_PROVIDER,
+    analysisModel: DEFAULT_OPENROUTER_ANALYSIS_MODEL,
+    generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    generationQuality: 'high',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0.02,
-    note: 'Default GLM-5V Turbo + GLM-Image HD untuk redraw halus yang nanti akan di-trace dan dipisah warna.'
+    estimatedUsdPerImage: 0.05,
+    note: 'Default OpenRouter Qwen VL + Qwen Image untuk redraw halus yang siap masuk trace dan pisah warna.'
   },
   premium: {
     mode: 'premium',
     preset: 'premium',
     label: 'Premium',
-    provider: HYBRID_REDRAW_PROVIDER,
-    analysisModel: 'glm-5v-turbo',
-    generationModel: 'glm-image',
-    generationQuality: 'hd',
+    provider: OPENROUTER_QWEN_REDRAW_PROVIDER,
+    analysisModel: DEFAULT_OPENROUTER_ANALYSIS_MODEL,
+    generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    generationQuality: 'high',
     aspectPolicy: 'match_source',
     resolutionPolicy: 'high',
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: true,
-    estimatedUsdPerImage: 0.035,
-    note: 'GLM-5V Turbo + GLM-Image HD dengan satu retry otomatis saat pembacaan teks atau bentuk masih kurang yakin.'
-  },
-  gemini_quality: {
-    mode: 'gemini_quality',
-    preset: 'gemini_quality',
-    label: 'Gemini 3.1 Flash Lite fallback',
-    provider: GEMINI_IMAGEN_REDRAW_PROVIDER,
-    analysisModel: 'gemini-3.1-flash-lite-preview',
-    generationModel: 'gemini-3.1-flash-image-preview',
-    generationQuality: '',
-    aspectPolicy: 'match_source',
-    resolutionPolicy: 'high',
-    preprocess: 'node_heuristic',
-    persistPrompt: true,
-    retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0.045,
-    note: 'Fallback Gemini 3.1 Flash Lite + Gemini image jika GLM belum sebagus Gemini untuk jenis gambar tertentu.'
+    estimatedUsdPerImage: 0.08,
+    note: 'OpenRouter Qwen dengan satu retry otomatis saat pembacaan teks atau bentuk masih kurang yakin.'
   }
-};
-
-const LEGACY_MODEL_TO_PRESET = {
-  'gemini-2.5-flash-image': 'budget',
-  'gemini-3.1-flash-image-preview': 'gemini_quality',
-  'gemini-3-pro-image-preview': 'gemini_quality'
 };
 
 function isObject(value) {
@@ -103,32 +84,21 @@ function normalizeText(value, fallback) {
   return typeof value === 'string' && value.trim() ? value.trim() : fallback;
 }
 
-function normalizeGeminiImageModel(env, fallback) {
-  const geminiImageModel = normalizeText(env.GEMINI_IMAGE_MODEL, '');
-  if (geminiImageModel) return geminiImageModel;
-  const legacyImagenModel = normalizeText(env.IMAGEN_GENERATION_MODEL, '');
-  return legacyImagenModel && !legacyImagenModel.startsWith('imagen-') ? legacyImagenModel : fallback;
-}
-
 function normalizeGenerationQuality(value, fallback) {
   const normalized = normalizeText(value, fallback).toLowerCase();
-  return normalized === 'standard' || normalized === 'hd' ? normalized : fallback;
+  return normalized === 'low' || normalized === 'standard' || normalized === 'high' ? normalized : fallback;
 }
 
-function inferLegacyPreset(input) {
-  const legacyByModel = LEGACY_MODEL_TO_PRESET[input.model];
-  if (legacyByModel) {
-    if (legacyByModel === 'quality' && String(input.imageSize || '').toUpperCase() === '1K') {
-      return 'standard';
-    }
-    return legacyByModel;
-  }
-
-  if (typeof input.mode === 'string' && HYBRID_REDRAW_PRESETS[input.mode]) {
-    return input.mode;
-  }
-
+function inferPreset(input, env) {
+  if (typeof input.mode === 'string' && HYBRID_REDRAW_PRESETS[input.mode]) return input.mode;
+  if (typeof input.preset === 'string' && HYBRID_REDRAW_PRESETS[input.preset]) return input.preset;
+  if (typeof env.AI_REDRAW_PRESET === 'string' && HYBRID_REDRAW_PRESETS[env.AI_REDRAW_PRESET]) return env.AI_REDRAW_PRESET;
   return 'quality';
+}
+
+function shouldForceQwen(input) {
+  if (!input.provider) return true;
+  return input.provider !== OPENROUTER_QWEN_REDRAW_PROVIDER;
 }
 
 export function listHybridRedrawPresets() {
@@ -137,43 +107,25 @@ export function listHybridRedrawPresets() {
 
 export function normalizeHybridRedrawConfig(value = {}, env = {}) {
   const input = isObject(value) ? value : {};
-  const isLegacy =
-    !input.provider ||
-    !input.analysisModel ||
-    !input.generationModel ||
-    Object.prototype.hasOwnProperty.call(input, 'imageSize') ||
-    Object.prototype.hasOwnProperty.call(input, 'model');
-
-  const presetKey = isLegacy
-    ? inferLegacyPreset(input)
-    : normalizeText(input.preset || input.mode, normalizeText(env.AI_REDRAW_PRESET, 'quality'));
+  const presetKey = inferPreset(input, env);
   const preset = HYBRID_REDRAW_PRESETS[presetKey] || HYBRID_REDRAW_PRESETS.quality;
-  const provider = normalizeText(input.provider, preset.provider);
-  const generationCandidate =
-    !isLegacy && typeof input.generationModel === 'string' && input.generationModel.trim()
-      ? input.generationModel
-      : !isLegacy && typeof input.model === 'string' && input.model.trim().startsWith('imagen-')
-        ? input.model
-        : provider === GEMINI_IMAGEN_REDRAW_PROVIDER
-          ? normalizeGeminiImageModel(env, preset.generationModel)
-          : env.GLM_IMAGE_MODEL || preset.generationModel;
-  const analysisCandidate =
-    provider === GEMINI_IMAGEN_REDRAW_PROVIDER
-      ? normalizeText(env.GEMINI_ANALYSIS_MODEL, preset.analysisModel)
-      : normalizeText(env.GLM_ANALYSIS_MODEL, preset.analysisModel);
-  const generationQuality =
-    provider === HYBRID_REDRAW_PROVIDER
-      ? normalizeGenerationQuality(input.generationQuality || env.GLM_IMAGE_QUALITY || preset.generationQuality, 'hd')
-      : normalizeText(input.generationQuality, preset.generationQuality || '');
+  const forceQwen = shouldForceQwen(input);
+
+  const analysisModel = forceQwen
+    ? normalizeText(env.OPENROUTER_ANALYSIS_MODEL, preset.analysisModel)
+    : normalizeText(input.analysisModel, normalizeText(env.OPENROUTER_ANALYSIS_MODEL, preset.analysisModel));
+  const generationModel = forceQwen
+    ? normalizeText(env.OPENROUTER_IMAGE_MODEL, preset.generationModel)
+    : normalizeText(input.generationModel || input.model, normalizeText(env.OPENROUTER_IMAGE_MODEL, preset.generationModel));
 
   return {
     mode: preset.mode,
     preset: preset.mode,
     label: normalizeText(input.label, preset.label),
-    provider,
-    analysisModel: normalizeText(input.analysisModel, analysisCandidate),
-    generationModel: normalizeText(generationCandidate, preset.generationModel),
-    generationQuality,
+    provider: OPENROUTER_QWEN_REDRAW_PROVIDER,
+    analysisModel,
+    generationModel,
+    generationQuality: normalizeGenerationQuality(input.generationQuality || env.OPENROUTER_IMAGE_QUALITY, preset.generationQuality),
     aspectPolicy: normalizeText(input.aspectPolicy, preset.aspectPolicy),
     resolutionPolicy: normalizeText(input.resolutionPolicy, preset.resolutionPolicy),
     preprocess: normalizeText(input.preprocess, preset.preprocess),

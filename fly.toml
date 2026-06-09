@@ -16,12 +16,12 @@ primary_region = "sin"
   TRACE_OPT_TOLERANCE = "0.18"
   SUPABASE_URL = "https://aemnvrxpptessfxaefqe.supabase.co"
   SUPABASE_PUBLISHABLE_KEY = ""
-  GLM_API_BASE_URL = "https://api.z.ai/api/paas/v4"
-  GLM_ANALYSIS_MODEL = "glm-5v-turbo"
-  GLM_IMAGE_MODEL = "glm-image"
+  OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+  OPENROUTER_ANALYSIS_MODEL = "qwen/qwen3-vl-235b-a22b-instruct"
+  OPENROUTER_IMAGE_MODEL = "qwen/qwen-image-2512"
+  OPENROUTER_IMAGE_QUALITY = "high"
+  OPENROUTER_APP_NAME = "Design Mudah Vector"
   AI_REDRAW_PRESET = "quality"
-  GEMINI_ANALYSIS_MODEL = "gemini-3.1-flash-lite-preview"
-  GEMINI_IMAGE_MODEL = "gemini-3.1-flash-image-preview"
 
 [http_service]
   internal_port = 8080

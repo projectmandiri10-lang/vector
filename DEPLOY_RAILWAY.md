@@ -9,7 +9,7 @@ Browser user
   -> Railway service Express
      -> serve frontend build
      -> API /api/...
-     -> GLM redraw via Z.AI
+     -> OpenRouter Qwen redraw
      -> vector trace, cutline, separasi, PDF, ZIP
   -> Supabase auth, credit, metadata
 ```
@@ -46,10 +46,12 @@ SUPABASE_URL=https://PROJECT-REF.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
 SUPABASE_SERVICE_ROLE_KEY=...
 
-GLM_API_KEY=...
-GLM_API_BASE_URL=https://api.z.ai/api/paas/v4
-GLM_ANALYSIS_MODEL=glm-5v-turbo
-GLM_IMAGE_MODEL=glm-image
+OPENROUTER_API_KEY=...
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+OPENROUTER_ANALYSIS_MODEL=qwen/qwen3-vl-235b-a22b-instruct
+OPENROUTER_IMAGE_MODEL=qwen/qwen-image-2512
+OPENROUTER_IMAGE_QUALITY=high
+OPENROUTER_APP_NAME=Design Mudah Vector
 AI_REDRAW_PRESET=quality
 
 GOOGLE_OAUTH_REDIRECT_TO=https://DOMAIN-RAILWAY-ANDA
@@ -83,8 +85,9 @@ Invoke-RestMethod "https://DOMAIN-RAILWAY-ANDA/api/health"
 Pastikan respons menampilkan:
 
 - `ok: true`
-- `redrawProvider: zai_glm5v_glm_image`
-- `redrawAnalysisModel: glm-5v-turbo`
-- `redrawGenerationModel: glm-image`
+- `redrawProvider: openrouter_qwen_image`
+- `redrawAnalysisModel: qwen/qwen3-vl-235b-a22b-instruct`
+- `redrawGenerationModel: qwen/qwen-image-2512`
+- `openRouterConfigured: true`
 
-Jika AI redraw gagal, cek `GLM_API_KEY` dan akses model `glm-5v-turbo` / `glm-image` di akun Z.AI.
+Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, dan model ID `OPENROUTER_IMAGE_MODEL`.

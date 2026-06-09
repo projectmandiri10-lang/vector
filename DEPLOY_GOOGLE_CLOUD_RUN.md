@@ -14,7 +14,7 @@ Referensi resmi yang dipakai:
 User Browser
   -> Cloudflare Pages frontend: https://designmudah.pages.dev
   -> Cloudflare Worker API: login, credit, admin, contoh job, dan proxy redraw
-  -> Google Cloud Run processor: GLM-5V Turbo director, GLM-Image painter, trace, cutline, separasi warna, PDF, ZIP, registration mark
+  -> Google Cloud Run processor: OpenRouter Qwen redraw, trace, cutline, separasi warna, PDF, ZIP, registration mark
   -> Supabase: auth, credit, metadata, bucket contoh
 ```
 
@@ -47,15 +47,15 @@ Pipeline redraw sekarang tetap:
 - Worker `/api/image-retouch` hanya memeriksa auth dan credit, lalu meneruskan upload ke Cloud Run.
 - Cloud Run route internal `POST /api/redraw/hybrid` melakukan:
   - preprocess Node heuristic
-  - analisis desain dengan GLM-5V Turbo
-  - generasi ulang dari nol dengan GLM-Image
+  - analisis desain dengan Qwen VL via OpenRouter
+  - generasi ulang image-to-image dengan Qwen Image via OpenRouter
 - Setelah PNG redraw jadi, trace/cutline/separasi warna tetap dikerjakan engine deterministik.
 
 Health endpoint backend sekarang menampilkan:
 
 ```json
 {
-  "redrawProvider": "zai_glm5v_glm_image",
+  "redrawProvider": "openrouter_qwen_image",
   "redrawPreset": "quality",
   "redrawScope": "worker /api/image-retouch and backend /api/jobs inputMode=ai_redraw"
 }
@@ -109,7 +109,7 @@ Jika repository sudah ada, command ini boleh dilewati.
 
 ## 6. Auth dan Secret
 
-Untuk Cloud Run/Fly, simpan `GLM_API_KEY` sebagai secret runtime. `GLM_API_BASE_URL`, `GLM_ANALYSIS_MODEL`, dan `GLM_IMAGE_MODEL` bisa menjadi env non-secret.
+Untuk Cloud Run/Fly, simpan `OPENROUTER_API_KEY` sebagai secret runtime. `OPENROUTER_BASE_URL`, `OPENROUTER_ANALYSIS_MODEL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_IMAGE_QUALITY`, dan `OPENROUTER_APP_NAME` bisa menjadi env non-secret.
 
 Pastikan service account runtime punya izin minimal:
 
