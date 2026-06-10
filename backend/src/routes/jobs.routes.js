@@ -96,20 +96,20 @@ function normalizeOffsetMm(value, fallback = 2) {
 
 export function validateSettings(body = {}) {
   const productionType = body.productionType === 'sablon' ? 'sablon' : 'sticker';
+  const inputMode = body.inputMode === 'ai_redraw' ? 'ai_redraw' : 'ready_trace';
   const defaultSeparate = productionType === 'sablon';
   const maxColors = Math.min(6, Math.max(2, Number.parseInt(body.maxColors || '4', 10)));
   const explicitColorLimitMode = body.colorLimitMode === 'manual' || body.colorLimitMode === 'auto';
   const colorLimitMode = explicitColorLimitMode ? body.colorLimitMode : body.maxColors ? 'manual' : 'auto';
-  const separateColors = parseBoolean(body.separateColors, defaultSeparate);
+  const separateColors = inputMode === 'ready_trace' && productionType === 'sablon' ? true : parseBoolean(body.separateColors, defaultSeparate);
   const paperSize = String(body.paperSize || 'A4').toUpperCase() === 'A3' ? 'A3' : 'A4';
   const paperOrientation = String(body.paperOrientation || 'portrait').toLowerCase() === 'landscape' ? 'landscape' : 'portrait';
-  const inputMode = body.inputMode === 'ai_redraw' ? 'ai_redraw' : 'ready_trace';
 
   return {
     projectName: String(body.projectName || 'Project Vector').trim().slice(0, 80) || 'Project Vector',
     productionType,
     inputMode,
-    makeVector: parseBoolean(body.makeVector, true) || separateColors,
+    makeVector: inputMode === 'ready_trace' ? true : parseBoolean(body.makeVector, true) || separateColors,
     separateColors,
     colorLimitMode,
     maxColors,
@@ -118,7 +118,7 @@ export function validateSettings(body = {}) {
     aiQuality: 'standard',
     actualWidthCm: normalizeActualWidthCm(body.actualWidthCm, 10),
     includeBackgroundInFilmSize: parseBoolean(body.includeBackgroundInFilmSize, false),
-    stickerCutlineEnabled: productionType === 'sticker' && parseBoolean(body.stickerCutlineEnabled, true),
+    stickerCutlineEnabled: productionType === 'sticker' ? (inputMode === 'ready_trace' ? true : parseBoolean(body.stickerCutlineEnabled, true)) : false,
     stickerCutlineOffsetMm: normalizeOffsetMm(body.stickerCutlineOffsetMm, 2),
     createUnderbaseFilm: productionType === 'sablon' && parseBoolean(body.createUnderbaseFilm, true),
     edgeRefinement: parseBoolean(body.edgeRefinement, true),

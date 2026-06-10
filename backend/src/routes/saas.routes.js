@@ -375,6 +375,7 @@ async function readyTraceHandler(req, res, next) {
     const settings = {
       ...JSON.parse(req.body?.settings || '{}'),
       inputMode: 'ready_trace',
+      makeVector: true,
       edgeRefinement: true,
       curveCleanup: true
     };
@@ -383,7 +384,7 @@ async function readyTraceHandler(req, res, next) {
       provider: 'ready_trace_edge_refinement',
       generationModel: 'none',
       generationQuality: 'deterministic',
-      note: 'Ready Trace backend: no AI, edge refinement before vector trace.'
+      note: 'Ready Trace backend: vector-only, edge refinement before trace, lalu pisah warna dan contour sticker.'
     };
     const qualityAssessment = await assessImageQuality(req.file.buffer, { forMode: 'ready_trace' });
     metadata.qualityAssessment = qualityAssessment;
@@ -404,7 +405,7 @@ async function readyTraceHandler(req, res, next) {
           ...metadata,
           ...logoRestore.metadata,
           readyTraceProvider: 'ready_trace_edge_refinement',
-          note: 'Ready Trace backend used deterministic Logo Restore before edge refinement.'
+          note: 'Ready Trace backend used deterministic Logo Restore before edge refinement and vector-only trace output.'
         };
       } else if (logoRestore.metadata?.reason) {
         metadata.logoRestoreSkippedReason = logoRestore.metadata.reason;

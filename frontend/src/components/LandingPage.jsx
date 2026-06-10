@@ -83,7 +83,7 @@ const howItWorks = [
     number: '02',
     icon: Wand2,
     title: 'Pilih Mode',
-    description: 'AI Redesign Premium (Rp 5.000) atau Trace + Edge Refinement (Rp 2.500).',
+    description: 'AI Redesign Premium (Rp 5.000) atau Siap Trace Vector (Rp 2.500).',
     detail: 'Pilih output: Sablon atau Sticker'
   },
   {
@@ -105,9 +105,9 @@ const pricingCards = [
     features: ['AI Image-to-Image', 'Safety Check', 'Sablon + Sticker mode', 'High Quality Output', 'Hasil dalam 1-3 menit']
   },
   {
-    title: 'Trace + Edge Refinement',
+    title: 'Siap Trace Vector',
     price: 2500,
-    description: 'Untuk gambar cukup jelas yang ingin diproses tanpa AI dengan edge refinement',
+    description: 'Untuk gambar cukup jelas yang diproses tanpa AI sebagai jalur vector-only',
     icon: Zap,
     popular: false,
     features: ['Direct Processing', 'Sablon + Sticker mode', 'High Quality Output', 'Fast Processing (30-60s)', 'Hemat budget']
@@ -120,7 +120,7 @@ const creditPackages = [
     credits: 2,
     price: 5000,
     pricePerCredit: 5000,
-    callout: 'Cukup untuk 1 AI Redesign atau 2 Ready Trace.',
+    callout: 'Cukup untuk 1 AI Redesign atau 2 Siap Trace Vector.',
     aiRedesign: 1,
     readyToTrace: 2
   },
@@ -179,12 +179,12 @@ const faqItems = [
   {
     question: 'Berapa harga per gambar?',
     answer:
-      'Kami menawarkan dua mode harga: AI Redesign Premium seharga Rp 5.000 per gambar dan Trace + Edge Refinement seharga Rp 2.500 per gambar. Anda dapat membeli credit dalam paket melalui Shopee.'
+      'Kami menawarkan dua mode harga: AI Redesign Premium seharga Rp 5.000 per gambar dan Siap Trace Vector seharga Rp 2.500 per gambar. Anda dapat membeli credit dalam paket melalui Shopee.'
   },
   {
     question: 'Apa perbedaan AI Redesign dan Ready to Trace?',
     answer:
-      'AI Redesign Premium menggunakan image-to-image untuk menggambar ulang desain sulit. Trace + Edge Refinement memproses gambar tanpa AI dengan cleanup tepi sebelum vector trace, cocok untuk logo yang sudah cukup jelas.'
+      'AI Redesign Premium menggunakan image-to-image untuk menggambar ulang desain sulit. Siap Trace Vector memproses gambar tanpa AI dengan jalur vector-only, cocok untuk logo yang sudah cukup jelas dan perlu pisah warna atau contour sticker.'
   },
   {
     question: 'Format output apa saja?',
@@ -204,7 +204,7 @@ const faqItems = [
   {
     question: 'Berapa lama proses gambar?',
     answer:
-      'Mode Ready to Trace biasanya selesai dalam 30-60 detik. Mode AI Redesign membutuhkan waktu sekitar 1-3 menit.'
+      'Mode Siap Trace Vector biasanya selesai dalam 30-60 detik. Mode AI Redesign membutuhkan waktu sekitar 1-3 menit.'
   },
   {
     question: 'Apakah gambar saya aman?',

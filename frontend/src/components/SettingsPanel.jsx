@@ -1,4 +1,5 @@
 import { Check, Palette, SlidersHorizontal } from 'lucide-react';
+import { INPUT_MODE_READY } from '../lib/modes.js';
 
 function Toggle({ checked, onChange, label, disabled }) {
   return (
@@ -19,7 +20,7 @@ function Toggle({ checked, onChange, label, disabled }) {
   );
 }
 
-export default function SettingsPanel({ settings, onChange, disabled }) {
+export default function SettingsPanel({ settings, inputMode, onChange, disabled }) {
   function update(key, value) {
     onChange({ ...settings, [key]: value });
   }
@@ -77,9 +78,20 @@ export default function SettingsPanel({ settings, onChange, disabled }) {
         </div>
 
         <div className="grid gap-2">
-          <Toggle checked={settings.makeVector} onChange={(value) => update('makeVector', value)} label="Buat versi vector" disabled={disabled || settings.separateColors} />
+          <Toggle
+            checked={inputMode === INPUT_MODE_READY ? true : settings.makeVector}
+            onChange={(value) => update('makeVector', value)}
+            label={inputMode === INPUT_MODE_READY ? 'Vector only (otomatis)' : 'Buat versi vector'}
+            disabled={disabled || settings.separateColors || inputMode === INPUT_MODE_READY}
+          />
           <Toggle checked={settings.separateColors} onChange={setSeparateColors} label="Pecah warna untuk sablon" disabled={disabled} />
         </div>
+
+        {inputMode === INPUT_MODE_READY && (
+          <div className="border border-spruce bg-primary/5 px-3 py-2 text-xs leading-5 text-ink">
+            Mode siap trace selalu menjalankan vector, pisah warna, dan contour sticker lewat jalur backend lokal.
+          </div>
+        )}
 
         <div className="border border-line bg-panel p-3">
           <Toggle

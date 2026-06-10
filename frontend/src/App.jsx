@@ -517,7 +517,7 @@ export default function App() {
         aiRedrawMetadata = retouchResult.aiRedrawMetadata || null;
         backendVectorResult = retouchResult.localResult || null;
       } else {
-        setJob(statusJob('processing_image', 'Menjalankan Ready Trace backend dengan edge refinement tanpa AI.', 30));
+        setJob(statusJob('processing_image', 'Menjalankan jalur vector-only backend untuk pisah warna dan contour sticker.', 30));
         const readyTraceResult = await requestReadyTrace(file, settings, session.access_token);
         processingFile = readyTraceResult.file || file;
         backendVectorResult = readyTraceResult.localResult || null;
@@ -726,7 +726,17 @@ export default function App() {
               file={file}
               previewUrl={previewUrl}
               inputMode={settings.inputMode}
-              onInputModeChange={(inputMode) => setSettings((current) => ({ ...current, inputMode }))}
+              onInputModeChange={(inputMode) =>
+                setSettings((current) => ({
+                  ...current,
+                  inputMode,
+                  makeVector: inputMode === INPUT_MODE_READY ? true : current.makeVector,
+                  separateColors:
+                    inputMode === INPUT_MODE_READY && current.productionType === 'sablon' ? true : current.separateColors,
+                  stickerCutlineEnabled:
+                    inputMode === INPUT_MODE_READY && current.productionType === 'sticker' ? true : current.stickerCutlineEnabled
+                }))
+              }
               onFileChange={setFile}
               disabled={isBusy}
             />
@@ -759,7 +769,7 @@ export default function App() {
           </div>
 
           <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
-            <SettingsPanel settings={settings} onChange={setSettings} disabled={isBusy} />
+            <SettingsPanel settings={settings} inputMode={settings.inputMode} onChange={setSettings} disabled={isBusy} />
             <button
               type="submit"
               disabled={!canSubmit}

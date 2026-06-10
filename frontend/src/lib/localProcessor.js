@@ -1000,6 +1000,15 @@ async function addSvgPdf(zip, name, svg, width, height, options = {}) {
 
 export async function processImageLocally(file, settings) {
   const { default: JSZip } = await import('jszip');
+  const effectiveSettings =
+    settings.inputMode === 'ready_trace'
+      ? {
+          ...settings,
+          makeVector: true,
+          separateColors: settings.productionType === 'sablon' ? true : settings.separateColors,
+          stickerCutlineEnabled: settings.productionType === 'sticker' ? true : settings.stickerCutlineEnabled
+        }
+      : settings;
   const bitmap = await loadBitmap(file);
   const scale = Math.min(1, MAX_CANVAS_EDGE / Math.max(bitmap.width, bitmap.height));
   const width = Math.max(1, Math.round(bitmap.width * scale));
@@ -1013,18 +1022,18 @@ export async function processImageLocally(file, settings) {
   ctx.drawImage(bitmap, 0, 0, width, height);
 
   const imageData = ctx.getImageData(0, 0, width, height);
-  const palette = buildPalette(imageData, settings);
-  const assigned = assignPixels(imageData, palette, settings);
-  const cleaned = removeEdgeConnectedBackground(assigned.assignments, palette, width, height, settings);
-  const limited = enforcePrintableColorLimit(cleaned.assignments, cleaned.colors, settings, width, height);
-  const refined = refineAssignmentsForTrace(limited.assignments, limited.colors, width, height, settings);
+  const palette = buildPalette(imageData, effectiveSettings);
+  const assigned = assignPixels(imageData, palette, effectiveSettings);
+  const cleaned = removeEdgeConnectedBackground(assigned.assignments, palette, width, height, effectiveSettings);
+  const limited = enforcePrintableColorLimit(cleaned.assignments, cleaned.colors, effectiveSettings, width, height);
+  const refined = refineAssignmentsForTrace(limited.assignments, limited.colors, width, height, effectiveSettings);
   const assignments = refined.assignments;
   const outputColors = refined.colors;
-  const filmPlan = createFilmPlan(outputColors, width, height, settings);
+  const filmPlan = createFilmPlan(outputColors, width, height, effectiveSettings);
   const printable = filmPlan.colors;
   const exportColors = settings.removeBackground === true && settings.includeBackgroundInFilmSize !== true ? printable : outputColors;
   const bounds = filmPlan.bounds;
-  const fullSvg = buildFullSvg({ colors: exportColors, assignments, width, height, settings });
+  const fullSvg = buildFullSvg({ colors: exportColors, assignments, width, height, settings: effectiveSettings });
   const zip = new JSZip();
   const separationZip = new JSZip();
   const fullSvgPdf = await addSvgPdf(zip, 'full-vector', fullSvg, width, height);
@@ -1045,7 +1054,7 @@ export async function processImageLocally(file, settings) {
         assignments,
         width,
         height,
-        settings,
+        settings: effectiveSettings,
         activeIndexes: new Set(printable.map((color) => color.index - 1)),
         label,
         bounds: filmPlan.bounds
@@ -1068,7 +1077,7 @@ export async function processImageLocally(file, settings) {
         assignments,
         width,
         height,
-        settings,
+        settings: effectiveSettings,
         activeIndexes: color.index - 1,
         label,
         bounds: filmPlan.bounds
@@ -1087,7 +1096,7 @@ export async function processImageLocally(file, settings) {
 
   let stickerCutline = null;
   if (settings.productionType === 'sticker' && settings.stickerCutlineEnabled && printable.length > 0) {
-    const cutlineSvg = buildCutlineSvg({ assignments, colors: printable, width, height, settings, bounds });
+    const cutlineSvg = buildCutlineSvg({ assignments, colors: printable, width, height, settings: effectiveSettings, bounds });
     stickerCutline = await addSvgPdf(zip, 'sticker-cutline', cutlineSvg, width, height);
   }
 
@@ -1097,7 +1106,7 @@ export async function processImageLocally(file, settings) {
   const priceIdr = calculateJobPrice({
     inputMode: settings.inputMode,
     separationFilmCount,
-    retouchAlreadyCharged: settings.inputMode === INPUT_MODE_RETOUCH
+      retouchAlreadyCharged: effectiveSettings.inputMode === INPUT_MODE_RETOUCH
   });
 
   return {
@@ -1111,7 +1120,7 @@ export async function processImageLocally(file, settings) {
     priceIdr,
     separationFilmCount,
     palette: exportColors,
-    settings,
+    settings: effectiveSettings,
     files: {
       fullPng: fileUrl(previewBlob),
       fullSvg: fullSvgPdf.svg,

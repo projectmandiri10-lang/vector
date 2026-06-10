@@ -14,8 +14,8 @@ const modeOptions = [
   },
   {
     value: INPUT_MODE_READY,
-    title: 'Trace + Edge Refinement',
-    description: 'Tanpa AI. Gambar dirapikan dengan edge refinement lalu dibuat vector, cutline, atau pisah warna.',
+    title: 'Siap Trace Vector',
+    description: 'Tanpa AI. Jalur vector-only untuk pisah warna, outline sticker, dan trace siap produksi.',
     priceIdr: READY_PROCESS_PRICE_IDR
   }
 ];
@@ -92,7 +92,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
                   <span className="block text-sm font-semibold text-ink">Pilih gambar JPG, PNG, atau WebP</span>
                   <span className="mt-1 block text-xs text-gray-600">
                     {inputMode === INPUT_MODE_READY
-                      ? 'Maksimal 10 MB. File diproses tanpa AI dengan edge refinement sebelum trace.'
+                      ? 'Maksimal 10 MB. File diproses tanpa AI ke jalur vector-only untuk separasi warna dan contour sticker.'
                       : 'Maksimal 10 MB. Gambar akan dirapikan sebelum diproses.'}
                   </span>
                 </>

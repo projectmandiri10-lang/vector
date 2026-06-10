@@ -863,6 +863,7 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(settings.whiteAsBackground, false);
   assert.equal(settings.removeBackground, true);
   assert.equal(settings.inputMode, 'ready_trace');
+  assert.equal(settings.makeVector, true);
   assert.equal(settings.colorLimitMode, 'auto');
   assert.equal(settings.stickerCutlineEnabled, true);
   assert.equal(settings.stickerCutlineOffsetMm, 2);
@@ -886,9 +887,18 @@ test('validateSettings normalizes print sizing options', () => {
     stickerCutlineOffsetMm: '1.5'
   });
   assert.equal(readyTrace.inputMode, 'ready_trace');
+  assert.equal(readyTrace.makeVector, true);
   assert.equal(readyTrace.colorLimitMode, 'manual');
   assert.equal(readyTrace.maxColors, 3);
   assert.equal(readyTrace.stickerCutlineOffsetMm, 1.5);
+
+  const readyTraceSticker = validateSettings({
+    inputMode: 'ready_trace',
+    productionType: 'sticker',
+    stickerCutlineEnabled: 'false'
+  });
+  assert.equal(readyTraceSticker.makeVector, true);
+  assert.equal(readyTraceSticker.stickerCutlineEnabled, true);
 
   const noRefinement = validateSettings({ edgeRefinement: 'false', curveCleanup: 'false' });
   assert.equal(noRefinement.edgeRefinement, false);
