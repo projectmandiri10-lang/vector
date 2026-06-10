@@ -319,6 +319,18 @@ export async function logoRestoreBuffer(uploadedBuffer, settings = {}, options =
   const width = metadata.width || 0;
   const height = metadata.height || 0;
   if (!width || !height) throw new Error('File gambar tidak valid atau tidak bisa dibaca.');
+  const qualityAssessment = options.qualityAssessment || null;
+  if (qualityAssessment?.qualityStatus === 'blocked') {
+    return {
+      canRestore: false,
+      metadata: {
+        provider: 'logo_restore_trace_first',
+        reason: 'quality_blocked',
+        qualityAssessment,
+        strictSpotColors: strictSpotModeEnabled(settings)
+      }
+    };
+  }
 
   const { data: raw } = await source.raw().toBuffer({ resolveWithObject: true });
   const background = estimateBorderColor(raw, width, height);
@@ -326,7 +338,10 @@ export async function logoRestoreBuffer(uploadedBuffer, settings = {}, options =
   const bounds = foregroundBounds(backgroundMask, width, height);
   const paletteResult = buildPalette(raw, backgroundMask, width, height, settings);
   const palette = paletteResult.palette;
-  const canRestore = options.force === true || isLogoLike({ width, height, bounds, palette, background });
+  const canRestore =
+    options.force === true ||
+    (isLogoLike({ width, height, bounds, palette, background }) &&
+      (qualityAssessment?.noiseScore === undefined || qualityAssessment.noiseScore <= Number.parseFloat(process.env.LOGO_RESTORE_MAX_NOISE_SCORE || '42')));
   if (!canRestore) {
     return {
       canRestore: false,
@@ -452,7 +467,8 @@ export async function createTraceArtifactsFromImage({ imageBuffer, settings = {}
       maxColors: settings.maxColors || 4,
       removeBackground: settings.removeBackground !== false,
       edgeRefinement: settings.edgeRefinement !== false,
-      curveCleanup: settings.curveCleanup !== false && metadata.strictSpotColors !== false
+      curveCleanup: settings.curveCleanup !== false && metadata.strictSpotColors !== false,
+      qualityAssessment: metadata.qualityAssessment || settings.qualityAssessment || null
     };
     await fs.writeFile(rawSourcePath, imageBuffer);
     const refinement = await refineTraceSourceImage(rawSourcePath, sourcePath, effectiveSettings);

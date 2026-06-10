@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, Wand2 } from 'lucide-react';
 
 const labels = {
   uploaded: 'Gambar diterima',
@@ -11,7 +11,7 @@ const labels = {
   failed: 'Gagal memproses gambar'
 };
 
-export default function JobStatus({ job, error }) {
+export default function JobStatus({ job, error, suggestedInputMode, onUseSuggestedMode }) {
   if (!job && !error) return null;
   const isDone = job?.status === 'done';
   const isFailed = job?.status === 'failed' || error;
@@ -33,6 +33,16 @@ export default function JobStatus({ job, error }) {
             <p className="mt-1 text-sm text-gray-600">{labels[job.status]}</p>
           )}
           {job?.error && <p className="mt-1 text-sm text-tomato">Silakan coba lagi atau hubungi admin.</p>}
+          {isFailed && suggestedInputMode === 'ai_redraw' && (
+            <button
+              type="button"
+              onClick={onUseSuggestedMode}
+              className="mt-3 inline-flex min-h-10 items-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-bold text-white hover:bg-primary/90"
+            >
+              <Wand2 className="h-4 w-4" aria-hidden="true" />
+              Gunakan AI Redraw Premium Rp5.000
+            </button>
+          )}
           <div className="mt-3 h-2 overflow-hidden bg-panel">
             <div className={`h-full ${isFailed ? 'bg-tomato' : 'bg-spruce'}`} style={{ width: `${progress}%` }} />
           </div>

@@ -242,7 +242,10 @@ export async function requestReadyTrace(file, settings, accessToken) {
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data.error || 'Ready Trace backend gagal.');
+    const error = new Error(data.error || 'Ready Trace backend gagal.');
+    error.qualityAssessment = data.qualityAssessment || null;
+    error.suggestedInputMode = data.suggestedInputMode || '';
+    throw error;
   }
 
   const data = await response.json();

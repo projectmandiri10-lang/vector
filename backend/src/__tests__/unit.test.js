@@ -14,6 +14,7 @@ import {
   parseOpenRouterSafetyResult
 } from '../services/aiRedraw.service.js';
 import { createLogoRestoreArtifacts, logoRestoreBuffer } from '../services/logoRestore.service.js';
+import { assessImageQuality } from '../services/imageQuality.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
@@ -283,6 +284,31 @@ test('logoRestoreBuffer preserves flat logo colors without generative redraw', a
   assert.ok(transparentPixels > 0);
   assert.ok(whitePixels > 0);
   assert.ok(yellowPixels > 0);
+});
+
+test('ready trace quality assessment blocks very low resolution input', async () => {
+  const png = new PNG({ width: 144, height: 191, colorType: 6 });
+  for (let i = 0; i < png.data.length; i += 4) {
+    png.data[i] = 18;
+    png.data[i + 1] = 18;
+    png.data[i + 2] = 18;
+    png.data[i + 3] = 255;
+  }
+  const assessment = await assessImageQuality(PNG.sync.write(png), { forMode: 'ready_trace' });
+  assert.equal(assessment.qualityStatus, 'blocked');
+  assert.equal(assessment.recommendedMode, 'ai_redraw');
+  assert.match(assessment.reasons.join(' '), /Resolusi terlalu kecil/);
+});
+
+test('logoRestoreBuffer skips deterministic restore when quality assessment is blocked', async () => {
+  const qualityAssessment = {
+    qualityStatus: 'blocked',
+    noiseScore: 12,
+    reasons: ['Resolusi terlalu kecil']
+  };
+  const result = await logoRestoreBuffer(makeFlatLogoBuffer(), { productionType: 'sablon' }, { qualityAssessment });
+  assert.equal(result.canRestore, false);
+  assert.equal(result.metadata.reason, 'quality_blocked');
 });
 
 test('createLogoRestoreArtifacts returns backend vector artifacts for logo restore', async () => {

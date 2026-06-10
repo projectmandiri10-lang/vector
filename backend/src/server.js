@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { normalizeHybridRedrawConfig } from '../../shared/hybridRedrawConfig.js';
-import { processorAuth, processorAuthEnabled } from './middleware/processorAuth.js';
+import { processorAuth, processorAuthEnabled, processorAuthRequired } from './middleware/processorAuth.js';
 import jobsRouter from './routes/jobs.routes.js';
 import redrawRouter from './routes/redraw.routes.js';
 import saasRouter from './routes/saas.routes.js';
@@ -60,6 +60,7 @@ app.get('/api/health', (_req, res) => {
     service: 'ai-redraw-vector-backend',
     runtime: process.env.FLY_APP_NAME ? 'fly' : process.env.K_SERVICE ? 'cloud-run' : 'node',
     processorAuth: processorAuthEnabled(),
+    processorAuthRequired: processorAuthRequired(),
     trace: {
       engine: 'potrace',
       maxDimension: Number.parseInt(process.env.PREPROCESS_MAX_DIMENSION || '2048', 10),

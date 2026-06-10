@@ -644,6 +644,37 @@ async function insertLedger(env, { userId, amountIdr, kind, reason, referenceId,
   return rows?.[0];
 }
 
+async function validateAiLedgerForCommit(env, { userId, ledgerId, expectedAmountIdr }) {
+  if (!ledgerId) throw new Error('AI Redraw belum terdebit. Silakan proses ulang dari tombol upload.');
+  const ledgerRows = await supabaseFetch(
+    env,
+    `/rest/v1/credit_ledger?select=id,user_id,amount_idr,kind,reason,reference_id&id=eq.${encodeURIComponent(ledgerId)}&limit=1`,
+    {}
+  );
+  const ledger = ledgerRows?.[0];
+  if (
+    !ledger ||
+    ledger.user_id !== userId ||
+    ledger.kind !== 'debit' ||
+    ledger.reason !== 'ai_redraw' ||
+    Number(ledger.amount_idr) !== -Math.abs(Number(expectedAmountIdr) || 0)
+  ) {
+    throw new Error('AI Redraw belum terdebit. Silakan proses ulang dari tombol upload.');
+  }
+
+  const refundRows = await supabaseFetch(
+    env,
+    `/rest/v1/credit_ledger?select=id&reference_id=eq.${encodeURIComponent(ledgerId)}&reason=eq.ai_redraw_refund&limit=1`,
+    {}
+  );
+  if (refundRows?.length) throw new Error('AI Redraw sudah direfund. Silakan proses ulang dari tombol upload.');
+
+  const usedRows = await supabaseFetch(env, `/rest/v1/jobs?select=id&ai_ledger_id=eq.${encodeURIComponent(ledgerId)}&limit=1`, {});
+  if (usedRows?.length) throw new Error('AI Redraw sudah pernah dicatat. Silakan proses ulang dari tombol upload.');
+
+  return ledger;
+}
+
 async function ensureCredit(env, profile, priceIdr) {
   if (profile.is_unlimited) return { isUnlimited: true, balance: null };
   const balance = await creditBalance(env, profile.id);
@@ -676,6 +707,13 @@ async function handleCommitJob(env, request) {
     aiAlreadyCharged: body.inputMode === 'ai_redraw'
   }, pricing);
   await ensureCredit(env, profile, priceIdr);
+  if (body.inputMode === 'ai_redraw' && !profile.is_unlimited) {
+    await validateAiLedgerForCommit(env, {
+      userId: user.id,
+      ledgerId: body.aiLedgerId,
+      expectedAmountIdr: pricing.ai_redraw
+    });
+  }
 
   const jobRows = await supabaseFetch(env, '/rest/v1/jobs?select=*', {
     method: 'POST',

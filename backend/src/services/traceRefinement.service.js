@@ -45,7 +45,10 @@ export async function refineTraceSourceImage(inputPath, outputPath, settings = {
   const scale = Math.min(requestedScale, maxDimension / Math.max(sourceWidth, sourceHeight));
   const width = Math.max(1, Math.round(sourceWidth * scale));
   const height = Math.max(1, Math.round(sourceHeight * scale));
-  const sharpenSigma = numberFromEnv('TRACE_EDGE_SHARPEN_SIGMA', 0.35, 0, 2);
+  const quality = settings.qualityAssessment || {};
+  const isLowQualitySource = quality.qualityStatus === 'warning' || quality.longestSide < (quality.idealLongestSide || 1500);
+  const sharpenSigma = isLowQualitySource ? 0 : numberFromEnv('TRACE_EDGE_SHARPEN_SIGMA', 0.35, 0, 2);
+  const medianSize = isLowQualitySource ? 3 : 1;
 
   let pipeline = sharp(inputPath, { failOn: 'error' })
     .rotate()
@@ -56,7 +59,7 @@ export async function refineTraceSourceImage(inputPath, outputPath, settings = {
       fit: 'fill',
       kernel: 'lanczos3'
     })
-    .median(1);
+    .median(medianSize);
 
   if (process.env.TRACE_EDGE_NORMALIZE_LIGHTING === '1') {
     pipeline = pipeline.normalise({ lower: 1, upper: 99 });
@@ -73,6 +76,9 @@ export async function refineTraceSourceImage(inputPath, outputPath, settings = {
     sourcePath: outputPath,
     width,
     height,
-    scale
+    scale,
+    lowQualitySource: isLowQualitySource,
+    sharpenSigma,
+    medianSize
   };
 }

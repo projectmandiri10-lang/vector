@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { redrawWithAI } from '../services/aiRedraw.service.js';
 import { exportSvgToPdf, exportSvgToPng } from '../services/export.service.js';
 import { preprocessUploadedImage } from '../services/preprocess.service.js';
+import { assessImageQuality, readyTraceBlockedMessage } from '../services/imageQuality.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
@@ -228,10 +229,18 @@ async function processJob(jobId, uploadedBuffer) {
     let aiRedrawMetadata = null;
     let traceRefinementMetadata = null;
     if (meta.settings.inputMode === 'ready_trace') {
+      const qualityAssessment = await assessImageQuality(uploadedBuffer, { forMode: 'ready_trace' });
+      if (qualityAssessment.qualityStatus === 'blocked') {
+        throw Object.assign(new Error(readyTraceBlockedMessage(qualityAssessment)), {
+          status: 422,
+          expose: true,
+          qualityAssessment
+        });
+      }
       const rawTraceSourcePath = safeJobPath(jobId, 'trace-source-original.png');
       let readyTraceRestoreMetadata = null;
       if (process.env.LOGO_RESTORE_ENABLED !== '0') {
-        const logoRestore = await logoRestoreBuffer(uploadedBuffer, meta.settings);
+        const logoRestore = await logoRestoreBuffer(uploadedBuffer, meta.settings, { qualityAssessment });
         if (logoRestore.canRestore) {
           await fs.writeFile(rawTraceSourcePath, logoRestore.imageBuffer);
           readyTraceRestoreMetadata = logoRestore.metadata;
@@ -242,9 +251,13 @@ async function processJob(jobId, uploadedBuffer) {
       }
 
       sourceImagePath = safeJobPath(jobId, 'trace-source.png');
-      traceRefinementMetadata = await refineTraceSourceImage(rawTraceSourcePath, sourceImagePath, meta.settings);
+      traceRefinementMetadata = await refineTraceSourceImage(rawTraceSourcePath, sourceImagePath, {
+        ...meta.settings,
+        qualityAssessment
+      });
       traceRefinementMetadata.mode = 'ready_trace';
       traceRefinementMetadata.logoRestore = readyTraceRestoreMetadata;
+      traceRefinementMetadata.qualityAssessment = qualityAssessment;
       await fs.copy(sourceImagePath, safeJobPath(jobId, 'preview-full-color.png'));
     } else {
       await updateJob(jobId, {

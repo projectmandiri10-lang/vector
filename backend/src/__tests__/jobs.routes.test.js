@@ -39,6 +39,21 @@ function makePngBuffer() {
   return PNG.sync.write(png);
 }
 
+function makeReadyTracePngBuffer() {
+  const png = new PNG({ width: 640, height: 640 });
+  for (let y = 0; y < png.height; y += 1) {
+    for (let x = 0; x < png.width; x += 1) {
+      const idx = (png.width * y + x) << 2;
+      const inLogo = x > 120 && x < 520 && y > 170 && y < 470;
+      png.data[idx] = inLogo ? 245 : 10;
+      png.data[idx + 1] = inLogo ? 245 : 10;
+      png.data[idx + 2] = inLogo ? 245 : 12;
+      png.data[idx + 3] = 255;
+    }
+  }
+  return PNG.sync.write(png);
+}
+
 test.after(async () => {
   await fs.remove(storageDir);
 });
@@ -66,7 +81,7 @@ test('POST /api/jobs accepts upload and exposes full PNG result in mock mode', a
     .field('maxColors', '3')
     .field('whiteAsBackground', 'true')
     .field('aiQuality', 'standard')
-    .attach('image', makePngBuffer(), {
+    .attach('image', makeReadyTracePngBuffer(), {
       filename: 'logo.png',
       contentType: 'image/png'
     });
@@ -199,6 +214,23 @@ test('OpenRouter API key mode reports clear missing key error', async () => {
   } finally {
     process.env.AI_REDRAW_MOCK = previousMock;
     if (previousKey) process.env.OPENROUTER_API_KEY = previousKey;
+  }
+});
+
+test('processor routes fail closed when processor auth is required but key is missing', async () => {
+  delete process.env.PROCESSOR_API_KEY;
+  process.env.REQUIRE_PROCESSOR_AUTH = '1';
+
+  try {
+    const response = await request(app).post('/api/redraw/hybrid').attach('image', makePngBuffer(), {
+      filename: 'logo.png',
+      contentType: 'image/png'
+    });
+
+    assert.equal(response.status, 503);
+    assert.match(response.body.error, /Processor auth belum dikonfigurasi/);
+  } finally {
+    delete process.env.REQUIRE_PROCESSOR_AUTH;
   }
 });
 

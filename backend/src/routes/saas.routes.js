@@ -6,6 +6,7 @@ import workerApi from '../../../cloudflare-worker/src/index.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { hybridRedrawBuffer } from '../services/aiRedraw.service.js';
 import { createLogoRestoreArtifacts, createTraceArtifactsFromImage, logoRestoreBuffer } from '../services/logoRestore.service.js';
+import { assessImageQuality, readyTraceBlockedMessage } from '../services/imageQuality.service.js';
 
 const router = express.Router();
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -384,9 +385,19 @@ async function readyTraceHandler(req, res, next) {
       generationQuality: 'deterministic',
       note: 'Ready Trace backend: no AI, edge refinement before vector trace.'
     };
+    const qualityAssessment = await assessImageQuality(req.file.buffer, { forMode: 'ready_trace' });
+    metadata.qualityAssessment = qualityAssessment;
+    if (qualityAssessment.qualityStatus === 'blocked') {
+      res.status(422).json({
+        error: readyTraceBlockedMessage(qualityAssessment),
+        qualityAssessment,
+        suggestedInputMode: 'ai_redraw'
+      });
+      return;
+    }
 
     if (process.env.LOGO_RESTORE_ENABLED !== '0') {
-      const logoRestore = await logoRestoreBuffer(req.file.buffer, settings);
+      const logoRestore = await logoRestoreBuffer(req.file.buffer, settings, { qualityAssessment });
       if (logoRestore.canRestore) {
         imageBuffer = logoRestore.imageBuffer;
         metadata = {
@@ -395,6 +406,8 @@ async function readyTraceHandler(req, res, next) {
           readyTraceProvider: 'ready_trace_edge_refinement',
           note: 'Ready Trace backend used deterministic Logo Restore before edge refinement.'
         };
+      } else if (logoRestore.metadata?.reason) {
+        metadata.logoRestoreSkippedReason = logoRestore.metadata.reason;
       }
     }
 

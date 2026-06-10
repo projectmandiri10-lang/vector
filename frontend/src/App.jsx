@@ -214,6 +214,7 @@ export default function App() {
   const [settings, setSettings] = useState(initialSettings);
   const [job, setJob] = useState(null);
   const [jobError, setJobError] = useState('');
+  const [suggestedInputMode, setSuggestedInputMode] = useState('');
   const [authCallbackError, setAuthCallbackError] = useState('');
   const [balanceError, setBalanceError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -490,6 +491,7 @@ export default function App() {
     }
 
     setJobError('');
+    setSuggestedInputMode('');
     setIsSubmitting(true);
     setJob(statusJob('preprocessing', 'Menyiapkan file lokal.', 10));
 
@@ -596,7 +598,9 @@ export default function App() {
 
       await refreshBalance();
     } catch (submitError) {
-      setJobError(toUserApiError(submitError, 'Gagal memproses gambar.').message);
+      const userError = toUserApiError(submitError, 'Gagal memproses gambar.');
+      setJobError(userError.message);
+      setSuggestedInputMode(submitError?.suggestedInputMode || '');
       setJob(statusJob('failed', 'Gagal memproses gambar.', 100));
     } finally {
       setIsSubmitting(false);
@@ -735,7 +739,16 @@ export default function App() {
               deletingJobId={deletingLibraryJobId}
               currentUserId={session.user.id}
             />
-            <JobStatus job={job} error={jobError} />
+            <JobStatus
+              job={job}
+              error={jobError}
+              suggestedInputMode={suggestedInputMode}
+              onUseSuggestedMode={() => {
+                setSettings((current) => ({ ...current, inputMode: INPUT_MODE_RETOUCH }));
+                setJobError('');
+                setSuggestedInputMode('');
+              }}
+            />
             <ResultPreview
               job={job}
               sourcePreviewUrl={previewUrl}

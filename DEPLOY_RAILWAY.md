@@ -48,6 +48,14 @@ TRACE_EDGE_SOURCE_SCALE=2
 TRACE_EDGE_MAX_DIMENSION=4096
 TRACE_EDGE_SHARPEN_SIGMA=0.35
 TRACE_EDGE_NORMALIZE_LIGHTING=0
+READY_TRACE_MIN_LONGEST_SIDE=600
+READY_TRACE_IDEAL_LONGEST_SIDE=1500
+READY_TRACE_MIN_CONTRAST=18
+READY_TRACE_MIN_BLUR_SCORE=22
+READY_TRACE_MAX_NOISE_SCORE=42
+LOGO_RESTORE_MAX_NOISE_SCORE=42
+REQUIRE_PROCESSOR_AUTH=1
+PROCESSOR_API_KEY=ISI_RANDOM_SECRET_YANG_KUAT
 
 SUPABASE_URL=https://PROJECT-REF.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
@@ -72,7 +80,7 @@ GOOGLE_OAUTH_REDIRECT_TO=https://DOMAIN-RAILWAY-ANDA
 
 Jangan set `VITE_API_BASE_URL` di Railway production. Jika kosong, frontend memakai same-origin `/api`, cocok untuk fullstack Railway.
 
-`PROCESSOR_API_KEY` dan `PROCESSOR_BASE_URL` boleh dikosongkan karena tidak ada processor terpisah.
+`PROCESSOR_API_KEY` wajib diisi di Railway production karena endpoint processor `/api/redraw/hybrid` harus fail-closed. `PROCESSOR_BASE_URL` boleh dikosongkan untuk fullstack satu service.
 
 ## Supabase Auth
 

@@ -18,7 +18,7 @@ Ringkasnya:
 
 1. Hubungkan repo ke Railway.
 2. Railway akan memakai `railway.json` dan `Dockerfile.fly`.
-3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_SAFETY_MODEL`, `OPENROUTER_IMAGE_SIZE`, `OPENROUTER_REASONING_EFFORT`, `OPENROUTER_BACKGROUND_MODE`, `OPENROUTER_SAFETY_ENABLED`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `TRACE_EDGE_REFINEMENT_ENABLED`, `GOOGLE_OAUTH_REDIRECT_TO`.
+3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_SAFETY_MODEL`, `OPENROUTER_IMAGE_SIZE`, `OPENROUTER_REASONING_EFFORT`, `OPENROUTER_BACKGROUND_MODE`, `OPENROUTER_SAFETY_ENABLED`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `TRACE_EDGE_REFINEMENT_ENABLED`, `READY_TRACE_MIN_LONGEST_SIDE`, `REQUIRE_PROCESSOR_AUTH`, `PROCESSOR_API_KEY`, `GOOGLE_OAUTH_REDIRECT_TO`.
 4. Kosongkan `VITE_API_BASE_URL` di production agar frontend memakai same-origin `/api`.
 5. Set Supabase Auth Site URL dan Google OAuth redirect ke domain Railway/custom domain.
 
@@ -75,9 +75,17 @@ TRACE_EDGE_MIN_COMPONENT_PIXELS=10
 TRACE_EDGE_MIN_COMPONENT_RATIO=0.000012
 TRACE_EDGE_MEDIUM_COMPONENT_RATIO=0.004
 TRACE_EDGE_LARGE_COMPONENT_RATIO=0.025
+READY_TRACE_MIN_LONGEST_SIDE=600
+READY_TRACE_IDEAL_LONGEST_SIDE=1500
+READY_TRACE_MIN_CONTRAST=18
+READY_TRACE_MIN_BLUR_SCORE=22
+READY_TRACE_MAX_NOISE_SCORE=42
+LOGO_RESTORE_MAX_NOISE_SCORE=42
+REQUIRE_PROCESSOR_AUTH=1
+PROCESSOR_API_KEY=isi-random-secret-production
 ```
 
-Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa model gambar agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. Ready Trace juga memakai `TRACE_EDGE_REFINEMENT_ENABLED=1`: raster di-upsample ringan, dibersihkan, lalu mask per warna di-close/open secara adaptif sebelum Potrace. `LOGO_RESTORE_STRICT_SPOTS=1` membuang/merge warna halo tepi yang bukan tinta cetak, misalnya bayangan coklat di sekitar kuning. `TRACE_CURVE_CLEANUP_ENABLED=1` menambahkan cleanup mask dan simplifikasi path agar outline huruf/sabit lebih terasa seperti vector manual. Preview PNG transparan tetap raster untuk tampilan, jadi cek file SVG/PDF untuk menilai kehalusan vector. Untuk gambar non-logo atau kualitas rendah, Nemotron memeriksa safety visual, lalu Gemini menggambar ulang langsung dari cleaned trace target memakai prompt teknis ketat.
+Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar yang cukup tajam: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa model gambar agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. Ready Trace juga memakai quality gate: gambar yang terlalu kecil/blur diblokir sebelum debit dan diarahkan upload ulang atau AI Redraw Premium. Untuk gambar non-logo atau kualitas rendah, Nemotron memeriksa safety visual, lalu Gemini menggambar ulang langsung dari cleaned trace target memakai prompt teknis ketat.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 

@@ -2,6 +2,7 @@ import fs from 'fs-extra';
 import sharp from 'sharp';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { logoRestoreBuffer } from './logoRestore.service.js';
+import { assessImageQuality } from './imageQuality.service.js';
 
 const DIRECTOR_SYSTEM_INSTRUCTION = `You are a technical art director with 20 years of experience preparing artwork for sticker printing, manual screen printing, DTF, decal, and vector tracing workflows.
 
@@ -934,8 +935,10 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
     };
   }
 
+  const qualityAssessment = await assessImageQuality(uploadedBuffer, { forMode: 'ai_redraw' });
+
   if (process.env.LOGO_RESTORE_ENABLED !== '0') {
-    const logoRestore = await logoRestoreBuffer(uploadedBuffer, settings);
+    const logoRestore = await logoRestoreBuffer(uploadedBuffer, settings, { qualityAssessment });
     if (logoRestore.canRestore) {
       return {
         imageBuffer: logoRestore.imageBuffer,
