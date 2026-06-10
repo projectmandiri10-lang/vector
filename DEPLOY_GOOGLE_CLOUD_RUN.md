@@ -14,7 +14,7 @@ Referensi resmi yang dipakai:
 User Browser
   -> Cloudflare Pages frontend: https://designmudah.pages.dev
   -> Cloudflare Worker API: login, credit, admin, contoh job, dan proxy redraw
-  -> Google Cloud Run processor: OpenRouter Nemotron safety + Gemini image redraw, trace, cutline, separasi warna, PDF, ZIP, registration mark
+  -> Google Cloud Run processor: OpenRouter Nemotron safety + FLUX trace-clone image redraw, trace, cutline, separasi warna, PDF, ZIP, registration mark
   -> Supabase: auth, credit, metadata, bucket contoh
 ```
 
@@ -48,14 +48,14 @@ Pipeline redraw sekarang tetap:
 - Cloud Run route internal `POST /api/redraw/hybrid` melakukan:
   - preprocess Node heuristic
   - safety gate visual dengan Nemotron via OpenRouter
-  - generasi ulang image-to-image dengan Gemini via OpenRouter
+  - generasi ulang trace-clone image-to-image dengan FLUX via OpenRouter
 - Setelah PNG redraw jadi, trace/cutline/separasi warna tetap dikerjakan engine deterministik.
 
 Health endpoint backend sekarang menampilkan:
 
 ```json
 {
-  "redrawProvider": "openrouter_gemini_image",
+  "redrawProvider": "openrouter_image",
   "redrawPreset": "quality",
   "redrawScope": "worker /api/image-retouch and backend /api/jobs inputMode=ai_redraw"
 }

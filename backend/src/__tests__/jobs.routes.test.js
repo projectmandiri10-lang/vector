@@ -13,11 +13,13 @@ process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
 process.env.OPENROUTER_ANALYSIS_MODEL = '';
-process.env.OPENROUTER_IMAGE_MODEL = 'google/gemini-3.1-flash-image-preview';
+process.env.OPENROUTER_IMAGE_MODEL = 'black-forest-labs/flux.2-klein-4b';
+process.env.OPENROUTER_IMAGE_MODEL_FALLBACK = 'sourceful/riverflow-v2-fast';
 process.env.OPENROUTER_SAFETY_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
+process.env.OPENROUTER_PROMPT_PROFILE = 'generic_trace_clone';
 process.env.OPENROUTER_IMAGE_QUALITY = 'high';
 process.env.OPENROUTER_IMAGE_SIZE = '1K';
-process.env.OPENROUTER_REASONING_EFFORT = 'medium';
+process.env.OPENROUTER_REASONING_EFFORT = 'low';
 process.env.OPENROUTER_BACKGROUND_MODE = 'transparent';
 process.env.OPENROUTER_SAFETY_ENABLED = '1';
 
@@ -187,13 +189,16 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.match(response.headers['content-type'], /image\/png/);
     assert.ok(response.headers['x-ai-redraw-metadata']);
     const metadata = JSON.parse(Buffer.from(response.headers['x-ai-redraw-metadata'], 'base64url').toString('utf8'));
-    assert.equal(metadata.provider, 'openrouter_gemini_image');
+    assert.equal(metadata.provider, 'openrouter_image');
     assert.equal(metadata.analysisModel, '');
-    assert.equal(metadata.generationModel, 'google/gemini-3.1-flash-image-preview');
+    assert.equal(metadata.generationModel, 'black-forest-labs/flux.2-klein-4b');
+    assert.equal(metadata.fallbackModel, 'sourceful/riverflow-v2-fast');
+    assert.equal(metadata.fallbackUsed, false);
     assert.equal(metadata.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
+    assert.equal(metadata.promptProfile, 'generic_trace_clone');
     assert.equal(metadata.generationQuality, 'high');
     assert.equal(metadata.imageSize, '1K');
-    assert.equal(metadata.reasoningEffort, 'medium');
+    assert.equal(metadata.reasoningEffort, 'low');
     assert.equal(metadata.backgroundMode, 'transparent');
   } finally {
     delete process.env.PROCESSOR_API_KEY;
@@ -267,15 +272,71 @@ test('unsafe safety gate blocks before OpenRouter image generator', async () => 
   }
 });
 
-test('legacy provider override still reports OpenRouter Gemini metadata in mock mode', async () => {
+test('OpenRouter image generation retries FLUX failure with fallback model', async () => {
+  const previousMock = process.env.AI_REDRAW_MOCK;
+  const previousKey = process.env.OPENROUTER_API_KEY;
+  const previousLogoRestore = process.env.LOGO_RESTORE_ENABLED;
+  const previousFetch = global.fetch;
+  delete process.env.AI_REDRAW_MOCK;
+  process.env.OPENROUTER_API_KEY = 'test-openrouter-key';
+  process.env.LOGO_RESTORE_ENABLED = '0';
+  const seenModels = [];
+  const outputDataUrl = `data:image/png;base64,${makePngBuffer().toString('base64')}`;
+
+  global.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(options.body || '{}');
+    seenModels.push(body.model);
+    if (body.model === 'nvidia/nemotron-3.5-content-safety:free') {
+      return new Response(JSON.stringify({ choices: [{ message: { content: '{"safe":true,"reason":"ordinary logo"}' } }] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    if (body.model === 'black-forest-labs/flux.2-klein-4b') {
+      return new Response(JSON.stringify({ error: { message: 'model unavailable' } }), {
+        status: 404,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    return new Response(JSON.stringify({ choices: [{ message: { images: [{ image_url: { url: outputDataUrl } }] } }] }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  };
+
+  try {
+    const result = await hybridRedrawBuffer(makePngBuffer(), { productionType: 'sablon', inputMode: 'ai_redraw' });
+    assert.equal(result.metadata.generationModel, 'sourceful/riverflow-v2-fast');
+    assert.equal(result.metadata.fallbackUsed, true);
+    assert.equal(result.metadata.fallbackModel, 'sourceful/riverflow-v2-fast');
+    assert.equal(result.metadata.promptProfile, 'generic_trace_clone');
+    assert.deepEqual(result.metadata.modalities, ['image']);
+    assert.deepEqual(seenModels, [
+      'nvidia/nemotron-3.5-content-safety:free',
+      'black-forest-labs/flux.2-klein-4b',
+      'sourceful/riverflow-v2-fast'
+    ]);
+  } finally {
+    process.env.AI_REDRAW_MOCK = previousMock;
+    if (previousKey) process.env.OPENROUTER_API_KEY = previousKey;
+    else delete process.env.OPENROUTER_API_KEY;
+    if (previousLogoRestore === undefined) delete process.env.LOGO_RESTORE_ENABLED;
+    else process.env.LOGO_RESTORE_ENABLED = previousLogoRestore;
+    global.fetch = previousFetch;
+  }
+});
+
+test('legacy provider override still reports OpenRouter FLUX metadata in mock mode', async () => {
   const result = await hybridRedrawBuffer(
     makePngBuffer(),
     { productionType: 'sablon', inputMode: 'ai_redraw' },
     { mode: 'legacy_quality', provider: 'old-provider', analysisModel: 'old-analysis', generationModel: 'old-generation' }
   );
 
-  assert.equal(result.metadata.provider, 'openrouter_gemini_image');
+  assert.equal(result.metadata.provider, 'openrouter_image');
   assert.equal(result.metadata.analysisModel, '');
-  assert.equal(result.metadata.generationModel, 'google/gemini-3.1-flash-image-preview');
+  assert.equal(result.metadata.generationModel, 'black-forest-labs/flux.2-klein-4b');
+  assert.equal(result.metadata.fallbackModel, 'sourceful/riverflow-v2-fast');
   assert.equal(result.metadata.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
+  assert.equal(result.metadata.promptProfile, 'generic_trace_clone');
 });

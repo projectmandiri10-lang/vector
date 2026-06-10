@@ -9,7 +9,7 @@ Browser user
   -> Railway service Express
      -> serve frontend build
      -> API /api/...
-     -> OpenRouter Nemotron safety + Gemini image redraw
+     -> OpenRouter Nemotron safety + FLUX trace-clone image redraw
      -> vector trace, cutline, separasi, PDF, ZIP
   -> Supabase auth, credit, metadata
 ```
@@ -64,11 +64,13 @@ SUPABASE_SERVICE_ROLE_KEY=...
 OPENROUTER_API_KEY=...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_ANALYSIS_MODEL=
-OPENROUTER_IMAGE_MODEL=google/gemini-3.1-flash-image-preview
+OPENROUTER_IMAGE_MODEL=black-forest-labs/flux.2-klein-4b
+OPENROUTER_IMAGE_MODEL_FALLBACK=sourceful/riverflow-v2-fast
 OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
+OPENROUTER_PROMPT_PROFILE=generic_trace_clone
 OPENROUTER_IMAGE_QUALITY=high
 OPENROUTER_IMAGE_SIZE=1K
-OPENROUTER_REASONING_EFFORT=medium
+OPENROUTER_REASONING_EFFORT=low
 OPENROUTER_BACKGROUND_MODE=transparent
 OPENROUTER_SAFETY_ENABLED=1
 OPENROUTER_MAX_IMAGE_INPUT_BYTES=3200000
@@ -106,9 +108,11 @@ Invoke-RestMethod "https://DOMAIN-RAILWAY-ANDA/api/health"
 Pastikan respons menampilkan:
 
 - `ok: true`
-- `redrawProvider: openrouter_gemini_image`
-- `redrawGenerationModel: google/gemini-3.1-flash-image-preview`
+- `redrawProvider: openrouter_image`
+- `redrawGenerationModel: black-forest-labs/flux.2-klein-4b`
+- `redrawFallbackModel: sourceful/riverflow-v2-fast`
+- `redrawPromptProfile: generic_trace_clone`
 - `redrawSafetyModel: nvidia/nemotron-3.5-content-safety:free`
 - `openRouterConfigured: true`
 
-Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, model ID `OPENROUTER_IMAGE_MODEL`, dan ketersediaan model Gemini image di OpenRouter.
+Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, model ID `OPENROUTER_IMAGE_MODEL`, fallback `OPENROUTER_IMAGE_MODEL_FALLBACK`, dan ketersediaan model image-to-image di OpenRouter.

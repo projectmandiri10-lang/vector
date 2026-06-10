@@ -116,7 +116,7 @@ VITE_GOOGLE_OAUTH_REDIRECT_TO=http://localhost:5173
 
 `GOOGLE_OAUTH_CLIENT_SECRET` jangan dimasukkan ke Cloudflare Pages/frontend. Secret tersebut cukup disimpan di Supabase Google provider dan catatan `.env` lokal.
 
-## 3. Siapkan OpenRouter Gemini Image
+## 3. Siapkan OpenRouter FLUX Image
 
 Worker memeriksa auth/credit, lalu meneruskan redraw ke processor backend. Processor memakai OpenRouter API:
 
@@ -130,11 +130,13 @@ Env yang dibutuhkan:
 OPENROUTER_API_KEY=...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_ANALYSIS_MODEL=
-OPENROUTER_IMAGE_MODEL=google/gemini-3.1-flash-image-preview
+OPENROUTER_IMAGE_MODEL=black-forest-labs/flux.2-klein-4b
+OPENROUTER_IMAGE_MODEL_FALLBACK=sourceful/riverflow-v2-fast
 OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
+OPENROUTER_PROMPT_PROFILE=generic_trace_clone
 OPENROUTER_IMAGE_QUALITY=high
 OPENROUTER_IMAGE_SIZE=1K
-OPENROUTER_REASONING_EFFORT=medium
+OPENROUTER_REASONING_EFFORT=low
 OPENROUTER_BACKGROUND_MODE=transparent
 OPENROUTER_SAFETY_ENABLED=1
 OPENROUTER_APP_NAME=Design Mudah Vector
@@ -427,7 +429,7 @@ AI redraw gagal:
 
 - Cek Worker secret `PROCESSOR_API_KEY` dan `PROCESSOR_BASE_URL`.
 - Cek processor secret `OPENROUTER_API_KEY`.
-- Cek akun OpenRouter punya saldo dan akses ke model Gemini image/Nemotron yang dipakai.
+- Cek akun OpenRouter punya saldo dan akses ke model image-to-image/Nemotron yang dipakai.
 
 Admin tidak muncul:
 

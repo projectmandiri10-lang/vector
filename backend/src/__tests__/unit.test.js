@@ -145,26 +145,30 @@ test('standard prompt prioritizes faithful color matching', () => {
   assert.match(prompt, /no jagged steps, no broken edges, and no accidental gaps/);
 });
 
-test('OpenRouter Gemini config defaults to Gemini generator and Nemotron safety', () => {
+test('OpenRouter config defaults to FLUX trace-clone generator and Nemotron safety', () => {
   const config = normalizeHybridRedrawConfig({}, {});
 
-  assert.equal(config.provider, 'openrouter_gemini_image');
+  assert.equal(config.provider, 'openrouter_image');
   assert.equal(config.analysisModel, '');
-  assert.equal(config.generationModel, 'google/gemini-3.1-flash-image-preview');
+  assert.equal(config.generationModel, 'black-forest-labs/flux.2-klein-4b');
+  assert.equal(config.fallbackModel, 'sourceful/riverflow-v2-fast');
   assert.equal(config.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
+  assert.equal(config.promptProfile, 'generic_trace_clone');
   assert.equal(config.generationQuality, 'high');
   assert.equal(config.imageSize, '1K');
-  assert.equal(config.reasoningEffort, 'medium');
+  assert.equal(config.reasoningEffort, 'low');
   assert.equal(config.backgroundMode, 'transparent');
   assert.equal(config.safetyEnabled, true);
 });
 
-test('OpenRouter Gemini config accepts env overrides', () => {
+test('OpenRouter config accepts env overrides', () => {
   const config = normalizeHybridRedrawConfig(
     {},
     {
       OPENROUTER_IMAGE_MODEL: 'custom/image-model',
+      OPENROUTER_IMAGE_MODEL_FALLBACK: 'custom/fallback-model',
       OPENROUTER_SAFETY_MODEL: 'custom/safety-model',
+      OPENROUTER_PROMPT_PROFILE: 'sourceful_trace_clone',
       OPENROUTER_IMAGE_SIZE: '4K',
       OPENROUTER_REASONING_EFFORT: 'high',
       OPENROUTER_BACKGROUND_MODE: 'solid',
@@ -172,9 +176,11 @@ test('OpenRouter Gemini config accepts env overrides', () => {
     }
   );
 
-  assert.equal(config.provider, 'openrouter_gemini_image');
+  assert.equal(config.provider, 'openrouter_image');
   assert.equal(config.generationModel, 'custom/image-model');
+  assert.equal(config.fallbackModel, 'custom/fallback-model');
   assert.equal(config.safetyModel, 'custom/safety-model');
+  assert.equal(config.promptProfile, 'sourceful_trace_clone');
   assert.equal(config.imageSize, '4K');
   assert.equal(config.reasoningEffort, 'high');
   assert.equal(config.backgroundMode, 'solid');
@@ -202,36 +208,58 @@ test('OpenRouter safety request sends normalized original and cleaned trace targ
   assert.match(userContent.map((part) => part.text || '').join(' '), /cleaned trace target/);
 });
 
-test('Gemini image generation request sends image input, image config, reasoning, and strict redraw instructions', () => {
+test('FLUX image generation request sends image-only modality and strict trace-clone instructions', () => {
   const request = buildOpenRouterImageGenerationRequest(
     'Strict vector redraw prompt.',
     {
-      generationModel: 'google/gemini-3.1-flash-image-preview',
+      generationModel: 'black-forest-labs/flux.2-klein-4b',
       generationQuality: 'high',
       resolutionPolicy: 'high',
       imageSize: '1K',
-      reasoningEffort: 'medium',
-      backgroundMode: 'transparent'
+      reasoningEffort: 'low',
+      backgroundMode: 'transparent',
+      promptProfile: 'generic_trace_clone'
     },
     { analysisBuffer: Buffer.from('cleaned') }
   );
 
   const content = request.messages[0].content;
   const promptText = content.find((part) => part.type === 'text').text;
-  assert.equal(request.model, 'google/gemini-3.1-flash-image-preview');
-  assert.deepEqual(request.modalities, ['image', 'text']);
-  assert.equal(request.image_config.background_mode, 'transparent');
+  assert.equal(request.model, 'black-forest-labs/flux.2-klein-4b');
+  assert.deepEqual(request.modalities, ['image']);
   assert.equal(request.image_config.image_size, '1K');
+  assert.equal(request.image_config.background_mode, undefined);
+  assert.equal(request.image_config.scoring_prompt, undefined);
+  assert.equal(request.image_config.scoring_rubric, undefined);
+  assert.equal(request.reasoning, undefined);
+  assert.equal(content.filter((part) => part.type === 'image_url').length, 1);
+  assert.match(promptText, /Use the provided image as the only visual reference/);
+  assert.match(promptText, /Treat every letter as a graphic shape, not OCR text/);
+  assert.match(promptText, /Do not invent, redesign, beautify/);
+  assert.match(promptText, /Remove photo, camera, paper, fabric/);
+  assert.match(promptText, /pixel blocks, halftone dots/);
+  assert.match(promptText, /Rebuild smooth closed outer contours/);
+  assert.match(promptText, /transparent background/);
+});
+
+test('Sourceful fallback request keeps scoring fields and reasoning', () => {
+  const request = buildOpenRouterImageGenerationRequest(
+    'Strict vector redraw prompt.',
+    {
+      generationModel: 'sourceful/riverflow-v2-fast',
+      imageSize: '1K',
+      reasoningEffort: 'low',
+      backgroundMode: 'transparent',
+      promptProfile: 'generic_trace_clone'
+    },
+    { analysisBuffer: Buffer.from('cleaned') }
+  );
+
+  assert.deepEqual(request.modalities, ['image']);
+  assert.equal(request.image_config.background_mode, 'transparent');
   assert.match(request.image_config.scoring_prompt, /Score high/);
   assert.match(request.image_config.scoring_rubric, /manual-vector-like/);
-  assert.deepEqual(request.reasoning, { effort: 'medium' });
-  assert.equal(content.filter((part) => part.type === 'image_url').length, 1);
-  assert.match(promptText, /not as OCR, scan repair, sharpening, enhancement, upscaling/);
-  assert.match(promptText, /Do not trace or preserve the jagged pixel boundary/);
-  assert.match(promptText, /smooth closed contours/);
-  assert.match(promptText, /Preserve exact readable text/);
-  assert.match(promptText, /flat color fills/);
-  assert.match(promptText, /Remove all paper, table, camera background/);
+  assert.deepEqual(request.reasoning, { effort: 'low' });
 });
 
 test('Nemotron safety parser blocks unsafe results and accepts safe results', () => {

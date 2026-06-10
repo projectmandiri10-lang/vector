@@ -1,6 +1,6 @@
 # Design Mudah Vector untuk Sablon dan Sticker
 
-Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid eksperimen `OpenRouter Nemotron safety + Gemini image-to-image redraw` di Railway.
+Aplikasi untuk upload gambar sederhana, memproses vector/cutline/film pisah warna, dan opsional gambar ulang melalui pipeline hybrid eksperimen `OpenRouter Nemotron safety + FLUX trace-clone image redraw` di Railway.
 
 ## Mode SaaS Railway + Supabase
 
@@ -18,7 +18,7 @@ Ringkasnya:
 
 1. Hubungkan repo ke Railway.
 2. Railway akan memakai `railway.json` dan `Dockerfile.fly`.
-3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_SAFETY_MODEL`, `OPENROUTER_IMAGE_SIZE`, `OPENROUTER_REASONING_EFFORT`, `OPENROUTER_BACKGROUND_MODE`, `OPENROUTER_SAFETY_ENABLED`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `TRACE_EDGE_REFINEMENT_ENABLED`, `READY_TRACE_MIN_LONGEST_SIDE`, `REQUIRE_PROCESSOR_AUTH`, `PROCESSOR_API_KEY`, `GOOGLE_OAUTH_REDIRECT_TO`.
+3. Set env production di Railway: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PUBLISHABLE_KEY`, `OPENROUTER_API_KEY`, `OPENROUTER_BASE_URL`, `OPENROUTER_IMAGE_MODEL`, `OPENROUTER_IMAGE_MODEL_FALLBACK`, `OPENROUTER_PROMPT_PROFILE`, `OPENROUTER_SAFETY_MODEL`, `OPENROUTER_IMAGE_SIZE`, `OPENROUTER_REASONING_EFFORT`, `OPENROUTER_BACKGROUND_MODE`, `OPENROUTER_SAFETY_ENABLED`, `AI_REDRAW_PRESET`, `LOGO_RESTORE_ENABLED`, `LOGO_RESTORE_STRICT_SPOTS`, `TRACE_SMOOTH_ENABLED`, `TRACE_CURVE_CLEANUP_ENABLED`, `TRACE_EDGE_REFINEMENT_ENABLED`, `READY_TRACE_MIN_LONGEST_SIDE`, `REQUIRE_PROCESSOR_AUTH`, `PROCESSOR_API_KEY`, `GOOGLE_OAUTH_REDIRECT_TO`.
 4. Kosongkan `VITE_API_BASE_URL` di production agar frontend memakai same-origin `/api`.
 5. Set Supabase Auth Site URL dan Google OAuth redirect ke domain Railway/custom domain.
 
@@ -35,17 +35,19 @@ npm run dev
 
 `npm run dev` menjalankan backend tanpa file watcher agar proses AI/vector tidak terputus saat backend menulis file hasil ke storage. Jika perlu watcher untuk edit kode backend, gunakan `npm run dev:watch`.
 
-Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid OpenRouter Gemini, isi minimalnya:
+Backend bisa membaca `.env` dari root project atau `backend/.env`. Untuk redraw hybrid OpenRouter FLUX trace-clone, isi minimalnya:
 
 ```env
 OPENROUTER_API_KEY=key-openrouter-anda
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_ANALYSIS_MODEL=
-OPENROUTER_IMAGE_MODEL=google/gemini-3.1-flash-image-preview
+OPENROUTER_IMAGE_MODEL=black-forest-labs/flux.2-klein-4b
+OPENROUTER_IMAGE_MODEL_FALLBACK=sourceful/riverflow-v2-fast
 OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
+OPENROUTER_PROMPT_PROFILE=generic_trace_clone
 OPENROUTER_IMAGE_QUALITY=high
 OPENROUTER_IMAGE_SIZE=1K
-OPENROUTER_REASONING_EFFORT=medium
+OPENROUTER_REASONING_EFFORT=low
 OPENROUTER_BACKGROUND_MODE=transparent
 OPENROUTER_SAFETY_ENABLED=1
 OPENROUTER_MAX_IMAGE_INPUT_BYTES=3200000
@@ -85,7 +87,7 @@ REQUIRE_PROCESSOR_AUTH=1
 PROCESSOR_API_KEY=isi-random-secret-production
 ```
 
-Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar yang cukup tajam: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa model gambar agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. Ready Trace juga memakai quality gate: gambar yang terlalu kecil/blur diblokir sebelum debit dan diarahkan upload ulang atau AI Redraw Premium. Untuk gambar non-logo atau kualitas rendah, Nemotron memeriksa safety visual, lalu Gemini menggambar ulang langsung dari cleaned trace target memakai prompt teknis ketat.
+Preset default memakai proteksi `Logo Restore` untuk gambar logo/teks datar yang cukup tajam: backend mengambil bentuk langsung dari source, membuang background edge-connected, menjaga warna spot tanpa model gambar agar layout tidak berubah seperti OCR, lalu membuat SVG/PDF/ZIP langsung dari backend dengan Potrace smoothing. Ready Trace juga memakai quality gate: gambar yang terlalu kecil/blur diblokir sebelum debit dan diarahkan upload ulang atau AI Redraw Premium. Untuk gambar non-logo atau kualitas rendah, Nemotron memeriksa safety visual, lalu FLUX menggambar ulang langsung dari cleaned trace target memakai prompt trace-clone ketat. Jika FLUX gagal atau tidak mengembalikan gambar, backend mencoba fallback `OPENROUTER_IMAGE_MODEL_FALLBACK` satu kali.
 
 Isi lengkap `backend/.env` jika ingin konfigurasi terpisah:
 
@@ -94,11 +96,13 @@ PORT=3001
 OPENROUTER_API_KEY=key-openrouter-anda
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_ANALYSIS_MODEL=
-OPENROUTER_IMAGE_MODEL=google/gemini-3.1-flash-image-preview
+OPENROUTER_IMAGE_MODEL=black-forest-labs/flux.2-klein-4b
+OPENROUTER_IMAGE_MODEL_FALLBACK=sourceful/riverflow-v2-fast
 OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
+OPENROUTER_PROMPT_PROFILE=generic_trace_clone
 OPENROUTER_IMAGE_QUALITY=high
 OPENROUTER_IMAGE_SIZE=1K
-OPENROUTER_REASONING_EFFORT=medium
+OPENROUTER_REASONING_EFFORT=low
 OPENROUTER_BACKGROUND_MODE=transparent
 OPENROUTER_SAFETY_ENABLED=1
 OPENROUTER_MAX_IMAGE_INPUT_BYTES=3200000
@@ -225,7 +229,7 @@ Halaman arsip menampilkan preview kecil, tombol download SVG, tombol download fi
 
 ## 9. Catatan Biaya Gambar Ulang
 
-Gambar ulang default eksperimen memakai OpenRouter: Nemotron untuk safety gate visual dan Gemini untuk direct image-to-image redraw. Rincian pembanding biaya ada di `AI_REDRAW_PRICE_COMPARISON.md`.
+Gambar ulang default eksperimen memakai OpenRouter: Nemotron untuk safety gate visual dan FLUX.2 Klein 1K untuk direct trace-clone image redraw. Rincian pembanding biaya ada di `AI_REDRAW_PRICE_COMPARISON.md`.
 
 Kualitas AI:
 

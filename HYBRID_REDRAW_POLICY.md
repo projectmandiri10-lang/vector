@@ -3,7 +3,8 @@
 Design Mudah uses an experimental OpenRouter redraw architecture:
 
 - `Nemotron Content Safety = visual safety gate`
-- `Gemini 3.1 Flash Image Preview = direct image-to-image redraw`
+- `FLUX.2 Klein 1K = direct trace-clone image redraw`
+- `Riverflow V2 Fast = fallback image redraw when the primary model is unavailable`
 - deterministic Logo Restore, trace, vector, cutline, film, PDF, and ZIP stay outside AI
 
 ## Pipeline
@@ -16,8 +17,9 @@ Design Mudah uses an experimental OpenRouter redraw architecture:
    - preserve enclosed artwork
 3. Logo Restore runs first for flat logo/text artwork and can return vector artifacts without generative redraw.
 4. For AI redraw, Nemotron checks the normalized original and cleaned trace target for safety.
-5. If safe, Gemini redraws directly from the cleaned trace target with a strict vector-like prompt, `image_config`, and reasoning effort from env.
-6. The resulting PNG is postprocessed, then returned to the existing trace and separation flow.
+5. If safe, FLUX redraws directly from the cleaned trace target with a strict trace-clone prompt and `image_config.image_size=1K`.
+6. If the primary model is unavailable or returns no image, the backend retries once with `OPENROUTER_IMAGE_MODEL_FALLBACK`.
+7. The resulting PNG is postprocessed, then returned to the existing trace and separation flow.
 
 ## Invariants
 
@@ -26,7 +28,9 @@ Design Mudah uses an experimental OpenRouter redraw architecture:
 - Persist redraw metadata to the job manifest:
   - provider
   - generation model
+  - fallback model and fallback-used flag
   - safety model
+  - prompt profile
   - image size
   - reasoning effort
   - background mode
@@ -39,4 +43,4 @@ Design Mudah uses an experimental OpenRouter redraw architecture:
 ## Admin Setting
 
 The active pipeline config lives in `app_settings.ai_redraw_model`.
-Saved settings normalize to the OpenRouter Gemini image config shape, including older records that used a previous provider.
+Saved settings normalize to the OpenRouter image config shape, including older records that used Gemini or Riverflow providers.

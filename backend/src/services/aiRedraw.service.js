@@ -707,6 +707,23 @@ async function analyzeArtworkWithOpenRouter(preprocessMeta, settings, aiConfig) 
 }
 
 function buildOpenRouterGeneratorPrompt(technicalPrompt, aiConfig) {
+  const promptProfile = aiConfig.promptProfile || 'generic_trace_clone';
+  if (promptProfile === 'generic_trace_clone' || promptProfile === 'sourceful_trace_clone') {
+    return [
+      'Use the provided image as the only visual reference.',
+      'Clone the artwork as flat production graphics for vector tracing, sticker cutting, DTF, and screen printing.',
+      'Treat every letter as a graphic shape, not OCR text; preserve the exact shape, spacing, position, holes, counters, slant, weight, and proportions of all lettering.',
+      'Do not invent, redesign, beautify, modernize, replace symbols, replace text, reinterpret text, or create new lettering.',
+      'Do not merely sharpen, upscale, scan-clean, posterize, or copy jagged pixels from the input.',
+      'Remove photo, camera, paper, fabric, table, scanner texture, shadows, glare, blur, noise, compression artifacts, pixel blocks, halftone dots, and any rectangular background.',
+      'Rebuild smooth closed outer contours, clean solid fills, transparent background, and vector-trace-ready artwork.',
+      'Use dominant flat colors from the reference only. Keep enclosed holes and non-printing gaps open.',
+      `Target output size: ${aiConfig.imageSize || '1K'}.`,
+      `Background target: ${aiConfig.backgroundMode || 'transparent'}.`,
+      technicalPrompt
+    ].join(' ');
+  }
+
   return [
     'Use the uploaded image as the direct visual reference for an image-to-image redraw.',
     'Redraw the artwork faithfully as flat solid vector-like art, not as OCR, scan repair, sharpening, enhancement, upscaling, or a cleaned screenshot.',
@@ -729,8 +746,36 @@ function riverflowScoringPrompt() {
   ].join(' ');
 }
 
+function normalizedModelId(model) {
+  return String(model || '').trim().toLowerCase();
+}
+
+function isSourcefulImageModel(model) {
+  return normalizedModelId(model).startsWith('sourceful/');
+}
+
+function isGeminiImageModel(model) {
+  return normalizedModelId(model).includes('gemini');
+}
+
+function openRouterImageModalities(aiConfig = {}) {
+  return isGeminiImageModel(aiConfig.generationModel) ? ['image', 'text'] : ['image'];
+}
+
 export function buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta) {
-  return {
+  const modalities = openRouterImageModalities(aiConfig);
+  const imageConfig = {
+    image_size: aiConfig.imageSize || '1K'
+  };
+
+  if (isSourcefulImageModel(aiConfig.generationModel)) {
+    imageConfig.background_mode = aiConfig.backgroundMode || 'transparent';
+    imageConfig.scoring_prompt = riverflowScoringPrompt();
+    imageConfig.scoring_rubric =
+      '0-2: OCR/scan cleanup or noisy raster. 3-5: partially faithful but jagged or background remains. 6-8: clean redraw with mostly smooth contours and correct text/layout. 9-10: manual-vector-like, flat colors, exact text placement, transparent background, trace-ready.';
+  }
+
+  const request = {
     model: aiConfig.generationModel,
     messages: [
       {
@@ -749,20 +794,20 @@ export function buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig,
         ]
       }
     ],
-    modalities: ['image', 'text'],
-    image_config: {
-      image_size: aiConfig.imageSize || '2K',
-      background_mode: aiConfig.backgroundMode || 'transparent',
-      scoring_prompt: riverflowScoringPrompt(),
-      scoring_rubric: '0-2: OCR/scan cleanup or noisy raster. 3-5: partially faithful but jagged or background remains. 6-8: clean redraw with mostly smooth contours and correct text/layout. 9-10: manual-vector-like, flat colors, exact text placement, transparent background, trace-ready.'
-    },
-    reasoning: {
-      effort: aiConfig.reasoningEffort || 'medium'
-    },
+    modalities,
+    image_config: imageConfig,
     temperature: 0.2,
     top_p: 0.9,
     stream: false
   };
+
+  if (isSourcefulImageModel(aiConfig.generationModel)) {
+    request.reasoning = {
+      effort: aiConfig.reasoningEffort || 'low'
+    };
+  }
+
+  return request;
 }
 
 export function extractOpenRouterImageReference(data) {
@@ -842,8 +887,22 @@ async function bufferFromOpenRouterImageReference(imageReference) {
   throw exposeAiError(error);
 }
 
-async function generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocessMeta) {
-  const data = await openRouterJsonFetch('/chat/completions', buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta));
+function shouldFallbackOpenRouterImage(error) {
+  const message = `${error?.message || ''} ${error?.responseText || ''}`.toLowerCase();
+  if (/insufficient balance|no credit|credits|quota|rate limit|billing/.test(message)) {
+    return false;
+  }
+  return (
+    error?.status === 404 ||
+    error?.status === 400 ||
+    error?.status === 502 ||
+    /unavailable|not available|no image|no images|not found|does not exist|no endpoint|unsupported|model/i.test(message)
+  );
+}
+
+async function generateOpenRouterImageOnce(technicalPrompt, aiConfig, preprocessMeta) {
+  const request = buildOpenRouterImageGenerationRequest(technicalPrompt, aiConfig, preprocessMeta);
+  const data = await openRouterJsonFetch('/chat/completions', request);
   const imageReference = extractOpenRouterImageReference(data);
   if (!imageReference) {
     const text = data?.choices?.[0]?.message?.content;
@@ -857,7 +916,42 @@ async function generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocess
     throw exposeAiError(error);
   }
 
-  return bufferFromOpenRouterImageReference(imageReference);
+  const imageBuffer = await bufferFromOpenRouterImageReference(imageReference);
+  return {
+    imageBuffer,
+    generationModel: aiConfig.generationModel,
+    fallbackUsed: aiConfig.fallbackUsed === true,
+    promptProfile: aiConfig.promptProfile || 'generic_trace_clone',
+    imageSize: aiConfig.imageSize || '1K',
+    modalities: request.modalities
+  };
+}
+
+async function generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocessMeta) {
+  try {
+    return await generateOpenRouterImageOnce(technicalPrompt, aiConfig, preprocessMeta);
+  } catch (error) {
+    const fallbackModel = aiConfig.fallbackModel;
+    const canFallback =
+      fallbackModel &&
+      fallbackModel !== aiConfig.generationModel &&
+      aiConfig.fallbackUsed !== true &&
+      shouldFallbackOpenRouterImage(error);
+
+    if (!canFallback) {
+      throw error;
+    }
+
+    return generateOpenRouterImageOnce(
+      technicalPrompt,
+      {
+        ...aiConfig,
+        generationModel: fallbackModel,
+        fallbackUsed: true
+      },
+      preprocessMeta
+    );
+  }
 }
 
 async function postprocessGeneratedImage(buffer, preprocessName) {
@@ -917,7 +1011,10 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
         provider: aiConfig.provider,
         analysisModel: aiConfig.analysisModel,
         generationModel: aiConfig.generationModel,
+        fallbackModel: aiConfig.fallbackModel,
+        fallbackUsed: false,
         safetyModel: aiConfig.safetyModel,
+        promptProfile: aiConfig.promptProfile,
         safetyEnabled: aiConfig.safetyEnabled,
         generationQuality: aiConfig.generationQuality,
         imageSize: aiConfig.imageSize,
@@ -946,7 +1043,10 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
           provider: logoRestore.metadata.provider,
           analysisModel: aiConfig.analysisModel,
           generationModel: logoRestore.metadata.generationModel,
+          fallbackModel: aiConfig.fallbackModel,
+          fallbackUsed: false,
           safetyModel: aiConfig.safetyModel,
+          promptProfile: aiConfig.promptProfile,
           safetyEnabled: aiConfig.safetyEnabled,
           generationQuality: logoRestore.metadata.generationQuality,
           imageSize: aiConfig.imageSize,
@@ -978,7 +1078,7 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
   const safety = await checkOpenRouterSafety(preparedMeta, settings, aiConfig);
   const analysis = normalizeAnalysisPayload(
     {
-      subjectSummary: 'Direct OpenRouter Gemini image-to-image redraw from the cleaned trace target.',
+      subjectSummary: 'Direct OpenRouter image-to-image trace-clone redraw from the cleaned trace target.',
       style: 'Flat vector-like redraw',
       textDescription: 'Preserve exact readable text, placement, and hierarchy from the uploaded artwork.',
       backgroundPolicy: 'Remove camera/paper/table background and return isolated trace-ready artwork.',
@@ -996,15 +1096,19 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
     retryUsed = true;
   }
 
-  const cleanedOutput = await postprocessGeneratedImage(generated, aiConfig.preprocess);
+  const cleanedOutput = await postprocessGeneratedImage(generated.imageBuffer, aiConfig.preprocess);
 
   return {
     imageBuffer: cleanedOutput,
     metadata: {
       provider: aiConfig.provider,
       analysisModel: aiConfig.analysisModel,
-      generationModel: aiConfig.generationModel,
+      generationModel: generated.generationModel || aiConfig.generationModel,
+      fallbackModel: aiConfig.fallbackModel,
+      fallbackUsed: generated.fallbackUsed === true,
       safetyModel: aiConfig.safetyModel,
+      promptProfile: generated.promptProfile || aiConfig.promptProfile,
+      modalities: generated.modalities || openRouterImageModalities(aiConfig),
       safetyEnabled: aiConfig.safetyEnabled,
       safetySummary: safety,
       generationQuality: aiConfig.generationQuality,

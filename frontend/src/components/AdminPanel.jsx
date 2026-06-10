@@ -313,12 +313,12 @@ export default function AdminPanel({ session, enabled }) {
     setIsBusy(true);
     setMessage('');
     try {
-      await updateAdminSetting(
+          await updateAdminSetting(
         {
           key: 'ai_redraw_model',
           value: nextValue,
           isPublic: false,
-          description: `Pipeline OpenRouter Gemini image redraw: ${nextValue.generationModel} image model + ${nextValue.safetyModel} safety gate`
+          description: `Pipeline OpenRouter image redraw: ${nextValue.generationModel} image model + ${nextValue.safetyModel} safety gate`
         },
         accessToken
       );
@@ -701,7 +701,7 @@ export default function AdminPanel({ session, enabled }) {
                 >
                   {aiRedrawModelPresets.map((preset) => (
                     <option key={preset.mode} value={preset.mode}>
-                      {preset.label} - {preset.analysisModel} + {preset.generationModel}
+                      {preset.label} - {preset.generationModel}
                     </option>
                   ))}
                   <option value="custom">Custom</option>
@@ -721,6 +721,14 @@ export default function AdminPanel({ session, enabled }) {
                   <input
                     value={aiModelDraft.generationModel}
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', generationModel: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Model fallback</span>
+                  <input
+                    value={aiModelDraft.fallbackModel || ''}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', fallbackModel: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   />
                 </label>
@@ -825,16 +833,28 @@ export default function AdminPanel({ session, enabled }) {
                   <span className="mb-1.5 block text-sm font-medium text-ink">Preprocess</span>
                   <input value={aiModelDraft.preprocess} readOnly className="w-full border border-line bg-panel px-3 py-2.5 text-sm text-gray-700" />
                 </label>
+                <label className="block">
+                  <span className="mb-1.5 block text-sm font-medium text-ink">Prompt profile</span>
+                  <select
+                    value={aiModelDraft.promptProfile || 'generic_trace_clone'}
+                    onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', promptProfile: event.target.value }))}
+                    className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
+                  >
+                    <option value="generic_trace_clone">Generic trace clone</option>
+                    <option value="sourceful_trace_clone">Sourceful trace clone</option>
+                    <option value="gemini_trace_clone">Gemini trace clone</option>
+                  </select>
+                </label>
               </div>
               <div className="border border-line bg-white p-3 text-sm leading-6 text-gray-700">
                 <p>
-                  Aktif: <strong>{aiModelDraft.label}</strong> | {aiModelDraft.analysisModel} to {aiModelDraft.generationModel}
+                  Aktif: <strong>{aiModelDraft.label}</strong> | {aiModelDraft.generationModel}
                   {aiModelDraft.generationQuality ? ` (${aiModelDraft.generationQuality.toUpperCase()})` : ''}
                 </p>
                 <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
-                <p>Pipeline: Nemotron memeriksa safety visual, lalu OpenRouter Gemini menggambar ulang langsung dari cleaned trace target sebelum hasilnya di-trace.</p>
+                <p>Pipeline: Nemotron memeriksa safety visual, lalu OpenRouter image model menggambar ulang langsung dari cleaned trace target sebelum hasilnya di-trace.</p>
                 <p>
-                  Gemini image: {aiModelDraft.imageSize || '1K'} | reasoning {aiModelDraft.reasoningEffort || 'medium'} | background {aiModelDraft.backgroundMode || 'transparent'} | safety {aiModelDraft.safetyEnabled === false ? 'mati' : 'aktif'}
+                  Image: {aiModelDraft.imageSize || '1K'} | prompt {aiModelDraft.promptProfile || 'generic_trace_clone'} | fallback {aiModelDraft.fallbackModel || '-'} | reasoning {aiModelDraft.reasoningEffort || 'low'} | safety {aiModelDraft.safetyEnabled === false ? 'mati' : 'aktif'}
                 </p>
                 <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen pipeline hybrid.'}</p>
                 <p>

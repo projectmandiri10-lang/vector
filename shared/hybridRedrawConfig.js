@@ -1,19 +1,24 @@
+export const OPENROUTER_IMAGE_REDRAW_PROVIDER = 'openrouter_image';
 export const OPENROUTER_GEMINI_REDRAW_PROVIDER = 'openrouter_gemini_image';
 export const OPENROUTER_RIVERFLOW_REDRAW_PROVIDER = 'openrouter_riverflow_image';
-export const HYBRID_REDRAW_PROVIDER = OPENROUTER_GEMINI_REDRAW_PROVIDER;
+export const HYBRID_REDRAW_PROVIDER = OPENROUTER_IMAGE_REDRAW_PROVIDER;
 
-export const DEFAULT_OPENROUTER_IMAGE_MODEL = 'google/gemini-3.1-flash-image-preview';
+export const DEFAULT_OPENROUTER_IMAGE_MODEL = 'black-forest-labs/flux.2-klein-4b';
+export const DEFAULT_OPENROUTER_IMAGE_MODEL_FALLBACK = 'sourceful/riverflow-v2-fast';
 export const DEFAULT_OPENROUTER_SAFETY_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
+export const DEFAULT_OPENROUTER_PROMPT_PROFILE = 'generic_trace_clone';
 
 export const HYBRID_REDRAW_PRESETS = {
   budget: {
     mode: 'budget',
     preset: 'budget',
     label: 'Hemat',
-    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
+    provider: OPENROUTER_IMAGE_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    fallbackModel: DEFAULT_OPENROUTER_IMAGE_MODEL_FALLBACK,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
+    promptProfile: DEFAULT_OPENROUTER_PROMPT_PROFILE,
     generationQuality: 'standard',
     imageSize: '1K',
     reasoningEffort: 'low',
@@ -24,20 +29,22 @@ export const HYBRID_REDRAW_PRESETS = {
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0,
-    note: 'OpenRouter Gemini image redraw 1K dengan safety gate Nemotron.'
+    estimatedUsdPerImage: 0.014,
+    note: 'OpenRouter FLUX.2 Klein 1K trace-clone redraw hemat dengan safety gate Nemotron.'
   },
   standard: {
     mode: 'standard',
     preset: 'standard',
     label: 'Standar',
-    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
+    provider: OPENROUTER_IMAGE_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    fallbackModel: DEFAULT_OPENROUTER_IMAGE_MODEL_FALLBACK,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
+    promptProfile: DEFAULT_OPENROUTER_PROMPT_PROFILE,
     generationQuality: 'high',
     imageSize: '1K',
-    reasoningEffort: 'medium',
+    reasoningEffort: 'low',
     backgroundMode: 'transparent',
     safetyEnabled: true,
     aspectPolicy: 'match_source',
@@ -45,20 +52,22 @@ export const HYBRID_REDRAW_PRESETS = {
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0,
-    note: 'Gemini direct image-to-image memakai cleaned trace target dan prompt redraw ketat.'
+    estimatedUsdPerImage: 0.014,
+    note: 'FLUX image-to-image memakai cleaned trace target dan prompt trace-clone ketat.'
   },
   quality: {
     mode: 'quality',
     preset: 'quality',
     label: 'Kualitas',
-    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
+    provider: OPENROUTER_IMAGE_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    fallbackModel: DEFAULT_OPENROUTER_IMAGE_MODEL_FALLBACK,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
+    promptProfile: DEFAULT_OPENROUTER_PROMPT_PROFILE,
     generationQuality: 'high',
     imageSize: '1K',
-    reasoningEffort: 'medium',
+    reasoningEffort: 'low',
     backgroundMode: 'transparent',
     safetyEnabled: true,
     aspectPolicy: 'match_source',
@@ -66,17 +75,19 @@ export const HYBRID_REDRAW_PRESETS = {
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: false,
-    estimatedUsdPerImage: 0,
-    note: 'Default OpenRouter Gemini 3.1 Flash Image Preview 1K + Nemotron safety untuk redraw halus siap trace.'
+    estimatedUsdPerImage: 0.014,
+    note: 'Default OpenRouter FLUX.2 Klein 1K + Nemotron safety untuk trace-clone halus siap trace.'
   },
   premium: {
     mode: 'premium',
     preset: 'premium',
     label: 'Premium',
-    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
+    provider: OPENROUTER_IMAGE_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
+    fallbackModel: DEFAULT_OPENROUTER_IMAGE_MODEL_FALLBACK,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
+    promptProfile: DEFAULT_OPENROUTER_PROMPT_PROFILE,
     generationQuality: 'high',
     imageSize: '1K',
     reasoningEffort: 'high',
@@ -87,8 +98,8 @@ export const HYBRID_REDRAW_PRESETS = {
     preprocess: 'node_heuristic',
     persistPrompt: true,
     retryOnLowConfidence: true,
-    estimatedUsdPerImage: 0,
-    note: 'Gemini 1K dengan reasoning lebih tinggi untuk eksperimen kualitas, tetap lewat safety gate Nemotron.'
+    estimatedUsdPerImage: 0.014,
+    note: 'FLUX 1K trace-clone dengan retry kualitas, tetap lewat safety gate Nemotron.'
   }
 };
 
@@ -124,6 +135,11 @@ function normalizeReasoningEffort(value, fallback) {
   return ['low', 'medium', 'high', 'xhigh'].includes(normalized) ? normalized : fallback;
 }
 
+function normalizePromptProfile(value, fallback) {
+  const normalized = normalizeText(value, fallback).toLowerCase();
+  return ['generic_trace_clone', 'sourceful_trace_clone', 'gemini_trace_clone'].includes(normalized) ? normalized : fallback;
+}
+
 function normalizeBackgroundMode(value, fallback) {
   const normalized = normalizeText(value, fallback).toLowerCase();
   return ['transparent', 'original', 'solid'].includes(normalized) ? normalized : fallback;
@@ -154,23 +170,27 @@ export function normalizeHybridRedrawConfig(value = {}, env = {}) {
   const input = isObject(value) ? value : {};
   const presetKey = inferPreset(input, env);
   const preset = HYBRID_REDRAW_PRESETS[presetKey] || HYBRID_REDRAW_PRESETS.quality;
-  const acceptsCustomModels = input.provider === OPENROUTER_GEMINI_REDRAW_PROVIDER;
+  const acceptsCustomModels = input.provider === OPENROUTER_IMAGE_REDRAW_PROVIDER;
   const customInput = acceptsCustomModels ? input : {};
 
   return {
     mode: preset.mode,
     preset: preset.mode,
     label: normalizeText(input.label, preset.label),
-    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
+    provider: OPENROUTER_IMAGE_REDRAW_PROVIDER,
     analysisModel: acceptsCustomModels
       ? normalizeOptionalText(input.analysisModel, normalizeOptionalText(env.OPENROUTER_ANALYSIS_MODEL, preset.analysisModel))
       : normalizeOptionalText(env.OPENROUTER_ANALYSIS_MODEL, preset.analysisModel),
     generationModel: acceptsCustomModels
       ? normalizeText(input.generationModel || input.model, normalizeText(env.OPENROUTER_IMAGE_MODEL, preset.generationModel))
       : normalizeText(env.OPENROUTER_IMAGE_MODEL, preset.generationModel),
+    fallbackModel: acceptsCustomModels
+      ? normalizeText(input.fallbackModel, normalizeText(env.OPENROUTER_IMAGE_MODEL_FALLBACK, preset.fallbackModel))
+      : normalizeText(env.OPENROUTER_IMAGE_MODEL_FALLBACK, preset.fallbackModel),
     safetyModel: acceptsCustomModels
       ? normalizeText(input.safetyModel, normalizeText(env.OPENROUTER_SAFETY_MODEL, preset.safetyModel))
       : normalizeText(env.OPENROUTER_SAFETY_MODEL, preset.safetyModel),
+    promptProfile: normalizePromptProfile(customInput.promptProfile || env.OPENROUTER_PROMPT_PROFILE, preset.promptProfile),
     generationQuality: normalizeGenerationQuality(customInput.generationQuality || env.OPENROUTER_IMAGE_QUALITY, preset.generationQuality),
     imageSize: normalizeImageSize(customInput.imageSize || env.OPENROUTER_IMAGE_SIZE, preset.imageSize),
     reasoningEffort: normalizeReasoningEffort(customInput.reasoningEffort || env.OPENROUTER_REASONING_EFFORT, preset.reasoningEffort),
