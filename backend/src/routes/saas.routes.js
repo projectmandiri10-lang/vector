@@ -116,7 +116,7 @@ async function creditBalance(userId) {
 }
 
 async function getPricing() {
-  const defaults = { ready_trace: 2500, ai_redraw: 5000, separation_film: 1000 };
+  const defaults = { ready_trace: 2500, ai_redraw: 5000, separation_film: 0 };
   try {
     const rows = await supabaseFetch('/rest/v1/pricing_rules?select=key,amount_idr,active,description&order=key.asc', {});
     return rows.reduce(

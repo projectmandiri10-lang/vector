@@ -13,7 +13,7 @@ import { HYBRID_REDRAW_PRESETS, normalizeHybridRedrawConfig } from '../../shared
 const DEFAULT_PRICING = {
   ready_trace: 2500,
   ai_redraw: AI_REDRAW_PRICE_IDR,
-  separation_film: 1000
+  separation_film: 0
 };
 
 const corsHeaders = {

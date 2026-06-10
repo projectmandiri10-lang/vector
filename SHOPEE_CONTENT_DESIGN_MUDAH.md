@@ -32,7 +32,7 @@ Estimasi baca: sekitar 27-30 detik dengan tempo iklan cepat.
 ## Caption Shopee
 
 ```text
-Top up credit aplikasi Design Mudah lewat Shopee, lalu ubah gambar dari foto HP jadi lebih rapi dan siap cetak. Tinggal upload, pilih mode siap proses mulai Rp2.500 atau gambar ulang Rp5.000, lalu download PNG, SVG, PDF, ZIP, dan film sablon Rp1.000 per warna bila dibutuhkan. Setelah checkout, kirim email akun Design Mudah lewat chat Shopee, admin top up manual 5-15 menit pada jam kerja, lalu credit langsung bisa dipakai. Cocok untuk UMKM sablon, sticker, cutting, dan print shop yang mau kerja lebih cepat. 
+Top up credit aplikasi Design Mudah lewat Shopee, lalu ubah gambar dari foto HP jadi lebih rapi dan siap cetak. Tinggal upload, pilih mode siap proses mulai Rp2.500 atau gambar ulang Rp5.000, lalu download PNG, SVG, PDF, ZIP, dan film sablon gratis bila dibutuhkan. Setelah checkout, kirim email akun Design Mudah lewat chat Shopee, admin top up manual 5-15 menit pada jam kerja, lalu credit langsung bisa dipakai. Cocok untuk UMKM sablon, sticker, cutting, dan print shop yang mau kerja lebih cepat.
 ```
 
 ## Copy Listing
@@ -61,8 +61,8 @@ Upload gambar dari HP, rapikan otomatis, lalu download file sablon dan sticker s
 
 - `Siap proses`: mulai `Rp2.500`.
 - `Gambar ulang`: `Rp5.000`.
-- `Film sablon`: `Rp1.000` per warna.
-- Estimasi pemakaian tergantung mode proses dan jumlah warna film yang dibutuhkan.
+- `Film sablon`: gratis, termasuk dalam hasil proses bila mode sablon dipilih.
+- Estimasi pemakaian tergantung mode proses yang dipilih.
 
 ## Aturan Order
 
@@ -82,7 +82,7 @@ Upload gambar dari HP, rapikan otomatis, lalu download file sablon dan sticker s
 - Hasil terbaik untuk logo, ilustrasi sederhana, kartun, artwork sablon, dan desain sticker.
 - Foto atau desain yang sangat rumit tetap bisa memiliki keterbatasan hasil dan mungkin perlu mode gambar ulang.
 - File yang diterima untuk proses adalah `JPG`, `PNG`, atau `WebP` dengan ukuran maksimal `10 MB`.
-- Harga film sablon dihitung per warna yang dibuat.
+- Download film sablon tidak dikenakan biaya tambahan per warna.
 - Produk ini bukan jasa revisi desain manual satuan. Buyer memakai credit untuk memproses desain sendiri di aplikasi.
 
 ## Deskripsi Singkat Produk

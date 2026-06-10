@@ -360,7 +360,7 @@ https://PROJECT-REF.supabase.co/auth/v1/callback
 7. Upload gambar siap trace.
 8. Pastikan output SVG/PDF/ZIP bisa didownload tanpa file muncul di Supabase Storage atau R2.
 9. Coba mode gambar ulang; pastikan credit Rp5.000 terdebit sebelum hasil gambar ulang diproses.
-10. Coba sablon separasi; pastikan Rp1.000 per film terdebit saat commit job.
+10. Coba sablon separasi; pastikan film separasi bisa didownload tanpa debit tambahan per film.
 
 ## 7. Catatan Cloudflare Always Free
 

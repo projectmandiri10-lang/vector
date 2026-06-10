@@ -232,8 +232,8 @@ const privacySections = [
     icon: Eye,
     title: '1. Pendahuluan',
     content: [
-      'Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, dan melindungi informasi pribadi Anda saat Anda menggunakan platform kami.',
-      'Dengan mengakses atau menggunakan layanan kami, Anda menyetujui praktik yang dijelaskan dalam Kebijakan Privasi ini.'
+      'Kebijakan Privasi ini menjelaskan bagaimana kami mengumpulkan, menggunakan, menyimpan, membagikan, dan melindungi informasi pribadi Anda saat Anda menggunakan platform kami.',
+      'Dengan mengakses, membuat akun, mengunggah gambar, membeli credit, atau menggunakan layanan kami, Anda menyetujui praktik yang dijelaskan dalam Kebijakan Privasi ini.'
     ]
   },
   {
@@ -242,11 +242,21 @@ const privacySections = [
     subsections: [
       {
         subtitle: 'Informasi yang Anda Berikan',
-        items: ['Nama lengkap dan nama pengguna', 'Alamat email', 'Informasi pembayaran', 'Gambar yang Anda upload', 'Pesan atau komunikasi Anda']
+        items: [
+          'Nama lengkap, nama pengguna, dan alamat email',
+          'Informasi akun, invoice, order ID, nominal top up, dan status pembayaran',
+          'Gambar, file desain, dan instruksi yang Anda upload untuk diproses',
+          'Bukti pembayaran, pesan dukungan, dan komunikasi Anda'
+        ]
       },
       {
         subtitle: 'Informasi yang Dikumpulkan Otomatis',
-        items: ['Alamat IP', 'Jenis browser dan sistem operasi', 'Halaman yang Anda kunjungi', 'Perangkat yang digunakan', 'Data cookie dan teknologi serupa']
+        items: [
+          'Alamat IP, jenis browser, sistem operasi, dan perangkat yang digunakan',
+          'Halaman yang Anda kunjungi, waktu akses, log keamanan, dan aktivitas akun',
+          'Data cookie dan teknologi serupa',
+          'Data transaksi dari kanal pembayaran yang aktif, termasuk Midtrans atau penyedia pembayaran lain bila digunakan'
+        ]
       }
     ]
   },
@@ -257,18 +267,20 @@ const privacySections = [
       'Menyediakan, mengoperasikan, dan memelihara layanan kami',
       'Memproses gambar dan menghasilkan desain ulang',
       'Mengelola akun pengguna dan verifikasi',
-      'Memproses transaksi pembayaran credit',
+      'Memproses top up credit, pembayaran, rekonsiliasi, refund, chargeback, dan dispute transaksi',
       'Menanggapi pertanyaan dan permintaan Anda',
-      'Mencegah penipuan dan penyalahgunaan'
+      'Mencegah penipuan, penyalahgunaan, transaksi tidak sah, dan pelanggaran keamanan',
+      'Memenuhi kewajiban hukum, audit, perpajakan, pembukuan, dan permintaan regulator yang sah'
     ]
   },
   {
     icon: ShieldCheck,
     title: '4. Pembagian Informasi',
     list: [
-      'Penyedia layanan pihak ketiga yang membantu operasional platform',
-      'Kewajiban hukum atau proses hukum',
-      'Perlindungan hak, properti, atau keselamatan',
+      'Penyedia layanan pihak ketiga yang membantu operasional platform, termasuk hosting, storage, email, analitik, dukungan pelanggan, dan pemrosesan gambar',
+      'Midtrans, bank, e-wallet, payment network, marketplace, atau penyedia pembayaran lain sejauh diperlukan untuk memproses pembayaran, refund, chargeback, rekonsiliasi, dan pencegahan fraud',
+      'Pihak berwenang, regulator, pengadilan, atau instansi pemerintah bila diwajibkan oleh hukum atau proses hukum yang sah',
+      'Perlindungan hak, properti, keamanan platform, pengguna, atau publik',
       'Transaksi bisnis seperti akuisisi atau penggabungan'
     ]
   },
@@ -277,7 +289,8 @@ const privacySections = [
     title: '5. Keamanan Data',
     content: [
       'Kami menerapkan langkah-langkah keamanan teknis dan organisasi yang wajar untuk melindungi informasi pribadi Anda.',
-      'Gambar yang diupload akan dihapus dari server kami setelah proses selesai dan hasil diunduh.'
+      'Data pembayaran sensitif seperti nomor kartu penuh, CVV, PIN, atau kredensial pembayaran diproses oleh payment gateway atau kanal pembayaran yang berwenang; kami tidak menyimpan data tersebut di server aplikasi.',
+      'Gambar yang diupload akan diproses untuk menghasilkan output desain dan dapat disimpan sementara atau di galeri akun sesuai kebutuhan layanan, dukungan, audit, atau penghapusan yang Anda minta.'
     ]
   },
   {
@@ -286,10 +299,11 @@ const privacySections = [
     list: [
       'Hak akses atas informasi pribadi Anda',
       'Hak koreksi atas informasi yang tidak akurat',
-      'Hak penghapusan dalam batas kewajiban hukum',
+      'Hak penghapusan dalam batas kewajiban hukum, pembukuan, audit, keamanan, dan penyelesaian sengketa transaksi',
       'Hak pembatasan pemrosesan data',
       'Hak portabilitas data',
-      'Hak keberatan atas pemrosesan tertentu'
+      'Hak keberatan atas pemrosesan tertentu',
+      'Hak menarik persetujuan dengan memahami bahwa beberapa layanan mungkin tidak dapat digunakan tanpa data yang diperlukan'
     ]
   },
   {
@@ -307,14 +321,14 @@ const privacySections = [
     title: '8. Perubahan Kebijakan',
     content: [
       'Kami dapat memperbarui Kebijakan Privasi ini sewaktu-waktu. Perubahan akan berlaku efektif segera setelah dipublikasikan.',
-      'Kami menyarankan Anda untuk meninjau halaman ini secara berkala untuk mengetahui pembaruan terbaru.'
+      'Jika perubahan bersifat material, kami dapat memberi pemberitahuan melalui halaman aplikasi, email, atau kanal komunikasi lain yang tersedia.'
     ]
   },
   {
     icon: Mail,
     title: '9. Kontak Kami',
     list: ['Email: support@ailogoredesign.com', 'WhatsApp: +62 812-xxxx-xxxx', 'Halaman Kontak: ailogoredesign.com/contact'],
-    afterList: ['Kebijakan Privasi ini terakhir diperbarui pada 1 Januari 2025.']
+    afterList: ['Kebijakan Privasi ini terakhir diperbarui pada 10 Juni 2026.']
   }
 ];
 
@@ -324,7 +338,7 @@ const termsSections = [
     title: '1. Ketentuan Umum',
     content: [
       'Syarat dan Ketentuan ini mengatur hubungan antara Anda dan kami dalam penggunaan layanan platform AI Logo Redesign.',
-      'Dengan mendaftar atau menggunakan layanan kami, Anda dianggap telah membaca, memahami, dan menyetujui seluruh ketentuan ini.'
+      'Dengan mendaftar, mengunggah gambar, membeli credit, melakukan pembayaran, atau menggunakan layanan kami, Anda dianggap telah membaca, memahami, dan menyetujui seluruh ketentuan ini sebagai persetujuan elektronik yang sah.'
     ]
   },
   {
@@ -335,7 +349,8 @@ const termsSections = [
       'Pengguna: individu yang mendaftar dan menggunakan layanan',
       'Layanan: seluruh fitur AI Redesign dan Ready to Trace',
       'Credit: unit pembayaran untuk mengakses layanan',
-      'Gambar: file yang diunggah untuk diproses'
+      'Gambar: file yang diunggah untuk diproses',
+      'Payment gateway: Midtrans atau penyedia pembayaran lain yang kami aktifkan untuk memproses transaksi'
     ]
   },
   {
@@ -344,6 +359,7 @@ const termsSections = [
     list: [
       'AI Redesign Premium: Rp 5.000 per gambar',
       'Ready to Trace: Rp 2.500 per gambar',
+      'Download film separasi sablon tidak dikenakan biaya tambahan per warna',
       'Output sablon dan sticker',
       'Penyimpanan hasil pada galeri pribadi pengguna'
     ],
@@ -363,7 +379,9 @@ const termsSections = [
           'Memberikan informasi yang akurat',
           'Menjaga kerahasiaan akun dan password',
           'Tidak menggunakan layanan untuk tujuan ilegal',
-          'Tidak mengunggah konten yang melanggar hak pihak lain'
+          'Tidak mengunggah konten yang melanggar hak pihak lain',
+          'Memastikan Anda memiliki hak atau izin yang diperlukan atas logo, gambar, merek, atau materi yang diproses',
+          'Tidak melakukan transaksi palsu, chargeback tidak sah, penyalahgunaan promo, atau percobaan fraud'
         ]
       }
     ]
@@ -373,8 +391,11 @@ const termsSections = [
     title: '5. Sistem Credit dan Pembayaran',
     list: [
       'Setiap pengguna baru mendapatkan 5 credit gratis',
-      'Credit dapat dibeli melalui paket Shopee',
-      'Credit tidak dapat dikembalikan atau ditukar uang',
+      'Credit dapat dibeli melalui kanal resmi yang tersedia, termasuk Shopee, transfer manual, Midtrans, atau payment gateway lain bila sudah diaktifkan',
+      'Pembayaran dapat diproses oleh pihak ketiga seperti Midtrans, bank, e-wallet, payment network, marketplace, atau penyedia pembayaran terkait',
+      'Dengan membayar melalui kanal pihak ketiga, pengguna juga tunduk pada syarat, kebijakan privasi, keamanan, biaya kanal, batas waktu pembayaran, dan status transaksi dari kanal tersebut',
+      'Credit yang sudah dipakai untuk memproses gambar tidak dapat dikembalikan kecuali terjadi kegagalan sistem, transaksi ganda, layanan tidak tersedia, atau kondisi lain yang kami setujui setelah verifikasi',
+      'Refund, pembatalan, chargeback, dan dispute mengikuti status pembayaran, bukti transaksi, dan ketentuan kanal pembayaran yang digunakan; pada payment gateway, proses refund umumnya hanya dapat dilakukan setelah transaksi berhasil atau settlement',
       'Credit tidak dapat ditransfer ke akun lain',
       'Credit memiliki masa berlaku 12 bulan'
     ]
@@ -395,7 +416,8 @@ const termsSections = [
       'Kerugian akibat penggunaan atau ketidakmampuan menggunakan layanan',
       'Kualitas hasil yang tidak sesuai ekspektasi',
       'Kehilangan data akibat kegagalan teknis atau force majeure',
-      'Kerugian dari transaksi pembayaran melalui Shopee'
+      'Keterlambatan, penolakan, biaya kanal, atau gangguan transaksi pada Shopee, Midtrans, bank, e-wallet, payment network, atau penyedia pembayaran lain',
+      'Kerugian akibat pengguna mengunggah materi tanpa hak, izin, atau lisensi yang diperlukan'
     ]
   },
   {
@@ -428,7 +450,7 @@ const termsSections = [
     icon: Mail,
     title: '11. Kontak',
     list: ['Email: support@ailogoredesign.com', 'WhatsApp: +62 812-xxxx-xxxx', 'Halaman Kontak: ailogoredesign.com/contact'],
-    afterList: ['Syarat dan Ketentuan ini terakhir diperbarui pada 1 Januari 2025.']
+    afterList: ['Syarat dan Ketentuan ini terakhir diperbarui pada 10 Juni 2026.']
   }
 ];
 
