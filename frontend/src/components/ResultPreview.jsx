@@ -1,5 +1,6 @@
 import { Archive, Download, FileImage, FileText, Layers, Palette, Scissors, Trash2 } from 'lucide-react';
 import { absoluteUrl } from '../lib/api.js';
+import { INPUT_MODE_READY } from '../lib/modes.js';
 
 function DownloadButton({ href, children, icon: Icon }) {
   if (!href) return null;
@@ -45,6 +46,7 @@ export default function ResultPreview({
   if (!job || job.status !== 'done') return null;
   const files = job.files || {};
   const settings = job.settings || {};
+  const isVectorReadyMode = settings.inputMode === INPUT_MODE_READY;
 
   return (
     <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
@@ -56,23 +58,31 @@ export default function ResultPreview({
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <PreviewCard title={sourcePreviewLabel} icon={FileImage} src={sourcePreviewUrl} alt={sourcePreviewLabel} />
-        <PreviewCard
-          title="Preview PNG hasil jadi"
-          icon={FileImage}
-          src={files.fullPng}
-          alt="Preview PNG hasil jadi"
-          notice={
-            settings.removeBackground && settings.includeBackgroundInFilmSize !== true
-              ? `Ukuran cetak: objek utama ${settings.actualWidthCm} cm, background dihilangkan. Kertas ${settings.paperSize} ${settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.`
-              : settings.separateColors || settings.stickerCutlineEnabled
-                ? `Ukuran cetak: lebar ${settings.separateColors && settings.includeBackgroundInFilmSize ? 'termasuk background' : 'area artwork'} ${settings.actualWidthCm} cm, tinggi mengikuti rasio. Kertas ${settings.paperSize} ${settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.`
-              : ''
-          }
-        />
-        <PreviewCard title="Preview SVG full color" icon={FileText} src={files.fullSvg} alt="Preview SVG full color" />
-      </div>
+      {!isVectorReadyMode && (
+        <div className="grid gap-4 xl:grid-cols-3">
+          <PreviewCard title={sourcePreviewLabel} icon={FileImage} src={sourcePreviewUrl} alt={sourcePreviewLabel} />
+          <PreviewCard
+            title="Preview PNG hasil jadi"
+            icon={FileImage}
+            src={files.fullPng}
+            alt="Preview PNG hasil jadi"
+            notice={
+              settings.removeBackground && settings.includeBackgroundInFilmSize !== true
+                ? `Ukuran cetak: objek utama ${settings.actualWidthCm} cm, background dihilangkan. Kertas ${settings.paperSize} ${settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.`
+                : settings.separateColors || settings.stickerCutlineEnabled
+                  ? `Ukuran cetak: lebar ${settings.separateColors && settings.includeBackgroundInFilmSize ? 'termasuk background' : 'area artwork'} ${settings.actualWidthCm} cm, tinggi mengikuti rasio. Kertas ${settings.paperSize} ${settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.`
+                  : ''
+            }
+          />
+          <PreviewCard title="Preview SVG full color" icon={FileText} src={files.fullSvg} alt="Preview SVG full color" />
+        </div>
+      )}
+
+      {isVectorReadyMode && (
+        <div className="border border-line bg-panel px-3 py-2 text-sm text-gray-700">
+          Mode Vector Siap Proses menampilkan file hasil akhir saja agar halaman tetap ringkas.
+        </div>
+      )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <DownloadButton href={files.fullPng} icon={FileImage}>
