@@ -1,6 +1,5 @@
-import { Wand2 } from 'lucide-react';
+import { CreditCard, LogOut, RefreshCw, ShoppingBag, Wand2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import AccountPanel from './components/AccountPanel.jsx';
 import AdminPanel from './components/AdminPanel.jsx';
 import AuthPanel from './components/AuthPanel.jsx';
 import BillingPanel from './components/BillingPanel.jsx';
@@ -625,7 +624,11 @@ export default function App() {
   const canSubmit = file && !isBusy && file.size <= 10 * 1024 * 1024 && session;
   const sessionEmail = session?.user?.email?.toLowerCase() || '';
   const isWhitelistedSuperadmin = sessionEmail === SUPERUSER_ACCOUNT;
-  const isSuperuser = ['superuser', 'superadmin'].includes(balance?.profile?.role) || isWhitelistedSuperadmin;
+  const profile = balance?.profile;
+  const isSuperuser = ['superuser', 'superadmin'].includes(profile?.role) || isWhitelistedSuperadmin;
+  const isUnlimited = profile?.is_unlimited ?? isWhitelistedSuperadmin;
+  const balanceLabel = isUnlimited ? 'Unlimited' : formatRupiah(balance?.balance || 0);
+  const roleLabel = isSuperuser ? 'Superadmin' : 'User';
 
   async function handleDeleteLibraryJob(item) {
     if (!item?.canDelete) return;
@@ -683,22 +686,64 @@ export default function App() {
     <main className="min-h-screen gradient-bg-subtle">
       {session && (
         <div className="glass-nav">
-          <div className="mx-auto flex max-w-6xl justify-end px-4 py-5 sm:px-6">
-            <nav className="flex flex-wrap gap-2">
-              {['app', 'billing', 'admin'].map((item) =>
-                item === 'admin' && !isSuperuser ? null : (
-                  <button
-                    key={item}
-                    type="button"
-                    onClick={() => setView(item)}
-                    className={`border px-3 py-2 text-sm font-semibold ${view === item ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink'}`}
-                  >
-                    {item === 'app' ? 'App' : item === 'billing' ? 'Billing' : 'Admin'}
-                  </button>
-                )
-              )}
-            </nav>
+          <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-4 sm:px-6 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-ink">{session?.user?.email}</p>
+                <p className="text-xs text-gray-600">{roleLabel}</p>
+              </div>
+              <div className="inline-flex items-center gap-2 border border-line bg-white px-3 py-2 text-sm font-semibold text-ink">
+                <CreditCard className="h-4 w-4 text-spruce" aria-hidden="true" />
+                <span>{balanceLabel}</span>
+              </div>
+              <button
+                type="button"
+                onClick={refreshBalance}
+                className="inline-flex h-9 w-9 items-center justify-center border border-line bg-white text-gray-700 hover:border-spruce hover:text-spruce"
+                title="Refresh saldo"
+              >
+                <RefreshCw className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <nav className="flex flex-wrap gap-2">
+                {['app', 'billing', 'admin'].map((item) =>
+                  item === 'admin' && !isSuperuser ? null : (
+                    <button
+                      key={item}
+                      type="button"
+                      onClick={() => setView(item)}
+                      className={`border px-3 py-2 text-sm font-semibold ${view === item ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink'}`}
+                    >
+                      {item === 'app' ? 'App' : item === 'billing' ? 'Billing' : 'Admin'}
+                    </button>
+                  )
+                )}
+              </nav>
+              <button
+                type="button"
+                onClick={() => setView('billing')}
+                className="inline-flex min-h-10 items-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+              >
+                <ShoppingBag className="h-4 w-4" aria-hidden="true" />
+                Isi saldo
+              </button>
+              <button
+                type="button"
+                onClick={signOut}
+                className="inline-flex h-10 w-10 items-center justify-center border border-line bg-white text-gray-700 hover:border-tomato hover:text-tomato"
+                title="Logout"
+              >
+                <LogOut className="h-4 w-4" aria-hidden="true" />
+              </button>
+            </div>
           </div>
+          {balanceError && (
+            <div className="mx-auto max-w-6xl px-4 pb-4 sm:px-6">
+              <p className="border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800">{balanceError}</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -720,9 +765,8 @@ export default function App() {
       )}
 
       {session && view === 'billing' && (
-        <div className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]">
+        <div className="mx-auto max-w-6xl px-4 py-5 sm:px-6">
           <BillingPanel session={session} />
-          <AccountPanel session={session} balance={balance} balanceError={balanceError} onRefreshBalance={refreshBalance} onSignOut={signOut} />
         </div>
       )}
 
@@ -735,7 +779,6 @@ export default function App() {
       {session && view === 'app' && (
         <form className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]" onSubmit={handleSubmit}>
           <div className="space-y-4">
-            <AccountPanel session={session} balance={balance} balanceError={balanceError} onRefreshBalance={refreshBalance} onSignOut={signOut} />
             <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
               <div className="flex flex-wrap gap-2">
                 {[
