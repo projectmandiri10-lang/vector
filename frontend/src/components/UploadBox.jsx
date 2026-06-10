@@ -14,7 +14,7 @@ const modeOptions = [
     title: 'Gambar perlu digambar ulang',
     description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.',
     priceIdr: IMAGE_RETOUCH_PRICE_IDR,
-    helper: 'Upload JPG, PNG, atau WebP. Cocok untuk foto logo yang masih perlu dibersihkan.',
+    helper: 'Upload JPG, PNG, atau WebP. Cocok untuk foto logo yang masih perlu dibersihkan sebelum redraw AI.',
     accept: 'image/png,image/jpeg,image/webp',
     badge: 'Raster + AI'
   },
@@ -70,6 +70,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
 
   const isValidType = !uploadError;
   const isValidSize = file ? file.size <= 10 * 1024 * 1024 : true;
+  const showRasterGuidelines = inputMode === INPUT_MODE_RETOUCH;
 
   return (
     <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
@@ -134,6 +135,19 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
           </button>
         )}
       </div>
+
+      {showRasterGuidelines && (
+        <div className="mb-4 border border-amber-200 bg-amber-50 p-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">Saran foto untuk AI redraw</p>
+          <ul className="mt-2 space-y-1 text-xs leading-5 text-amber-900">
+            <li>Kamera Android minimal 16 MP.</li>
+            <li>Ambil foto di tempat dengan cahaya cukup dan tanpa bayangan di area logo.</li>
+            <li>Pastikan gambar tidak blur dan logo terlihat jelas.</li>
+            <li>Jangan gunakan efek, filter, atau mode beautify kamera.</li>
+            <li>Jangan gunakan zoom optik atau zoom digital saat memotret logo.</li>
+          </ul>
+        </div>
+      )}
 
       <label
         className={`relative flex min-h-56 cursor-pointer overflow-hidden border border-dashed px-4 py-6 text-center transition ${
@@ -214,7 +228,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
       <p className="mt-3 text-xs text-gray-600">
         {inputMode === INPUT_MODE_READY
           ? 'Vector Siap Proses dipakai untuk file vector murni yang akan dipisah warna dan dibuat contour sticker.'
-          : 'Untuk foto rumit, hasil redraw dan pecah warna mungkin perlu dicek kembali.'}
+          : 'Jika foto terlalu gelap, blur, atau banyak bayangan, hasil redraw bisa tetap meleset dan perlu upload ulang.'}
       </p>
     </section>
   );
