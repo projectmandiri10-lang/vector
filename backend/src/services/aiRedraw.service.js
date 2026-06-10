@@ -486,7 +486,7 @@ async function compressedImageDataUrl(buffer, label, maxBytes = configuredMaxIma
   }
 
   const error = new Error(
-    `Gambar referensi terlalu besar untuk Riverflow free (${label}). Turunkan PREPROCESS_MAX_DIMENSION atau OPENROUTER_IMAGE_SIZE lalu coba lagi.`
+    `Gambar referensi terlalu besar untuk model image OpenRouter (${label}). Turunkan PREPROCESS_MAX_DIMENSION atau OPENROUTER_IMAGE_SIZE lalu coba lagi.`
   );
   error.status = 413;
   error.upstream = 'openrouter';
@@ -709,6 +709,7 @@ function buildOpenRouterGeneratorPrompt(technicalPrompt, aiConfig) {
   return [
     'Use the uploaded image as the direct visual reference for an image-to-image redraw.',
     'Redraw the artwork faithfully as flat solid vector-like art, not as OCR, scan repair, sharpening, enhancement, upscaling, or a cleaned screenshot.',
+    'Do not trace or preserve the jagged pixel boundary of the reference image; infer the intended smooth manual-vector contour behind the rough raster edge.',
     'Preserve exact readable text, text placement, lettering hierarchy, dominant colors, silhouette, enclosed holes, and symbol positions from the reference.',
     'Create smooth closed contours, clean high-density edges, flat color fills, and trace-ready shapes for vectorization, screen printing, sticker cutting, and color separation.',
     'Remove all paper, table, camera background, shadows, glare, texture, compression noise, pixel blocks, halftone, scan artifacts, rectangular background layers, and jagged mask noise.',
@@ -797,7 +798,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
     const contentType = imageResponse.headers.get('content-type') || '';
     if (imageResponse.ok) {
       if (contentType && !/^image\/|application\/octet-stream/i.test(contentType)) {
-        const error = new Error(`URL hasil OpenRouter/Riverflow tidak mengembalikan file gambar (${contentType}).`);
+        const error = new Error(`URL hasil OpenRouter image model tidak mengembalikan file gambar (${contentType}).`);
         error.status = 502;
         error.upstream = 'openrouter';
         throw exposeAiError(error);
@@ -808,7 +809,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
 
     const responseText = await imageResponse.text().catch(() => '');
     const isRetryableStatus = imageResponse.status === 404 || imageResponse.status === 429 || imageResponse.status >= 500;
-    lastError = new Error(`Gagal mengunduh hasil OpenRouter/Riverflow: ${imageResponse.status}`);
+    lastError = new Error(`Gagal mengunduh hasil OpenRouter image model: ${imageResponse.status}`);
     lastError.status = imageResponse.status >= 400 && imageResponse.status < 500 && imageResponse.status !== 404 ? imageResponse.status : 502;
     lastError.upstream = 'openrouter';
     lastError.responseText = responseText.slice(0, 500);
@@ -818,7 +819,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
     }
   }
 
-  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter/Riverflow.'), { status: 502, upstream: 'openrouter' }));
+  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter image model.'), { status: 502, upstream: 'openrouter' }));
 }
 
 async function bufferFromOpenRouterImageReference(imageReference) {
@@ -834,7 +835,7 @@ async function bufferFromOpenRouterImageReference(imageReference) {
     return downloadOpenRouterImageResult(imageReference);
   }
 
-  const error = new Error('OpenRouter/Riverflow mengembalikan referensi gambar yang tidak dikenali.');
+  const error = new Error('OpenRouter image model mengembalikan referensi gambar yang tidak dikenali.');
   error.status = 502;
   error.upstream = 'openrouter';
   throw exposeAiError(error);
@@ -847,8 +848,8 @@ async function generateWithOpenRouterImage(technicalPrompt, aiConfig, preprocess
     const text = data?.choices?.[0]?.message?.content;
     const error = new Error(
       text
-        ? `OpenRouter/Riverflow tidak mengembalikan gambar. Respons teks: ${String(text).slice(0, 500)}`
-        : 'OpenRouter/Riverflow tidak mengembalikan URL gambar atau base64 image.'
+        ? `OpenRouter image model tidak mengembalikan gambar. Respons teks: ${String(text).slice(0, 500)}`
+        : 'OpenRouter image model tidak mengembalikan URL gambar atau base64 image.'
     );
     error.status = 502;
     error.upstream = 'openrouter';
@@ -866,7 +867,7 @@ async function postprocessGeneratedImage(buffer, preprocessName) {
     try {
       return await sharp(buffer, { failOn: 'none' }).rotate().png().toBuffer();
     } catch {
-      const next = new Error(`Gambar OpenRouter/Riverflow berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
+      const next = new Error(`Gambar OpenRouter image model berhasil dibuat, tetapi tidak bisa dibaca sebagai file gambar valid. ${error instanceof Error ? error.message : ''}`.trim());
       next.status = 502;
       next.upstream = 'openrouter';
       throw exposeAiError(next);
@@ -974,7 +975,7 @@ export async function hybridRedrawBuffer(uploadedBuffer, settings = {}, configOv
   const safety = await checkOpenRouterSafety(preparedMeta, settings, aiConfig);
   const analysis = normalizeAnalysisPayload(
     {
-      subjectSummary: 'Direct Riverflow image-to-image redraw from the cleaned trace target.',
+      subjectSummary: 'Direct OpenRouter Gemini image-to-image redraw from the cleaned trace target.',
       style: 'Flat vector-like redraw',
       textDescription: 'Preserve exact readable text, placement, and hierarchy from the uploaded artwork.',
       backgroundPolicy: 'Remove camera/paper/table background and return isolated trace-ready artwork.',

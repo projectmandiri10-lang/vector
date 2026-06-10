@@ -9,7 +9,7 @@ Browser user
   -> Railway service Express
      -> serve frontend build
      -> API /api/...
-     -> OpenRouter Nemotron safety + Riverflow redraw
+     -> OpenRouter Nemotron safety + Gemini image redraw
      -> vector trace, cutline, separasi, PDF, ZIP
   -> Supabase auth, credit, metadata
 ```
@@ -41,6 +41,13 @@ STORAGE_DIR=/tmp/vectorizer-storage
 MAX_UPLOAD_MB=10
 UPLOAD_RATE_LIMIT_PER_MINUTE=3
 PREPROCESS_MAX_DIMENSION=2048
+TRACE_SMOOTH_ENABLED=1
+TRACE_CURVE_CLEANUP_ENABLED=1
+TRACE_EDGE_REFINEMENT_ENABLED=1
+TRACE_EDGE_SOURCE_SCALE=2
+TRACE_EDGE_MAX_DIMENSION=4096
+TRACE_EDGE_SHARPEN_SIGMA=0.35
+TRACE_EDGE_NORMALIZE_LIGHTING=0
 
 SUPABASE_URL=https://PROJECT-REF.supabase.co
 SUPABASE_PUBLISHABLE_KEY=sb_publishable_...
@@ -49,10 +56,10 @@ SUPABASE_SERVICE_ROLE_KEY=...
 OPENROUTER_API_KEY=...
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_ANALYSIS_MODEL=
-OPENROUTER_IMAGE_MODEL=sourceful/riverflow-v2.5-pro:free
+OPENROUTER_IMAGE_MODEL=google/gemini-3.1-flash-image-preview
 OPENROUTER_SAFETY_MODEL=nvidia/nemotron-3.5-content-safety:free
 OPENROUTER_IMAGE_QUALITY=high
-OPENROUTER_IMAGE_SIZE=2K
+OPENROUTER_IMAGE_SIZE=1K
 OPENROUTER_REASONING_EFFORT=medium
 OPENROUTER_BACKGROUND_MODE=transparent
 OPENROUTER_SAFETY_ENABLED=1
@@ -91,9 +98,9 @@ Invoke-RestMethod "https://DOMAIN-RAILWAY-ANDA/api/health"
 Pastikan respons menampilkan:
 
 - `ok: true`
-- `redrawProvider: openrouter_riverflow_image`
-- `redrawGenerationModel: sourceful/riverflow-v2.5-pro:free`
+- `redrawProvider: openrouter_gemini_image`
+- `redrawGenerationModel: google/gemini-3.1-flash-image-preview`
 - `redrawSafetyModel: nvidia/nemotron-3.5-content-safety:free`
 - `openRouterConfigured: true`
 
-Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, model ID `OPENROUTER_IMAGE_MODEL`, dan apakah model free Riverflow masih tersedia.
+Jika AI redraw gagal, cek `OPENROUTER_API_KEY`, saldo OpenRouter, model ID `OPENROUTER_IMAGE_MODEL`, dan ketersediaan model Gemini image di OpenRouter.

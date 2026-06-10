@@ -1,4 +1,4 @@
-export const READY_TRACE_PRICE_IDR = 1000;
+export const READY_TRACE_PRICE_IDR = 2500;
 export const AI_REDRAW_PRICE_IDR = 5000;
 export const SEPARATION_FILM_PRICE_IDR = 1000;
 export const SUPERUSER_EMAIL = 'jho.j80@gmail.com';

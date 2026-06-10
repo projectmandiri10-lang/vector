@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { AI_REDRAW_PRICE_IDR, READY_TRACE_PRICE_IDR, SEPARATION_FILM_PRICE_IDR, calculateJobPrice } from './pricing.js';
 
-test('ready trace costs Rp1.000', () => {
+test('ready trace costs Rp2.500', () => {
   assert.equal(calculateJobPrice({ inputMode: 'ready_trace' }), READY_TRACE_PRICE_IDR);
 });
 

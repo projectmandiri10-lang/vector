@@ -6,6 +6,7 @@ import { createMasksForPalette, quantizeImage } from './quantize.service.js';
 import { buildFullColorSvg, vectorizeMasks } from './vectorize.service.js';
 import { createFilmPlan, createSeparations } from './separation.service.js';
 import { createStickerCutline } from './stickerCutline.service.js';
+import { refineTraceSourceImage } from './traceRefinement.service.js';
 import { exportSvgToPdf, exportSvgToPng } from './export.service.js';
 import { createResultZip, createSeparationZip } from './zip.service.js';
 import { colorChroma, colorDistance, rgbToHex } from '../utils/colors.js';
@@ -435,17 +436,14 @@ async function buildArtifactResponse(jobDir, settings, manifest, palette, separa
   };
 }
 
-export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, metadata = {} }) {
+export async function createTraceArtifactsFromImage({ imageBuffer, settings = {}, metadata = {} }) {
   const jobDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-logo-restore-'));
   try {
+    const rawSourcePath = path.join(jobDir, 'trace-source-original.png');
     const sourcePath = path.join(jobDir, 'trace-source.png');
     const fullPreviewPath = path.join(jobDir, 'preview-full-color.png');
     const fullSvgPath = path.join(jobDir, 'full-vector.svg');
     const fullPdfPath = path.join(jobDir, 'full-vector.pdf');
-
-    await fs.writeFile(sourcePath, imageBuffer);
-    const sourceMeta = await sharp(imageBuffer, { failOn: 'error' }).metadata();
-    await fs.writeFile(fullPreviewPath, imageBuffer);
 
     const effectiveSettings = {
       ...settings,
@@ -453,8 +451,14 @@ export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, m
       colorLimitMode: settings.colorLimitMode || 'manual',
       maxColors: settings.maxColors || 4,
       removeBackground: settings.removeBackground !== false,
-      curveCleanup: metadata.strictSpotColors !== false
+      edgeRefinement: settings.edgeRefinement !== false,
+      curveCleanup: settings.curveCleanup !== false && metadata.strictSpotColors !== false
     };
+    await fs.writeFile(rawSourcePath, imageBuffer);
+    const refinement = await refineTraceSourceImage(rawSourcePath, sourcePath, effectiveSettings);
+    const sourceMeta = await sharp(sourcePath, { failOn: 'error' }).metadata();
+    await fs.copy(sourcePath, fullPreviewPath);
+
     const quantized = await quantizeImage(sourcePath, effectiveSettings);
     const palette = quantized.palette;
     await fs.writeJson(path.join(jobDir, 'palette.json'), palette, { spaces: 2 });
@@ -464,7 +468,8 @@ export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, m
       width: quantized.width,
       height: quantized.height,
       outputPath: fullSvgPath,
-      curveCleanup: metadata.strictSpotColors !== false
+      curveCleanup: effectiveSettings.curveCleanup === true,
+      edgeRefinement: effectiveSettings.edgeRefinement === true
     });
     let pathsByColor = vectorResult.pathsByColor;
 
@@ -520,7 +525,15 @@ export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, m
         width: sourceMeta.width || quantized.width,
         height: sourceMeta.height || quantized.height,
         palette,
-        aiRedraw: { ...metadata, artifactsGenerated: true },
+        aiRedraw:
+          metadata?.readyTraceProvider || metadata?.provider === 'ready_trace_edge_refinement'
+            ? null
+            : { ...metadata, artifactsGenerated: true },
+        readyTrace:
+          metadata?.readyTraceProvider || metadata?.provider === 'ready_trace_edge_refinement'
+            ? { ...metadata, artifactsGenerated: true }
+            : null,
+        traceRefinement: refinement,
         generatedFiles: [
           'preview-full-color.png',
           'full-vector.svg',
@@ -538,4 +551,8 @@ export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, m
   } finally {
     await fs.remove(jobDir);
   }
+}
+
+export async function createLogoRestoreArtifacts({ imageBuffer, settings = {}, metadata = {} }) {
+  return createTraceArtifactsFromImage({ imageBuffer, settings, metadata });
 }

@@ -318,7 +318,7 @@ export default function AdminPanel({ session, enabled }) {
           key: 'ai_redraw_model',
           value: nextValue,
           isPublic: false,
-          description: `Pipeline OpenRouter Riverflow redraw: ${nextValue.generationModel} image model + ${nextValue.safetyModel} safety gate`
+          description: `Pipeline OpenRouter Gemini image redraw: ${nextValue.generationModel} image model + ${nextValue.safetyModel} safety gate`
         },
         accessToken
       );
@@ -749,7 +749,7 @@ export default function AdminPanel({ session, enabled }) {
                 <label className="block">
                   <span className="mb-1.5 block text-sm font-medium text-ink">Ukuran gambar</span>
                   <select
-                    value={aiModelDraft.imageSize || '2K'}
+                    value={aiModelDraft.imageSize || '1K'}
                     onChange={(event) => setAiModelDraft((current) => ({ ...current, mode: 'custom', preset: 'custom', label: 'Custom', imageSize: event.target.value }))}
                     className="w-full border border-line bg-white px-3 py-2.5 text-sm outline-none focus:border-spruce"
                   >
@@ -832,9 +832,9 @@ export default function AdminPanel({ session, enabled }) {
                   {aiModelDraft.generationQuality ? ` (${aiModelDraft.generationQuality.toUpperCase()})` : ''}
                 </p>
                 <p>Estimasi biaya: sekitar {formatRupiah(estimatedIdr(aiModelDraft.estimatedUsdPerImage))} per redraw hybrid, dengan harga user tetap flat.</p>
-                <p>Pipeline: Nemotron memeriksa safety visual, lalu Riverflow menggambar ulang langsung dari cleaned trace target sebelum hasilnya di-trace.</p>
+                <p>Pipeline: Nemotron memeriksa safety visual, lalu OpenRouter Gemini menggambar ulang langsung dari cleaned trace target sebelum hasilnya di-trace.</p>
                 <p>
-                  Riverflow: {aiModelDraft.imageSize || '2K'} | reasoning {aiModelDraft.reasoningEffort || 'medium'} | background {aiModelDraft.backgroundMode || 'transparent'} | safety {aiModelDraft.safetyEnabled === false ? 'mati' : 'aktif'}
+                  Gemini image: {aiModelDraft.imageSize || '1K'} | reasoning {aiModelDraft.reasoningEffort || 'medium'} | background {aiModelDraft.backgroundMode || 'transparent'} | safety {aiModelDraft.safetyEnabled === false ? 'mati' : 'aktif'}
                 </p>
                 <p>{aiRedrawModelPresets.find((preset) => preset.mode === aiModelDraft.mode)?.note || 'Mode custom untuk eksperimen pipeline hybrid.'}</p>
                 <p>

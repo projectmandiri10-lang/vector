@@ -13,10 +13,10 @@ process.env.AI_REDRAW_MOCK = '1';
 process.env.STORAGE_DIR = storageDir;
 process.env.MAX_UPLOAD_MB = '10';
 process.env.OPENROUTER_ANALYSIS_MODEL = '';
-process.env.OPENROUTER_IMAGE_MODEL = 'sourceful/riverflow-v2.5-pro:free';
+process.env.OPENROUTER_IMAGE_MODEL = 'google/gemini-3.1-flash-image-preview';
 process.env.OPENROUTER_SAFETY_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
 process.env.OPENROUTER_IMAGE_QUALITY = 'high';
-process.env.OPENROUTER_IMAGE_SIZE = '2K';
+process.env.OPENROUTER_IMAGE_SIZE = '1K';
 process.env.OPENROUTER_REASONING_EFFORT = 'medium';
 process.env.OPENROUTER_BACKGROUND_MODE = 'transparent';
 process.env.OPENROUTER_SAFETY_ENABLED = '1';
@@ -87,6 +87,9 @@ test('POST /api/jobs accepts upload and exposes full PNG result in mock mode', a
   assert.equal(job.settings.paymentStatus, 'skipped_mvp');
   assert.ok(job.files.fullPng);
   assert.ok(job.files.zip);
+  assert.equal(job.traceRefinement.enabled, true);
+  assert.equal(job.traceRefinement.mode, 'ready_trace');
+  assert.equal(job.aiRedraw, undefined);
   assert.equal(await fs.pathExists(safeJobPath(createResponse.body.jobId, 'ai-redraw.png')), false);
   assert.equal(await fs.pathExists(safeJobPath(createResponse.body.jobId, 'trace-source.png')), true);
 
@@ -169,12 +172,12 @@ test('POST /api/redraw/hybrid returns png and redraw metadata in mock mode', asy
     assert.match(response.headers['content-type'], /image\/png/);
     assert.ok(response.headers['x-ai-redraw-metadata']);
     const metadata = JSON.parse(Buffer.from(response.headers['x-ai-redraw-metadata'], 'base64url').toString('utf8'));
-    assert.equal(metadata.provider, 'openrouter_riverflow_image');
+    assert.equal(metadata.provider, 'openrouter_gemini_image');
     assert.equal(metadata.analysisModel, '');
-    assert.equal(metadata.generationModel, 'sourceful/riverflow-v2.5-pro:free');
+    assert.equal(metadata.generationModel, 'google/gemini-3.1-flash-image-preview');
     assert.equal(metadata.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
     assert.equal(metadata.generationQuality, 'high');
-    assert.equal(metadata.imageSize, '2K');
+    assert.equal(metadata.imageSize, '1K');
     assert.equal(metadata.reasoningEffort, 'medium');
     assert.equal(metadata.backgroundMode, 'transparent');
   } finally {
@@ -199,7 +202,7 @@ test('OpenRouter API key mode reports clear missing key error', async () => {
   }
 });
 
-test('unsafe safety gate blocks before Riverflow generator', async () => {
+test('unsafe safety gate blocks before OpenRouter image generator', async () => {
   const previousMock = process.env.AI_REDRAW_MOCK;
   const previousKey = process.env.OPENROUTER_API_KEY;
   const previousLogoRestore = process.env.LOGO_RESTORE_ENABLED;
@@ -232,15 +235,15 @@ test('unsafe safety gate blocks before Riverflow generator', async () => {
   }
 });
 
-test('legacy provider override still reports OpenRouter Riverflow metadata in mock mode', async () => {
+test('legacy provider override still reports OpenRouter Gemini metadata in mock mode', async () => {
   const result = await hybridRedrawBuffer(
     makePngBuffer(),
     { productionType: 'sablon', inputMode: 'ai_redraw' },
     { mode: 'legacy_quality', provider: 'old-provider', analysisModel: 'old-analysis', generationModel: 'old-generation' }
   );
 
-  assert.equal(result.metadata.provider, 'openrouter_riverflow_image');
+  assert.equal(result.metadata.provider, 'openrouter_gemini_image');
   assert.equal(result.metadata.analysisModel, '');
-  assert.equal(result.metadata.generationModel, 'sourceful/riverflow-v2.5-pro:free');
+  assert.equal(result.metadata.generationModel, 'google/gemini-3.1-flash-image-preview');
   assert.equal(result.metadata.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
 });

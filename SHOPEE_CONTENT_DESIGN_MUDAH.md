@@ -32,7 +32,7 @@ Estimasi baca: sekitar 27-30 detik dengan tempo iklan cepat.
 ## Caption Shopee
 
 ```text
-Top up credit aplikasi Design Mudah lewat Shopee, lalu ubah gambar dari foto HP jadi lebih rapi dan siap cetak. Tinggal upload, pilih mode siap proses mulai Rp1.000 atau gambar ulang Rp5.000, lalu download PNG, SVG, PDF, ZIP, dan film sablon Rp1.000 per warna bila dibutuhkan. Setelah checkout, kirim email akun Design Mudah lewat chat Shopee, admin top up manual 5-15 menit pada jam kerja, lalu credit langsung bisa dipakai. Cocok untuk UMKM sablon, sticker, cutting, dan print shop yang mau kerja lebih cepat. 
+Top up credit aplikasi Design Mudah lewat Shopee, lalu ubah gambar dari foto HP jadi lebih rapi dan siap cetak. Tinggal upload, pilih mode siap proses mulai Rp2.500 atau gambar ulang Rp5.000, lalu download PNG, SVG, PDF, ZIP, dan film sablon Rp1.000 per warna bila dibutuhkan. Setelah checkout, kirim email akun Design Mudah lewat chat Shopee, admin top up manual 5-15 menit pada jam kerja, lalu credit langsung bisa dipakai. Cocok untuk UMKM sablon, sticker, cutting, dan print shop yang mau kerja lebih cepat. 
 ```
 
 ## Copy Listing
@@ -59,7 +59,7 @@ Upload gambar dari HP, rapikan otomatis, lalu download file sablon dan sticker s
 
 ### Estimasi Pemakaian Credit
 
-- `Siap proses`: mulai `Rp1.000`.
+- `Siap proses`: mulai `Rp2.500`.
 - `Gambar ulang`: `Rp5.000`.
 - `Film sablon`: `Rp1.000` per warna.
 - Estimasi pemakaian tergantung mode proses dan jumlah warna film yang dibutuhkan.

@@ -10,6 +10,8 @@ import { preprocessUploadedImage } from '../services/preprocess.service.js';
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
+import { logoRestoreBuffer } from '../services/logoRestore.service.js';
+import { refineTraceSourceImage } from '../services/traceRefinement.service.js';
 import { buildFullColorSvg, vectorizeMasks } from '../services/vectorize.service.js';
 import { createResultZip, createSeparationZip } from '../services/zip.service.js';
 import { normalizeActualWidthCm } from '../utils/paper.js';
@@ -118,6 +120,8 @@ export function validateSettings(body = {}) {
     stickerCutlineEnabled: productionType === 'sticker' && parseBoolean(body.stickerCutlineEnabled, true),
     stickerCutlineOffsetMm: normalizeOffsetMm(body.stickerCutlineOffsetMm, 2),
     createUnderbaseFilm: productionType === 'sablon' && parseBoolean(body.createUnderbaseFilm, true),
+    edgeRefinement: parseBoolean(body.edgeRefinement, true),
+    curveCleanup: parseBoolean(body.curveCleanup, true),
     paperSize,
     paperOrientation,
     priceIdr: 20000,
@@ -186,6 +190,8 @@ function publicJobSummary(jobId, meta) {
     createdAt: meta.createdAt,
     updatedAt: meta.updatedAt,
     error: meta.error,
+    traceRefinement: meta.traceRefinement,
+    aiRedraw: meta.aiRedraw,
     files: publicFiles(jobId, meta)
   };
 }
@@ -220,9 +226,25 @@ async function processJob(jobId, uploadedBuffer) {
 
     let sourceImagePath = input.cleanInputPath;
     let aiRedrawMetadata = null;
+    let traceRefinementMetadata = null;
     if (meta.settings.inputMode === 'ready_trace') {
+      const rawTraceSourcePath = safeJobPath(jobId, 'trace-source-original.png');
+      let readyTraceRestoreMetadata = null;
+      if (process.env.LOGO_RESTORE_ENABLED !== '0') {
+        const logoRestore = await logoRestoreBuffer(uploadedBuffer, meta.settings);
+        if (logoRestore.canRestore) {
+          await fs.writeFile(rawTraceSourcePath, logoRestore.imageBuffer);
+          readyTraceRestoreMetadata = logoRestore.metadata;
+        }
+      }
+      if (!readyTraceRestoreMetadata) {
+        await fs.copy(input.cleanInputPath, rawTraceSourcePath);
+      }
+
       sourceImagePath = safeJobPath(jobId, 'trace-source.png');
-      await fs.copy(input.cleanInputPath, sourceImagePath);
+      traceRefinementMetadata = await refineTraceSourceImage(rawTraceSourcePath, sourceImagePath, meta.settings);
+      traceRefinementMetadata.mode = 'ready_trace';
+      traceRefinementMetadata.logoRestore = readyTraceRestoreMetadata;
       await fs.copy(sourceImagePath, safeJobPath(jobId, 'preview-full-color.png'));
     } else {
       await updateJob(jobId, {
@@ -233,8 +255,10 @@ async function processJob(jobId, uploadedBuffer) {
       const aiOutputPath = safeJobPath(jobId, 'ai-redraw.png');
       const redrawResult = await redrawWithAI(input.cleanInputPath, aiOutputPath, meta.settings);
       aiRedrawMetadata = redrawResult.metadata || null;
-      sourceImagePath = aiOutputPath;
-      await fs.copy(aiOutputPath, safeJobPath(jobId, 'preview-full-color.png'));
+      sourceImagePath = safeJobPath(jobId, 'trace-source.png');
+      traceRefinementMetadata = await refineTraceSourceImage(aiOutputPath, sourceImagePath, meta.settings);
+      traceRefinementMetadata.mode = 'ai_redraw';
+      await fs.copy(sourceImagePath, safeJobPath(jobId, 'preview-full-color.png'));
     }
 
     let palette = [];
@@ -250,7 +274,8 @@ async function processJob(jobId, uploadedBuffer) {
         progress: 55,
         message: statusMessages.vectorizing,
         prompt: aiRedrawMetadata?.technicalPrompt || undefined,
-        aiRedraw: aiRedrawMetadata || undefined
+        aiRedraw: aiRedrawMetadata || undefined,
+        traceRefinement: traceRefinementMetadata || undefined
       });
 
       const quantized = await quantizeImage(sourceImagePath, {
@@ -275,7 +300,9 @@ async function processJob(jobId, uploadedBuffer) {
       const vectorResult = await vectorizeMasks(masks, {
         width: quantized.width,
         height: quantized.height,
-        outputPath: safeJobPath(jobId, 'full-vector.svg')
+        outputPath: safeJobPath(jobId, 'full-vector.svg'),
+        curveCleanup: meta.settings.curveCleanup === true,
+        edgeRefinement: meta.settings.edgeRefinement === true
       });
       pathsByColor = vectorResult.pathsByColor;
 
@@ -300,7 +327,7 @@ async function processJob(jobId, uploadedBuffer) {
         width: quantized.width,
         height: quantized.height,
         outputDir: jobDir,
-        settings: meta.settings
+        settings: { ...meta.settings, curveCleanup: meta.settings.curveCleanup === true, edgeRefinement: meta.settings.edgeRefinement === true }
       });
     }
 
@@ -354,6 +381,7 @@ async function processJob(jobId, uploadedBuffer) {
       files: publicFiles(jobId, { separations }),
       prompt: aiRedrawMetadata?.technicalPrompt || undefined,
       aiRedraw: aiRedrawMetadata || undefined,
+      traceRefinement: traceRefinementMetadata || undefined,
       palette,
       separations,
       stickerCutline

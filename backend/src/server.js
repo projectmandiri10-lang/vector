@@ -78,7 +78,12 @@ app.get('/api/health', (_req, res) => {
       curveTurdSize: Number.parseFloat(process.env.TRACE_CURVE_TURD_SIZE || '12'),
       curveAlphaMax: Number.parseFloat(process.env.TRACE_CURVE_ALPHA_MAX || '1.25'),
       curveOptTolerance: Number.parseFloat(process.env.TRACE_CURVE_OPT_TOLERANCE || '0.32'),
-      curveFloatPrecision: Number.parseInt(process.env.TRACE_CURVE_FLOAT_PRECISION || '1', 10)
+      curveFloatPrecision: Number.parseInt(process.env.TRACE_CURVE_FLOAT_PRECISION || '1', 10),
+      edgeRefinement: process.env.TRACE_EDGE_REFINEMENT_ENABLED !== '0',
+      edgeSourceScale: Number.parseFloat(process.env.TRACE_EDGE_SOURCE_SCALE || '2'),
+      edgeMaxDimension: Number.parseInt(process.env.TRACE_EDGE_MAX_DIMENSION || '4096', 10),
+      edgeSharpenSigma: Number.parseFloat(process.env.TRACE_EDGE_SHARPEN_SIGMA || '0.35'),
+      edgeNormalizeLighting: process.env.TRACE_EDGE_NORMALIZE_LIGHTING === '1'
     },
     redrawProvider: redrawConfig.provider,
     redrawAnalysisModel: redrawConfig.analysisModel,

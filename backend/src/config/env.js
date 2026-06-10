@@ -13,10 +13,10 @@ dotenv.config({ path: path.join(backendDir, '.env'), override: false });
 
 process.env.OPENROUTER_BASE_URL ||= 'https://openrouter.ai/api/v1';
 process.env.OPENROUTER_ANALYSIS_MODEL ||= '';
-process.env.OPENROUTER_IMAGE_MODEL ||= 'sourceful/riverflow-v2.5-pro:free';
+process.env.OPENROUTER_IMAGE_MODEL ||= 'google/gemini-3.1-flash-image-preview';
 process.env.OPENROUTER_SAFETY_MODEL ||= 'nvidia/nemotron-3.5-content-safety:free';
 process.env.OPENROUTER_IMAGE_QUALITY ||= 'high';
-process.env.OPENROUTER_IMAGE_SIZE ||= '2K';
+process.env.OPENROUTER_IMAGE_SIZE ||= '1K';
 process.env.OPENROUTER_REASONING_EFFORT ||= 'medium';
 process.env.OPENROUTER_BACKGROUND_MODE ||= 'transparent';
 process.env.OPENROUTER_SAFETY_ENABLED ||= '1';

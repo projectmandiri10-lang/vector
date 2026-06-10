@@ -597,6 +597,139 @@ function dilate(binary, width, height, radius) {
   return output;
 }
 
+function erode(binary, width, height, radius) {
+  const output = new Uint8Array(binary.length);
+  const radiusPx = Math.max(1, Math.round(radius));
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      let allActive = true;
+      for (let yy = Math.max(0, y - radiusPx); yy <= Math.min(height - 1, y + radiusPx) && allActive; yy += 1) {
+        for (let xx = Math.max(0, x - radiusPx); xx <= Math.min(width - 1, x + radiusPx); xx += 1) {
+          if (!binary[width * yy + xx]) {
+            allActive = false;
+            break;
+          }
+        }
+      }
+      if (allActive) output[width * y + x] = 1;
+    }
+  }
+  return output;
+}
+
+function findBinaryComponents(binary, width, height) {
+  const visited = new Uint8Array(binary.length);
+  const components = [];
+  for (let start = 0; start < binary.length; start += 1) {
+    if (visited[start] || !binary[start]) continue;
+
+    const stack = [start];
+    const pixels = [];
+    let count = 0;
+    let minX = start % width;
+    let maxX = minX;
+    let minY = Math.floor(start / width);
+    let maxY = minY;
+    visited[start] = 1;
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const x = current % width;
+      const y = Math.floor(current / width);
+      pixels.push(current);
+      count += 1;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+
+      const neighbors = [
+        [x - 1, y],
+        [x + 1, y],
+        [x, y - 1],
+        [x, y + 1]
+      ];
+      for (const [nextX, nextY] of neighbors) {
+        if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue;
+        const next = nextY * width + nextX;
+        if (visited[next] || !binary[next]) continue;
+        visited[next] = 1;
+        stack.push(next);
+      }
+    }
+
+    components.push({
+      pixels,
+      count,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+      boundsArea: (maxX - minX + 1) * (maxY - minY + 1)
+    });
+  }
+  return components;
+}
+
+function refineBinaryForTrace(binary, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const output = new Uint8Array(binary.length);
+  const components = findBinaryComponents(binary, width, height);
+
+  for (const component of components) {
+    if (component.count <= 10 || (component.count <= 48 && (component.width <= 3 || component.height <= 3))) continue;
+
+    const coverage = component.count / totalPixels;
+    const boundsCoverage = component.boundsArea / totalPixels;
+    const isLarge = coverage >= 0.025 || boundsCoverage >= 0.055;
+    const isMedium = coverage >= 0.004 || boundsCoverage >= 0.01;
+    const radius = isLarge || isMedium ? 1 : 1;
+    let mask = new Uint8Array(binary.length);
+    component.pixels.forEach((pixel) => {
+      mask[pixel] = 1;
+    });
+
+    mask = erode(dilate(mask, width, height, radius), width, height, radius);
+    if (isLarge || isMedium) {
+      mask = dilate(erode(mask, width, height, radius), width, height, radius);
+    }
+
+    for (let index = 0; index < mask.length; index += 1) {
+      if (mask[index]) output[index] = 1;
+    }
+  }
+
+  return output;
+}
+
+function refineAssignmentsForTrace(assignments, colors, width, height, settings = {}) {
+  if (settings.edgeRefinement === false) {
+    return {
+      assignments,
+      colors: recomputeColors(assignments, colors, width, height)
+    };
+  }
+
+  const output = new Int16Array(assignments.length);
+  output.fill(-1);
+  const colorsBySize = [...colors].sort((left, right) => right.count - left.count);
+
+  for (const color of colorsBySize) {
+    const colorIndex = color.index - 1;
+    const binary = new Uint8Array(assignments.length);
+    for (let index = 0; index < assignments.length; index += 1) {
+      if (assignments[index] === colorIndex) binary[index] = 1;
+    }
+    const refined = refineBinaryForTrace(binary, width, height);
+    for (let index = 0; index < refined.length; index += 1) {
+      if (refined[index]) output[index] = colorIndex;
+    }
+  }
+
+  const refinedColors = recomputeColors(output, colors, width, height);
+  return refinedColors.length > 0
+    ? { assignments: output, colors: refinedColors }
+    : { assignments, colors: recomputeColors(assignments, colors, width, height) };
+}
+
 function boundaryPaths(binary, width, height) {
   const segments = new Map();
   const add = (x1, y1, x2, y2) => {
@@ -884,8 +1017,9 @@ export async function processImageLocally(file, settings) {
   const assigned = assignPixels(imageData, palette, settings);
   const cleaned = removeEdgeConnectedBackground(assigned.assignments, palette, width, height, settings);
   const limited = enforcePrintableColorLimit(cleaned.assignments, cleaned.colors, settings, width, height);
-  const assignments = limited.assignments;
-  const outputColors = limited.colors;
+  const refined = refineAssignmentsForTrace(limited.assignments, limited.colors, width, height, settings);
+  const assignments = refined.assignments;
+  const outputColors = refined.colors;
   const filmPlan = createFilmPlan(outputColors, width, height, settings);
   const printable = filmPlan.colors;
   const exportColors = settings.removeBackground === true && settings.includeBackgroundInFilmSize !== true ? printable : outputColors;
@@ -1012,6 +1146,7 @@ export async function processImageLocally(file, settings) {
       palette: outputColors,
       separationFilmCount,
       hasStickerCutline: Boolean(stickerCutline),
+      edgeRefinement: settings.edgeRefinement !== false,
       generatedFiles: [
         'preview-full-color.png',
         'full-vector.svg',

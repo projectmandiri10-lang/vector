@@ -10,7 +10,7 @@ import LandingPage, { AboutPage, ContactPage, PrivacyPage, TermsPage } from './c
 import ResultPreview from './components/ResultPreview.jsx';
 import SettingsPanel from './components/SettingsPanel.jsx';
 import UploadBox from './components/UploadBox.jsx';
-import { commitJob, deleteCloudJob, getBalance, listExampleJobs, quoteJob, requestImageRetouch, toUserApiError, uploadExampleArtifacts } from './lib/api.js';
+import { commitJob, deleteCloudJob, getBalance, listExampleJobs, quoteJob, requestImageRetouch, requestReadyTrace, toUserApiError, uploadExampleArtifacts } from './lib/api.js';
 import { createNormalizedImagePreviewBlob } from './lib/imagePreview.js';
 import { deleteHistoryJob, loadHistoryJobs, releaseHistoryJobs, saveHistoryJob } from './lib/localHistoryStore.js';
 import { processImageLocally } from './lib/localProcessor.js';
@@ -61,6 +61,8 @@ const initialSettings = {
   stickerCutlineEnabled: true,
   stickerCutlineOffsetMm: 2,
   createUnderbaseFilm: true,
+  edgeRefinement: true,
+  curveCleanup: true,
   paperSize: 'A4',
   paperOrientation: 'portrait'
 };
@@ -502,6 +504,7 @@ export default function App() {
       let processingFile = file;
       let retouchLedgerId = '';
       let aiRedrawMetadata = null;
+      let readyTraceMetadata = null;
       let backendVectorResult = null;
 
       if (settings.inputMode === INPUT_MODE_RETOUCH) {
@@ -511,6 +514,12 @@ export default function App() {
         retouchLedgerId = retouchResult.retouchLedgerId;
         aiRedrawMetadata = retouchResult.aiRedrawMetadata || null;
         backendVectorResult = retouchResult.localResult || null;
+      } else {
+        setJob(statusJob('processing_image', 'Menjalankan Ready Trace backend dengan edge refinement tanpa AI.', 30));
+        const readyTraceResult = await requestReadyTrace(file, settings, session.access_token);
+        processingFile = readyTraceResult.file || file;
+        backendVectorResult = readyTraceResult.localResult || null;
+        readyTraceMetadata = readyTraceResult.readyTraceMetadata || null;
       }
 
       setJob(
@@ -525,7 +534,8 @@ export default function App() {
       const localResult = backendVectorResult || (await processImageLocally(processingFile, settings));
       const manifest = {
         ...(localResult.manifest || {}),
-        aiRedraw: aiRedrawMetadata
+        aiRedraw: aiRedrawMetadata,
+        readyTrace: readyTraceMetadata || localResult.manifest?.readyTrace || null
       };
       const finalPrice = calculateJobPrice({
         inputMode: settings.inputMode,

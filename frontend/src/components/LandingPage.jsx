@@ -83,7 +83,7 @@ const howItWorks = [
     number: '02',
     icon: Wand2,
     title: 'Pilih Mode',
-    description: 'AI Redesign (Rp 2.500) atau Ready to Trace (Rp 1.000).',
+    description: 'AI Redesign Premium (Rp 5.000) atau Trace + Edge Refinement (Rp 2.500).',
     detail: 'Pilih output: Sablon atau Sticker'
   },
   {
@@ -98,16 +98,16 @@ const howItWorks = [
 const pricingCards = [
   {
     title: 'AI Redesign',
-    price: 2500,
+    price: 5000,
     description: 'Untuk gambar yang belum rapih, perlu analisis AI dan redesign ulang',
     icon: Sparkles,
     popular: true,
-    features: ['VLM Analysis', 'AI Image Generation', 'Sablon + Sticker mode', 'High Quality Output', 'Hasil dalam 1-3 menit']
+    features: ['AI Image-to-Image', 'Safety Check', 'Sablon + Sticker mode', 'High Quality Output', 'Hasil dalam 1-3 menit']
   },
   {
-    title: 'Ready to Trace',
-    price: 1000,
-    description: 'Untuk gambar yang sudah siap diproses langsung',
+    title: 'Trace + Edge Refinement',
+    price: 2500,
+    description: 'Untuk gambar cukup jelas yang ingin diproses tanpa AI dengan edge refinement',
     icon: Zap,
     popular: false,
     features: ['Direct Processing', 'Sablon + Sticker mode', 'High Quality Output', 'Fast Processing (30-60s)', 'Hemat budget']
@@ -119,27 +119,27 @@ const creditPackages = [
     name: 'Paket Basic',
     credits: 2,
     price: 5000,
-    pricePerCredit: 2500,
-    callout: 'Lakukan 2 proses dengan 1 paket basic!',
-    aiRedesign: 2,
-    readyToTrace: 5
+    pricePerCredit: 5000,
+    callout: 'Cukup untuk 1 AI Redesign atau 2 Ready Trace.',
+    aiRedesign: 1,
+    readyToTrace: 2
   },
   {
     name: 'Paket Standard',
     credits: 4,
     price: 10000,
-    pricePerCredit: 2500,
-    aiRedesign: 4,
-    readyToTrace: 10
+    pricePerCredit: 5000,
+    aiRedesign: 2,
+    readyToTrace: 4
   },
   {
     name: 'Paket Premium',
     credits: 10,
     price: 25000,
-    pricePerCredit: 2500,
+    pricePerCredit: 5000,
     highlight: true,
-    aiRedesign: 10,
-    readyToTrace: 25
+    aiRedesign: 5,
+    readyToTrace: 10
   }
 ];
 
@@ -149,7 +149,7 @@ const testimonials = [
     role: 'Pemilik Konveksi',
     initials: 'BS',
     quote:
-      'Hasil redesign logonya sangat bersih dan siap sablon. Dulu saya harus bayar desainer lumayan mahal, sekarang cukup Rp 2.500 per gambar.',
+      'Hasil redesign logonya sangat bersih dan siap sablon. Dulu saya harus bayar desainer lumayan mahal, sekarang cukup Rp 5.000 per gambar.',
     rating: 5
   },
   {
@@ -179,12 +179,12 @@ const faqItems = [
   {
     question: 'Berapa harga per gambar?',
     answer:
-      'Kami menawarkan dua mode harga: AI Redesign seharga Rp 2.500 per gambar dan Ready to Trace seharga Rp 1.000 per gambar. Anda dapat membeli credit dalam paket melalui Shopee.'
+      'Kami menawarkan dua mode harga: AI Redesign Premium seharga Rp 5.000 per gambar dan Trace + Edge Refinement seharga Rp 2.500 per gambar. Anda dapat membeli credit dalam paket melalui Shopee.'
   },
   {
     question: 'Apa perbedaan AI Redesign dan Ready to Trace?',
     answer:
-      'AI Redesign menggunakan analisis AI untuk membuat ulang desain dari nol. Ready to Trace memproses gambar langsung tanpa redesign ulang, cocok untuk logo yang sudah cukup bersih.'
+      'AI Redesign Premium menggunakan image-to-image untuk menggambar ulang desain sulit. Trace + Edge Refinement memproses gambar tanpa AI dengan cleanup tepi sebelum vector trace, cocok untuk logo yang sudah cukup jelas.'
   },
   {
     question: 'Format output apa saja?',
@@ -342,8 +342,8 @@ const termsSections = [
     icon: Server,
     title: '3. Layanan',
     list: [
-      'AI Redesign: Rp 2.500 per gambar',
-      'Ready to Trace: Rp 1.000 per gambar',
+      'AI Redesign Premium: Rp 5.000 per gambar',
+      'Ready to Trace: Rp 2.500 per gambar',
       'Output sablon dan sticker',
       'Penyimpanan hasil pada galeri pribadi pengguna'
     ],
@@ -816,7 +816,7 @@ function PublicFooter({ onNavigate }) {
 function HeroSection({ onStart }) {
   const floatingBadges = [
     { label: 'AI Powered', icon: Sparkles, tone: 'text-primary border-primary/20', position: 'right-[8%] top-[12%] sm:right-[12%] sm:top-[15%]', delay: '0s' },
-    { label: 'Rp 2.500', icon: Zap, tone: 'text-chart-3 border-chart-3/20', position: 'left-[5%] top-[25%] sm:left-[8%] sm:top-[30%]', delay: '1.3s' },
+    { label: 'Rp 5.000', icon: Zap, tone: 'text-chart-3 border-chart-3/20', position: 'left-[5%] top-[25%] sm:left-[8%] sm:top-[30%]', delay: '1.3s' },
     { label: '5 Credit Gratis', icon: Star, tone: 'text-chart-2 border-chart-2/20', position: 'right-[15%] bottom-[18%] sm:right-[18%] sm:bottom-[20%]', delay: '2.6s' }
   ];
 
@@ -911,7 +911,7 @@ function HeroSection({ onStart }) {
               </div>
             </div>
             <div className="mt-5 flex items-center justify-between text-xs text-mutedForeground">
-              <span className="rounded-full border border-chart-3/20 bg-white/5 px-3 py-1 text-chart-3">Rp 2.500</span>
+              <span className="rounded-full border border-chart-3/20 bg-white/5 px-3 py-1 text-chart-3">Rp 5.000</span>
               <span className="rounded-full border border-primary/20 bg-white/5 px-3 py-1 text-primary">5 Credit Gratis</span>
             </div>
           </div>

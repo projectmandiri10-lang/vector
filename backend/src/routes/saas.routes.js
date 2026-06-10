@@ -5,7 +5,7 @@ import { Readable } from 'node:stream';
 import workerApi from '../../../cloudflare-worker/src/index.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { hybridRedrawBuffer } from '../services/aiRedraw.service.js';
-import { createLogoRestoreArtifacts } from '../services/logoRestore.service.js';
+import { createLogoRestoreArtifacts, createTraceArtifactsFromImage, logoRestoreBuffer } from '../services/logoRestore.service.js';
 
 const router = express.Router();
 const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
@@ -116,7 +116,7 @@ async function creditBalance(userId) {
 }
 
 async function getPricing() {
-  const defaults = { ready_trace: 1000, ai_redraw: 2500, separation_film: 1000 };
+  const defaults = { ready_trace: 2500, ai_redraw: 5000, separation_film: 1000 };
   try {
     const rows = await supabaseFetch('/rest/v1/pricing_rules?select=key,amount_idr,active,description&order=key.asc', {});
     return rows.reduce(
@@ -317,8 +317,8 @@ async function imageRetouchHandler(req, res, next) {
       const aiRedrawModel = settings.aiRedrawModel || (await getAiRedrawModelConfig());
       const result = await hybridRedrawBuffer(req.file.buffer, settings, aiRedrawModel);
       const encodedMetadata = encodeMetadataHeader(result.metadata);
-      if (result.metadata?.provider === 'logo_restore_trace_first') {
-        const artifactResult = await createLogoRestoreArtifacts({
+      try {
+        const artifactResult = await createTraceArtifactsFromImage({
           imageBuffer: result.imageBuffer,
           settings,
           metadata: result.metadata
@@ -332,6 +332,10 @@ async function imageRetouchHandler(req, res, next) {
           retouchLedgerId: ledger?.id || ''
         });
         return;
+      } catch (artifactError) {
+        if (result.metadata?.provider === 'logo_restore_trace_first') {
+          throw artifactError;
+        }
       }
 
       res.setHeader('Content-Type', 'image/png');
@@ -361,6 +365,53 @@ async function imageRetouchHandler(req, res, next) {
 }
 
 export { imageRetouchHandler };
+
+async function readyTraceHandler(req, res, next) {
+  try {
+    await requireUser(req);
+    if (!req.file?.buffer) throw new Error('File gambar wajib diisi.');
+
+    const settings = {
+      ...JSON.parse(req.body?.settings || '{}'),
+      inputMode: 'ready_trace',
+      edgeRefinement: true,
+      curveCleanup: true
+    };
+    let imageBuffer = req.file.buffer;
+    let metadata = {
+      provider: 'ready_trace_edge_refinement',
+      generationModel: 'none',
+      generationQuality: 'deterministic',
+      note: 'Ready Trace backend: no AI, edge refinement before vector trace.'
+    };
+
+    if (process.env.LOGO_RESTORE_ENABLED !== '0') {
+      const logoRestore = await logoRestoreBuffer(req.file.buffer, settings);
+      if (logoRestore.canRestore) {
+        imageBuffer = logoRestore.imageBuffer;
+        metadata = {
+          ...metadata,
+          ...logoRestore.metadata,
+          readyTraceProvider: 'ready_trace_edge_refinement',
+          note: 'Ready Trace backend used deterministic Logo Restore before edge refinement.'
+        };
+      }
+    }
+
+    const artifactResult = await createLogoRestoreArtifacts({
+      imageBuffer,
+      settings,
+      metadata
+    });
+    res.setHeader('Content-Type', 'application/json');
+    res.json({
+      ...artifactResult,
+      readyTraceMetadata: metadata
+    });
+  } catch (error) {
+    next(error);
+  }
+}
 
 async function submitContactHandler(req, res, next) {
   try {
@@ -430,6 +481,7 @@ router.post('/api/jobs/commit', workerHandler);
 router.get('/api/example-jobs', workerHandler);
 router.post('/api/image-retouch', handleUpload, imageRetouchHandler);
 router.post('/api/ai-redraw', handleUpload, imageRetouchHandler);
+router.post('/api/ready-trace', handleUpload, readyTraceHandler);
 router.post('/api/jobs/:jobId/artifacts', workerHandler);
 router.delete('/api/jobs/:jobId', authenticatedWorkerHandler);
 router.all('/api/admin/users', workerHandler);

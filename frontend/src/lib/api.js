@@ -226,6 +226,34 @@ export async function requestImageRetouch(file, settings, accessToken) {
   };
 }
 
+export async function requestReadyTrace(file, settings, accessToken) {
+  const formData = new FormData();
+  formData.append('image', file);
+  formData.append('settings', JSON.stringify(settings));
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}/api/ready-trace`, {
+      method: 'POST',
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
+      body: formData
+    });
+  } catch (error) {
+    throw toUserApiError(error, 'Koneksi ke layanan trace belum tersambung. Periksa URL API aplikasi.');
+  }
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || 'Ready Trace backend gagal.');
+  }
+
+  const data = await response.json();
+  const hydrated = hydrateBackendRetouchResult(data, settings);
+  return {
+    file: hydrated.pngFile || file,
+    localResult: hydrated.localResult,
+    readyTraceMetadata: data.readyTraceMetadata || null
+  };
+}
+
 export async function listAdminUsers(accessToken) {
   return apiFetch('/api/admin/users', { accessToken });
 }

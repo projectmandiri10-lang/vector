@@ -20,8 +20,9 @@ function integerFromEnv(key, fallback, min, max) {
 }
 
 function traceCurveCleanupEnabled(options = {}) {
+  if (options.edgeRefinement === false) return false;
   if (options.curveCleanup === false) return false;
-  return options.curveCleanup === true && process.env.TRACE_CURVE_CLEANUP_ENABLED !== '0';
+  return (options.curveCleanup === true || options.edgeRefinement === true) && process.env.TRACE_CURVE_CLEANUP_ENABLED !== '0';
 }
 
 function traceOptions(options = {}) {
@@ -91,6 +92,113 @@ function morphMask(mask, width, height, radius, mode) {
   return output;
 }
 
+function findMaskComponents(mask, width, height) {
+  const visited = new Uint8Array(mask.length);
+  const components = [];
+
+  for (let start = 0; start < mask.length; start += 1) {
+    if (visited[start] || !mask[start]) continue;
+
+    const stack = [start];
+    const pixels = [];
+    let count = 0;
+    let minX = start % width;
+    let maxX = minX;
+    let minY = Math.floor(start / width);
+    let maxY = minY;
+    visited[start] = 1;
+
+    while (stack.length > 0) {
+      const current = stack.pop();
+      const x = current % width;
+      const y = Math.floor(current / width);
+      pixels.push(current);
+      count += 1;
+      minX = Math.min(minX, x);
+      maxX = Math.max(maxX, x);
+      minY = Math.min(minY, y);
+      maxY = Math.max(maxY, y);
+
+      const neighbors = [
+        [x - 1, y],
+        [x + 1, y],
+        [x, y - 1],
+        [x, y + 1]
+      ];
+      for (const [nextX, nextY] of neighbors) {
+        if (nextX < 0 || nextY < 0 || nextX >= width || nextY >= height) continue;
+        const next = nextY * width + nextX;
+        if (visited[next] || !mask[next]) continue;
+        visited[next] = 1;
+        stack.push(next);
+      }
+    }
+
+    components.push({
+      pixels,
+      count,
+      width: maxX - minX + 1,
+      height: maxY - minY + 1,
+      boundsArea: (maxX - minX + 1) * (maxY - minY + 1)
+    });
+  }
+
+  return components;
+}
+
+function shouldDropTraceComponent(component, totalPixels) {
+  const minPixels = integerFromEnv('TRACE_EDGE_MIN_COMPONENT_PIXELS', 10, 0, 1000);
+  if (component.count <= minPixels) return true;
+  if (component.count <= 48 && (component.width <= 3 || component.height <= 3)) return true;
+  return component.count / Math.max(1, totalPixels) < numberFromEnv('TRACE_EDGE_MIN_COMPONENT_RATIO', 0.000012, 0, 0.01);
+}
+
+function cleanupComponentMask(componentMask, width, height, radius, iterations, allowOpen) {
+  let output = componentMask;
+  for (let iteration = 0; iteration < iterations; iteration += 1) {
+    output = morphMask(output, width, height, radius, 'dilate');
+    output = morphMask(output, width, height, radius, 'erode');
+    if (allowOpen) {
+      output = morphMask(output, width, height, radius, 'erode');
+      output = morphMask(output, width, height, radius, 'dilate');
+    }
+  }
+  return output;
+}
+
+function refineMaskByComponent(mask, width, height) {
+  const totalPixels = Math.max(1, width * height);
+  const components = findMaskComponents(mask, width, height);
+  const output = new Uint8Array(mask.length);
+  const baseRadius = integerFromEnv('TRACE_CURVE_MORPH_RADIUS', 1, 1, 3);
+  const baseIterations = integerFromEnv('TRACE_CURVE_MORPH_ITERATIONS', 1, 1, 3);
+  const largeRatio = numberFromEnv('TRACE_EDGE_LARGE_COMPONENT_RATIO', 0.025, 0.001, 0.5);
+  const mediumRatio = numberFromEnv('TRACE_EDGE_MEDIUM_COMPONENT_RATIO', 0.004, 0.0001, 0.25);
+
+  for (const component of components) {
+    if (shouldDropTraceComponent(component, totalPixels)) continue;
+
+    const coverage = component.count / totalPixels;
+    const boundsCoverage = component.boundsArea / totalPixels;
+    const isLarge = coverage >= largeRatio || boundsCoverage >= largeRatio * 2.2;
+    const isMedium = coverage >= mediumRatio || boundsCoverage >= mediumRatio * 2.5;
+    const radius = isLarge || isMedium ? baseRadius : 1;
+    const iterations = isLarge ? baseIterations : 1;
+    const allowOpen = isLarge || isMedium;
+    const componentMask = new Uint8Array(mask.length);
+    component.pixels.forEach((pixel) => {
+      componentMask[pixel] = 1;
+    });
+
+    const cleaned = cleanupComponentMask(componentMask, width, height, radius, iterations, allowOpen);
+    for (let index = 0; index < cleaned.length; index += 1) {
+      if (cleaned[index]) output[index] = 1;
+    }
+  }
+
+  return output;
+}
+
 function writeMaskToPng(mask, width, height) {
   const png = new PNG({ width, height, colorType: 6 });
   for (let index = 0; index < mask.length; index += 1) {
@@ -105,17 +213,8 @@ function writeMaskToPng(mask, width, height) {
 }
 
 async function cleanupCurveMask(filePath, outputPath, options = {}) {
-  const radius = integerFromEnv('TRACE_CURVE_MORPH_RADIUS', 1, 1, 3);
-  const iterations = integerFromEnv('TRACE_CURVE_MORPH_ITERATIONS', 1, 1, 3);
   const png = await readPng(filePath);
-  let mask = activeMaskPixels(png);
-
-  for (let iteration = 0; iteration < iterations; iteration += 1) {
-    mask = morphMask(mask, png.width, png.height, radius, 'dilate');
-    mask = morphMask(mask, png.width, png.height, radius, 'erode');
-    mask = morphMask(mask, png.width, png.height, radius, 'erode');
-    mask = morphMask(mask, png.width, png.height, radius, 'dilate');
-  }
+  const mask = refineMaskByComponent(activeMaskPixels(png), png.width, png.height);
 
   await writePng(writeMaskToPng(mask, png.width, png.height), outputPath);
 }

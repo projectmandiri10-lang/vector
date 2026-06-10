@@ -17,6 +17,7 @@ import { createLogoRestoreArtifacts, logoRestoreBuffer } from '../services/logoR
 import { createMasksForPalette, quantizeImage } from '../services/quantize.service.js';
 import { buildSeparationSvg, createFilmPlan, createSeparations } from '../services/separation.service.js';
 import { createStickerCutline } from '../services/stickerCutline.service.js';
+import { refineTraceSourceImage } from '../services/traceRefinement.service.js';
 import { canonicalizeSpotPixel, colorDistance, isLowChroma, isNearWhite, nearestColorIndex, rgbToHex } from '../utils/colors.js';
 import { buildPrintLayout, getPaperSizeMm } from '../utils/paper.js';
 import { createRegistrationMarks } from '../utils/registrationMarks.js';
@@ -143,21 +144,21 @@ test('standard prompt prioritizes faithful color matching', () => {
   assert.match(prompt, /no jagged steps, no broken edges, and no accidental gaps/);
 });
 
-test('OpenRouter Riverflow config defaults to Riverflow generator and Nemotron safety', () => {
+test('OpenRouter Gemini config defaults to Gemini generator and Nemotron safety', () => {
   const config = normalizeHybridRedrawConfig({}, {});
 
-  assert.equal(config.provider, 'openrouter_riverflow_image');
+  assert.equal(config.provider, 'openrouter_gemini_image');
   assert.equal(config.analysisModel, '');
-  assert.equal(config.generationModel, 'sourceful/riverflow-v2.5-pro:free');
+  assert.equal(config.generationModel, 'google/gemini-3.1-flash-image-preview');
   assert.equal(config.safetyModel, 'nvidia/nemotron-3.5-content-safety:free');
   assert.equal(config.generationQuality, 'high');
-  assert.equal(config.imageSize, '2K');
+  assert.equal(config.imageSize, '1K');
   assert.equal(config.reasoningEffort, 'medium');
   assert.equal(config.backgroundMode, 'transparent');
   assert.equal(config.safetyEnabled, true);
 });
 
-test('OpenRouter Riverflow config accepts env overrides', () => {
+test('OpenRouter Gemini config accepts env overrides', () => {
   const config = normalizeHybridRedrawConfig(
     {},
     {
@@ -170,7 +171,7 @@ test('OpenRouter Riverflow config accepts env overrides', () => {
     }
   );
 
-  assert.equal(config.provider, 'openrouter_riverflow_image');
+  assert.equal(config.provider, 'openrouter_gemini_image');
   assert.equal(config.generationModel, 'custom/image-model');
   assert.equal(config.safetyModel, 'custom/safety-model');
   assert.equal(config.imageSize, '4K');
@@ -200,14 +201,14 @@ test('OpenRouter safety request sends normalized original and cleaned trace targ
   assert.match(userContent.map((part) => part.text || '').join(' '), /cleaned trace target/);
 });
 
-test('Riverflow image generation request sends image input, image config, reasoning, and strict redraw instructions', () => {
+test('Gemini image generation request sends image input, image config, reasoning, and strict redraw instructions', () => {
   const request = buildOpenRouterImageGenerationRequest(
     'Strict vector redraw prompt.',
     {
-      generationModel: 'sourceful/riverflow-v2.5-pro:free',
+      generationModel: 'google/gemini-3.1-flash-image-preview',
       generationQuality: 'high',
       resolutionPolicy: 'high',
-      imageSize: '2K',
+      imageSize: '1K',
       reasoningEffort: 'medium',
       backgroundMode: 'transparent'
     },
@@ -216,15 +217,16 @@ test('Riverflow image generation request sends image input, image config, reason
 
   const content = request.messages[0].content;
   const promptText = content.find((part) => part.type === 'text').text;
-  assert.equal(request.model, 'sourceful/riverflow-v2.5-pro:free');
+  assert.equal(request.model, 'google/gemini-3.1-flash-image-preview');
   assert.deepEqual(request.modalities, ['image', 'text']);
   assert.equal(request.image_config.background_mode, 'transparent');
-  assert.equal(request.image_config.image_size, '2K');
+  assert.equal(request.image_config.image_size, '1K');
   assert.match(request.image_config.scoring_prompt, /Score high/);
   assert.match(request.image_config.scoring_rubric, /manual-vector-like/);
   assert.deepEqual(request.reasoning, { effort: 'medium' });
   assert.equal(content.filter((part) => part.type === 'image_url').length, 1);
   assert.match(promptText, /not as OCR, scan repair, sharpening, enhancement, upscaling/);
+  assert.match(promptText, /Do not trace or preserve the jagged pixel boundary/);
   assert.match(promptText, /smooth closed contours/);
   assert.match(promptText, /Preserve exact readable text/);
   assert.match(promptText, /flat color fills/);
@@ -811,6 +813,8 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(settings.stickerCutlineEnabled, true);
   assert.equal(settings.stickerCutlineOffsetMm, 2);
   assert.equal(settings.createUnderbaseFilm, false);
+  assert.equal(settings.edgeRefinement, true);
+  assert.equal(settings.curveCleanup, true);
 
   const includeBackground = validateSettings({ includeBackgroundInFilmSize: 'true' });
   assert.equal(includeBackground.includeBackgroundInFilmSize, true);
@@ -832,8 +836,50 @@ test('validateSettings normalizes print sizing options', () => {
   assert.equal(readyTrace.maxColors, 3);
   assert.equal(readyTrace.stickerCutlineOffsetMm, 1.5);
 
+  const noRefinement = validateSettings({ edgeRefinement: 'false', curveCleanup: 'false' });
+  assert.equal(noRefinement.edgeRefinement, false);
+  assert.equal(noRefinement.curveCleanup, false);
+
   const sablon = validateSettings({ productionType: 'sablon' });
   assert.equal(sablon.createUnderbaseFilm, true);
+});
+
+test('refineTraceSourceImage upsamples trace source before vector trace', async () => {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'vectorizer-trace-refine-test-'));
+  const previousScale = process.env.TRACE_EDGE_SOURCE_SCALE;
+  const previousMax = process.env.TRACE_EDGE_MAX_DIMENSION;
+  try {
+    process.env.TRACE_EDGE_SOURCE_SCALE = '2';
+    process.env.TRACE_EDGE_MAX_DIMENSION = '1024';
+    const sourcePath = path.join(tempDir, 'source.png');
+    const outputPath = path.join(tempDir, 'refined.png');
+    const png = new PNG({ width: 12, height: 8, colorType: 6 });
+    png.data.fill(255);
+    for (let y = 2; y < 6; y += 1) {
+      for (let x = 3; x < 9; x += 1) {
+        const idx = (png.width * y + x) << 2;
+        png.data[idx] = 0;
+        png.data[idx + 1] = 0;
+        png.data[idx + 2] = 0;
+        png.data[idx + 3] = 255;
+      }
+    }
+    await fs.writeFile(sourcePath, PNG.sync.write(png));
+
+    const refined = await refineTraceSourceImage(sourcePath, outputPath, { edgeRefinement: true });
+    const output = PNG.sync.read(await fs.readFile(outputPath));
+
+    assert.equal(refined.enabled, true);
+    assert.equal(refined.scale, 2);
+    assert.equal(output.width, 24);
+    assert.equal(output.height, 16);
+  } finally {
+    if (previousScale === undefined) delete process.env.TRACE_EDGE_SOURCE_SCALE;
+    else process.env.TRACE_EDGE_SOURCE_SCALE = previousScale;
+    if (previousMax === undefined) delete process.env.TRACE_EDGE_MAX_DIMENSION;
+    else process.env.TRACE_EDGE_MAX_DIMENSION = previousMax;
+    await fs.remove(tempDir);
+  }
 });
 
 test('paper sizing converts A4/A3 orientation and rejects oversized artwork', () => {

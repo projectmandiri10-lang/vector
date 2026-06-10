@@ -1,7 +1,8 @@
+export const OPENROUTER_GEMINI_REDRAW_PROVIDER = 'openrouter_gemini_image';
 export const OPENROUTER_RIVERFLOW_REDRAW_PROVIDER = 'openrouter_riverflow_image';
-export const HYBRID_REDRAW_PROVIDER = OPENROUTER_RIVERFLOW_REDRAW_PROVIDER;
+export const HYBRID_REDRAW_PROVIDER = OPENROUTER_GEMINI_REDRAW_PROVIDER;
 
-export const DEFAULT_OPENROUTER_IMAGE_MODEL = 'sourceful/riverflow-v2.5-pro:free';
+export const DEFAULT_OPENROUTER_IMAGE_MODEL = 'google/gemini-3.1-flash-image-preview';
 export const DEFAULT_OPENROUTER_SAFETY_MODEL = 'nvidia/nemotron-3.5-content-safety:free';
 
 export const HYBRID_REDRAW_PRESETS = {
@@ -9,7 +10,7 @@ export const HYBRID_REDRAW_PRESETS = {
     mode: 'budget',
     preset: 'budget',
     label: 'Hemat',
-    provider: OPENROUTER_RIVERFLOW_REDRAW_PROVIDER,
+    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
@@ -24,18 +25,18 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0,
-    note: 'Eksperimen Riverflow image-to-image gratis dengan safety gate Nemotron.'
+    note: 'OpenRouter Gemini image redraw 1K dengan safety gate Nemotron.'
   },
   standard: {
     mode: 'standard',
     preset: 'standard',
     label: 'Standar',
-    provider: OPENROUTER_RIVERFLOW_REDRAW_PROVIDER,
+    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
     generationQuality: 'high',
-    imageSize: '2K',
+    imageSize: '1K',
     reasoningEffort: 'medium',
     backgroundMode: 'transparent',
     safetyEnabled: true,
@@ -45,18 +46,18 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0,
-    note: 'Riverflow direct image-to-image memakai cleaned trace target dan prompt redraw ketat.'
+    note: 'Gemini direct image-to-image memakai cleaned trace target dan prompt redraw ketat.'
   },
   quality: {
     mode: 'quality',
     preset: 'quality',
     label: 'Kualitas',
-    provider: OPENROUTER_RIVERFLOW_REDRAW_PROVIDER,
+    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
     generationQuality: 'high',
-    imageSize: '2K',
+    imageSize: '1K',
     reasoningEffort: 'medium',
     backgroundMode: 'transparent',
     safetyEnabled: true,
@@ -66,18 +67,18 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: false,
     estimatedUsdPerImage: 0,
-    note: 'Default eksperimen Riverflow V2.5 Pro image-to-image + Nemotron safety untuk redraw halus siap trace.'
+    note: 'Default OpenRouter Gemini 3.1 Flash Image Preview 1K + Nemotron safety untuk redraw halus siap trace.'
   },
   premium: {
     mode: 'premium',
     preset: 'premium',
     label: 'Premium',
-    provider: OPENROUTER_RIVERFLOW_REDRAW_PROVIDER,
+    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
     analysisModel: '',
     generationModel: DEFAULT_OPENROUTER_IMAGE_MODEL,
     safetyModel: DEFAULT_OPENROUTER_SAFETY_MODEL,
     generationQuality: 'high',
-    imageSize: '4K',
+    imageSize: '1K',
     reasoningEffort: 'high',
     backgroundMode: 'transparent',
     safetyEnabled: true,
@@ -87,7 +88,7 @@ export const HYBRID_REDRAW_PRESETS = {
     persistPrompt: true,
     retryOnLowConfidence: true,
     estimatedUsdPerImage: 0,
-    note: 'Riverflow dengan reasoning lebih tinggi untuk eksperimen kualitas, tetap lewat safety gate Nemotron.'
+    note: 'Gemini 1K dengan reasoning lebih tinggi untuk eksperimen kualitas, tetap lewat safety gate Nemotron.'
   }
 };
 
@@ -153,13 +154,14 @@ export function normalizeHybridRedrawConfig(value = {}, env = {}) {
   const input = isObject(value) ? value : {};
   const presetKey = inferPreset(input, env);
   const preset = HYBRID_REDRAW_PRESETS[presetKey] || HYBRID_REDRAW_PRESETS.quality;
-  const acceptsCustomModels = input.provider === OPENROUTER_RIVERFLOW_REDRAW_PROVIDER;
+  const acceptsCustomModels = input.provider === OPENROUTER_GEMINI_REDRAW_PROVIDER;
+  const customInput = acceptsCustomModels ? input : {};
 
   return {
     mode: preset.mode,
     preset: preset.mode,
     label: normalizeText(input.label, preset.label),
-    provider: OPENROUTER_RIVERFLOW_REDRAW_PROVIDER,
+    provider: OPENROUTER_GEMINI_REDRAW_PROVIDER,
     analysisModel: acceptsCustomModels
       ? normalizeOptionalText(input.analysisModel, normalizeOptionalText(env.OPENROUTER_ANALYSIS_MODEL, preset.analysisModel))
       : normalizeOptionalText(env.OPENROUTER_ANALYSIS_MODEL, preset.analysisModel),
@@ -169,17 +171,17 @@ export function normalizeHybridRedrawConfig(value = {}, env = {}) {
     safetyModel: acceptsCustomModels
       ? normalizeText(input.safetyModel, normalizeText(env.OPENROUTER_SAFETY_MODEL, preset.safetyModel))
       : normalizeText(env.OPENROUTER_SAFETY_MODEL, preset.safetyModel),
-    generationQuality: normalizeGenerationQuality(input.generationQuality || env.OPENROUTER_IMAGE_QUALITY, preset.generationQuality),
-    imageSize: normalizeImageSize(input.imageSize || env.OPENROUTER_IMAGE_SIZE, preset.imageSize),
-    reasoningEffort: normalizeReasoningEffort(input.reasoningEffort || env.OPENROUTER_REASONING_EFFORT, preset.reasoningEffort),
-    backgroundMode: normalizeBackgroundMode(input.backgroundMode || env.OPENROUTER_BACKGROUND_MODE, preset.backgroundMode),
-    safetyEnabled: normalizeBoolean(input.safetyEnabled ?? env.OPENROUTER_SAFETY_ENABLED, preset.safetyEnabled),
+    generationQuality: normalizeGenerationQuality(customInput.generationQuality || env.OPENROUTER_IMAGE_QUALITY, preset.generationQuality),
+    imageSize: normalizeImageSize(customInput.imageSize || env.OPENROUTER_IMAGE_SIZE, preset.imageSize),
+    reasoningEffort: normalizeReasoningEffort(customInput.reasoningEffort || env.OPENROUTER_REASONING_EFFORT, preset.reasoningEffort),
+    backgroundMode: normalizeBackgroundMode(customInput.backgroundMode || env.OPENROUTER_BACKGROUND_MODE, preset.backgroundMode),
+    safetyEnabled: normalizeBoolean(customInput.safetyEnabled ?? env.OPENROUTER_SAFETY_ENABLED, preset.safetyEnabled),
     aspectPolicy: normalizeText(input.aspectPolicy, preset.aspectPolicy),
     resolutionPolicy: normalizeText(input.resolutionPolicy, preset.resolutionPolicy),
     preprocess: normalizeText(input.preprocess, preset.preprocess),
     persistPrompt: input.persistPrompt !== false,
-    retryOnLowConfidence: input.retryOnLowConfidence === true || preset.retryOnLowConfidence === true,
-    estimatedUsdPerImage: clampEstimatedUsd(input.estimatedUsdPerImage, preset.estimatedUsdPerImage),
-    note: normalizeText(input.note, preset.note)
+    retryOnLowConfidence: customInput.retryOnLowConfidence === true || preset.retryOnLowConfidence === true,
+    estimatedUsdPerImage: clampEstimatedUsd(customInput.estimatedUsdPerImage, preset.estimatedUsdPerImage),
+    note: normalizeText(customInput.note, preset.note)
   };
 }
