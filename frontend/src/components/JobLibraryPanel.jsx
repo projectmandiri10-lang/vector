@@ -212,9 +212,20 @@ export default function JobLibraryPanel({
   exampleError = '',
   onDeleteJob,
   deletingJobId = '',
-  currentUserId = ''
+  currentUserId = '',
+  selectedKey: controlledSelectedKey,
+  onSelectedKeyChange
 }) {
-  const [selectedKey, setSelectedKey] = useState('');
+  const [internalSelectedKey, setInternalSelectedKey] = useState('');
+  const selectedKey = controlledSelectedKey ?? internalSelectedKey;
+
+  function setSelectedKey(nextKey) {
+    if (typeof onSelectedKeyChange === 'function') {
+      onSelectedKeyChange(nextKey);
+      return;
+    }
+    setInternalSelectedKey(nextKey);
+  }
 
   const items = useMemo(() => {
     const localItems = (historyJobs || []).map((item) => normalizeHistoryItem(item, currentUserId));

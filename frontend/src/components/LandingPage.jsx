@@ -66,6 +66,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { submitContactMessage } from '../lib/api.js';
 import { IMAGE_RETOUCH_PRICE_IDR, READY_PROCESS_PRICE_IDR, formatRupiah } from '../lib/pricing.js';
 
+const SUPPORT_PHONE = '085156861485';
+const SUPPORT_WHATSAPP = SUPPORT_PHONE;
+const SUPPORT_EMAIL_LABEL = 'Belum tersedia saat ini';
+
 const heroStats = [
   { icon: Star, value: '500+', label: 'Logo Diproses', accent: 'text-chart-3' },
   { icon: Sparkles, value: '98%', label: 'Kepuasan', accent: 'text-primary' },
@@ -327,7 +331,7 @@ const privacySections = [
   {
     icon: Mail,
     title: '9. Kontak Kami',
-    list: ['Email: support@ailogoredesign.com', 'WhatsApp: +62 812-xxxx-xxxx', 'Halaman Kontak: ailogoredesign.com/contact'],
+    list: [`Telepon: ${SUPPORT_PHONE}`, `WhatsApp: ${SUPPORT_WHATSAPP}`, `Email: ${SUPPORT_EMAIL_LABEL}`],
     afterList: ['Kebijakan Privasi ini terakhir diperbarui pada 10 Juni 2026.']
   }
 ];
@@ -449,7 +453,7 @@ const termsSections = [
   {
     icon: Mail,
     title: '11. Kontak',
-    list: ['Email: support@ailogoredesign.com', 'WhatsApp: +62 812-xxxx-xxxx', 'Halaman Kontak: ailogoredesign.com/contact'],
+    list: [`Telepon: ${SUPPORT_PHONE}`, `WhatsApp: ${SUPPORT_WHATSAPP}`, `Email: ${SUPPORT_EMAIL_LABEL}`],
     afterList: ['Syarat dan Ketentuan ini terakhir diperbarui pada 10 Juni 2026.']
   }
 ];
@@ -458,7 +462,7 @@ const contactFaq = [
   { question: 'Berapa lama proses AI Redesign?', answer: 'Biasanya 30 detik hingga 2 menit tergantung kompleksitas gambar.' },
   { question: 'Format gambar apa yang didukung?', answer: 'Kami mendukung JPG, PNG, dan WebP dengan ukuran maksimal 10MB.' },
   { question: 'Apakah credit bisa dikembalikan?', answer: 'Credit yang sudah digunakan tidak dapat dikembalikan kecuali jika proses gagal karena kesalahan sistem.' },
-  { question: 'Bagaimana cara menghubungi support?', answer: 'Anda bisa mengisi formulir di bawah atau mengirim email ke support@ailogoredesign.com.' }
+  { question: 'Bagaimana cara menghubungi support?', answer: `Anda bisa mengisi formulir di bawah atau menghubungi WhatsApp/telepon ${SUPPORT_PHONE}. Email support belum tersedia saat ini.` }
 ];
 
 const contactSubjects = [
@@ -1621,8 +1625,9 @@ function ContactPage({ onNavigate }) {
           <div className="glass-card rounded-3xl p-6">
             <h3 className="text-lg font-semibold text-foreground">Info Kontak</h3>
             <div className="mt-4 space-y-3 text-sm text-mutedForeground">
-              <p>Email: support@ailogoredesign.com</p>
-              <p>WhatsApp: +62 812-xxxx-xxxx</p>
+              <p>Telepon: {SUPPORT_PHONE}</p>
+              <p>WhatsApp: {SUPPORT_WHATSAPP}</p>
+              <p>Email: {SUPPORT_EMAIL_LABEL}</p>
               <p>Jam kerja: Senin - Jumat, 09.00 - 17.00 WIB</p>
             </div>
           </div>

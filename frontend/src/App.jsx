@@ -213,6 +213,9 @@ export default function App() {
   const [file, setFile] = useState(null);
   const [settings, setSettings] = useState(initialSettings);
   const [job, setJob] = useState(null);
+  const [appSection, setAppSection] = useState('process');
+  const [historySelectedKey, setHistorySelectedKey] = useState('');
+  const [historyNotice, setHistoryNotice] = useState('');
   const [jobError, setJobError] = useState('');
   const [suggestedInputMode, setSuggestedInputMode] = useState('');
   const [authCallbackError, setAuthCallbackError] = useState('');
@@ -458,6 +461,9 @@ export default function App() {
     setSession(null);
     setBalance(null);
     setJob(null);
+    setAppSection('process');
+    setHistorySelectedKey('');
+    setHistoryNotice('');
     setView('app');
     replaceHistoryJobs([]);
     setHistoryError('');
@@ -492,6 +498,7 @@ export default function App() {
 
     setJobError('');
     setSuggestedInputMode('');
+    setHistoryNotice('');
     setIsSubmitting(true);
     setJob(statusJob('preprocessing', 'Menyiapkan file lokal.', 10));
 
@@ -579,6 +586,13 @@ export default function App() {
           job: completedJob
         });
         await refreshHistory();
+        setHistorySelectedKey(completedJob.jobId);
+        setAppSection('history');
+        setHistoryNotice('Job selesai diproses dan dipindahkan ke riwayat agar halaman proses tetap bersih.');
+        setFile(null);
+        setJob(null);
+        setJobError('');
+        setSuggestedInputMode('');
       } catch (historySaveError) {
         setHistoryError(historySaveError instanceof Error ? historySaveError.message : 'Riwayat lokal tidak bisa disimpan di browser ini.');
       }
@@ -722,65 +736,125 @@ export default function App() {
         <form className="mx-auto grid max-w-6xl gap-4 px-4 py-5 sm:px-6 lg:grid-cols-[minmax(0,1fr)_380px]" onSubmit={handleSubmit}>
           <div className="space-y-4">
             <AccountPanel session={session} balance={balance} balanceError={balanceError} onRefreshBalance={refreshBalance} onSignOut={signOut} />
-            <UploadBox
-              file={file}
-              previewUrl={previewUrl}
-              inputMode={settings.inputMode}
-              onInputModeChange={(inputMode) => {
-                setFile(null);
-                setJobError('');
-                setSuggestedInputMode('');
-                setSettings((current) => ({
-                  ...current,
-                  inputMode,
-                  makeVector: inputMode === INPUT_MODE_READY ? true : current.makeVector,
-                  separateColors:
-                    inputMode === INPUT_MODE_READY && current.productionType === 'sablon' ? true : current.separateColors,
-                  stickerCutlineEnabled:
-                    inputMode === INPUT_MODE_READY && current.productionType === 'sticker' ? true : current.stickerCutlineEnabled
-                }));
-              }}
-              onFileChange={setFile}
-              disabled={isBusy}
-            />
-            <JobLibraryPanel
-              historyJobs={historyJobs}
-              exampleJobs={exampleJobs}
-              historyError={historyError}
-              exampleError={exampleError}
-              onDeleteJob={handleDeleteLibraryJob}
-              deletingJobId={deletingLibraryJobId}
-              currentUserId={session.user.id}
-            />
-            <JobStatus
-              job={job}
-              error={jobError}
-              suggestedInputMode={suggestedInputMode}
-              onUseSuggestedMode={() => {
-                setSettings((current) => ({ ...current, inputMode: INPUT_MODE_RETOUCH }));
-                setJobError('');
-                setSuggestedInputMode('');
-              }}
-            />
-            <ResultPreview
-              job={job}
-              sourcePreviewUrl={previewUrl}
-              sourcePreviewLabel={file?.name ? `Preview awal: ${file.name}` : 'Preview gambar awal'}
-              onDelete={() => setJob(null)}
-              isDeleting={false}
-            />
+            <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: 'process', label: 'Proses Baru' },
+                  { key: 'history', label: 'Riwayat Job' }
+                ].map((section) => (
+                  <button
+                    key={section.key}
+                    type="button"
+                    onClick={() => {
+                      setAppSection(section.key);
+                      if (section.key === 'process') {
+                        setHistoryNotice('');
+                      }
+                    }}
+                    className={`inline-flex min-h-10 items-center justify-center border px-3 py-2 text-sm font-semibold transition ${
+                      appSection === section.key ? 'border-spruce bg-spruce text-white' : 'border-line bg-white text-ink hover:border-spruce'
+                    }`}
+                  >
+                    {section.label}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            {appSection === 'process' ? (
+              <>
+                <UploadBox
+                  file={file}
+                  previewUrl={previewUrl}
+                  inputMode={settings.inputMode}
+                  onInputModeChange={(inputMode) => {
+                    setFile(null);
+                    setJobError('');
+                    setSuggestedInputMode('');
+                    setSettings((current) => ({
+                      ...current,
+                      inputMode,
+                      makeVector: inputMode === INPUT_MODE_READY ? true : current.makeVector,
+                      separateColors:
+                        inputMode === INPUT_MODE_READY && current.productionType === 'sablon' ? true : current.separateColors,
+                      stickerCutlineEnabled:
+                        inputMode === INPUT_MODE_READY && current.productionType === 'sticker' ? true : current.stickerCutlineEnabled
+                    }));
+                  }}
+                  onFileChange={setFile}
+                  disabled={isBusy}
+                />
+                <JobStatus
+                  job={job}
+                  error={jobError}
+                  suggestedInputMode={suggestedInputMode}
+                  onUseSuggestedMode={() => {
+                    setSettings((current) => ({ ...current, inputMode: INPUT_MODE_RETOUCH }));
+                    setJobError('');
+                    setSuggestedInputMode('');
+                  }}
+                />
+                <ResultPreview
+                  job={job}
+                  sourcePreviewUrl={previewUrl}
+                  sourcePreviewLabel={file?.name ? `Preview awal: ${file.name}` : 'Preview gambar awal'}
+                  onDelete={() => setJob(null)}
+                  isDeleting={false}
+                />
+              </>
+            ) : (
+              <>
+                {historyNotice && (
+                  <section className="border border-spruce bg-primary/5 px-4 py-3 text-sm text-ink shadow-sm">
+                    {historyNotice}
+                  </section>
+                )}
+                <JobLibraryPanel
+                  historyJobs={historyJobs}
+                  exampleJobs={exampleJobs}
+                  historyError={historyError}
+                  exampleError={exampleError}
+                  onDeleteJob={handleDeleteLibraryJob}
+                  deletingJobId={deletingLibraryJobId}
+                  currentUserId={session.user.id}
+                  selectedKey={historySelectedKey}
+                  onSelectedKeyChange={setHistorySelectedKey}
+                />
+              </>
+            )}
           </div>
 
           <aside className="space-y-4 lg:sticky lg:top-5 lg:self-start">
-            <SettingsPanel settings={settings} inputMode={settings.inputMode} onChange={setSettings} disabled={isBusy} />
-            <button
-              type="submit"
-              disabled={!canSubmit}
-              className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300 disabled:text-gray-600"
-            >
-              <Wand2 className="h-5 w-5" aria-hidden="true" />
-              <span>{isBusy ? 'Sedang memproses' : 'Proses dan debit credit'}</span>
-            </button>
+            {appSection === 'process' ? (
+              <>
+                <SettingsPanel settings={settings} inputMode={settings.inputMode} onChange={setSettings} disabled={isBusy} />
+                <button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className="inline-flex min-h-12 w-full items-center justify-center gap-2 border border-spruce bg-spruce px-4 py-3 text-sm font-bold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-300 disabled:text-gray-600"
+                >
+                  <Wand2 className="h-5 w-5" aria-hidden="true" />
+                  <span>{isBusy ? 'Sedang memproses' : 'Proses dan debit credit'}</span>
+                </button>
+              </>
+            ) : (
+              <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
+                <h2 className="text-base font-semibold text-ink">Riwayat aktif</h2>
+                <p className="mt-2 text-sm leading-6 text-gray-600">
+                  Job yang selesai dipindahkan ke halaman ini supaya area proses tetap fokus untuk upload berikutnya.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAppSection('process');
+                    setHistoryNotice('');
+                  }}
+                  className="mt-4 inline-flex min-h-10 w-full items-center justify-center border border-spruce bg-white px-3 py-2 text-sm font-semibold text-spruce transition hover:bg-primary/5"
+                >
+                  Kembali ke Proses Baru
+                </button>
+              </section>
+            )}
           </aside>
         </form>
       )}
