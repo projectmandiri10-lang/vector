@@ -88,15 +88,14 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
               type="button"
               disabled={disabled}
               onClick={() => onInputModeChange(option.value)}
-              className={`border p-3 text-left transition ${
+              className={`border px-3 py-2.5 text-left transition ${
                 isActive ? 'border-spruce bg-primary/5 shadow-sm' : 'border-line bg-white hover:border-spruce/50'
               } disabled:opacity-60`}
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-sm font-black text-ink">{option.title}</h3>
-                  <p className="mt-2 text-xs leading-5 text-gray-700">{option.description}</p>
-                  <p className="mt-2 text-[11px] font-medium text-gray-500">{option.helper}</p>
+                  <p className="mt-1.5 text-xs leading-5 text-gray-700">{option.description}</p>
                 </div>
                 <div className="shrink-0 text-right">
                   <p className="text-base font-black text-spruce">{formatRupiah(option.priceIdr)}/gambar</p>
@@ -108,17 +107,14 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
         })}
       </div>
 
-      <div className="mb-3 border border-spruce bg-primary/5 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-xs font-semibold uppercase tracking-wide text-spruce">Mode aktif</p>
-            <h3 className="mt-1 text-sm font-black text-ink">{activeOption.title}</h3>
-            <p className="mt-1 text-xs leading-5 text-gray-700">{activeOption.helper}</p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-base font-black text-spruce">{formatRupiah(activeOption.priceIdr)}/gambar</p>
-            <p className="text-xs text-gray-600">{activeOption.badge}</p>
-          </div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border border-spruce/30 bg-primary/5 px-3 py-2">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-spruce">Mode aktif</p>
+          <p className="text-xs text-gray-700">
+            <span className="font-semibold text-ink">{activeOption.title}</span>
+            {' - '}
+            {activeOption.helper}
+          </p>
         </div>
         {file && (
           <button
@@ -129,7 +125,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
               setPreviewFailed(false);
               onFileChange(null);
             }}
-            className="mt-3 inline-flex min-h-9 items-center justify-center border border-line bg-white px-3 py-2 text-xs font-semibold text-ink hover:border-spruce disabled:opacity-60"
+            className="inline-flex min-h-8 items-center justify-center border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink hover:border-spruce disabled:opacity-60"
           >
             Kosongkan file
           </button>
