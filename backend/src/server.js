@@ -15,6 +15,15 @@ import { cleanupOldJobs, ensureStorage, markInterruptedJobsFailed } from './util
 export const app = express();
 app.set('trust proxy', 1);
 
+function currentBuildInfo() {
+  return {
+    commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || '',
+    branch: process.env.RAILWAY_GIT_BRANCH || '',
+    deploymentId: process.env.RAILWAY_DEPLOYMENT_ID || '',
+    serviceName: process.env.RAILWAY_SERVICE_NAME || ''
+  };
+}
+
 app.use(
   helmet({
     crossOriginResourcePolicy: { policy: 'cross-origin' },
@@ -55,10 +64,12 @@ app.get('/api/runtime-config.js', (_req, res) => {
 
 app.get('/api/health', (_req, res) => {
   const redrawConfig = normalizeHybridRedrawConfig({}, process.env);
+  const build = currentBuildInfo();
   res.json({
     ok: true,
     service: 'ai-redraw-vector-backend',
     runtime: process.env.FLY_APP_NAME ? 'fly' : process.env.K_SERVICE ? 'cloud-run' : 'node',
+    build,
     processorAuth: processorAuthEnabled(),
     processorAuthRequired: processorAuthRequired(),
     trace: {
@@ -143,6 +154,9 @@ if (shouldListen) {
 
   const port = Number(process.env.PORT || 3001);
   app.listen(port, () => {
-    console.log(`Backend berjalan di http://localhost:${port}`);
+    const build = currentBuildInfo();
+    console.log(
+      `Backend berjalan di http://localhost:${port} (commit=${build.commitSha || 'unknown'}, deployment=${build.deploymentId || 'unknown'})`
+    );
   });
 }
