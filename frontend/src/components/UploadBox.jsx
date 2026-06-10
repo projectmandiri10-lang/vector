@@ -23,6 +23,8 @@ const modeOptions = [
 export default function UploadBox({ file, previewUrl, inputMode, onInputModeChange, onFileChange, disabled }) {
   const [previewFailed, setPreviewFailed] = useState(false);
   const hasPreview = Boolean(file && previewUrl);
+  const activeOption = modeOptions.find((option) => option.value === inputMode) || modeOptions[0];
+  const secondaryOption = modeOptions.find((option) => option.value !== activeOption.value) || null;
 
   function handleChange(event) {
     const nextFile = event.target.files?.[0];
@@ -41,23 +43,28 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
         <h2 className="text-base font-semibold text-ink">Upload gambar</h2>
       </div>
 
-      <div className="mb-3 grid gap-2 md:grid-cols-2">
-        {modeOptions.map((option) => (
+      <div className="mb-3 border border-spruce bg-primary/5 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-spruce">Mode aktif</p>
+            <h3 className="mt-1 text-sm font-black text-ink">{activeOption.title}</h3>
+            <p className="mt-1 text-xs leading-5 text-gray-700">{activeOption.description}</p>
+          </div>
+          <div className="shrink-0 text-right">
+            <p className="text-base font-black text-spruce">{formatRupiah(activeOption.priceIdr)}/gambar</p>
+            <p className="text-xs text-gray-600">{inputMode === INPUT_MODE_READY ? 'Vector-only' : 'AI redraw'}</p>
+          </div>
+        </div>
+        {secondaryOption && (
           <button
-            key={option.value}
             type="button"
             disabled={disabled}
-            onClick={() => onInputModeChange(option.value)}
-            className={`border px-3 py-3 text-left transition ${
-              inputMode === option.value ? 'border-spruce bg-primary/5 text-ink' : 'border-line bg-white text-gray-700 hover:border-spruce'
-            } ${disabled ? 'cursor-not-allowed opacity-60' : ''}`}
-            aria-pressed={inputMode === option.value}
+            onClick={() => onInputModeChange(secondaryOption.value)}
+            className="mt-3 inline-flex min-h-9 items-center justify-center border border-line bg-white px-3 py-2 text-xs font-semibold text-ink hover:border-spruce disabled:opacity-60"
           >
-            <span className="block text-sm font-semibold">{option.title}</span>
-            <span className="mt-1 block text-base font-black text-spruce">{formatRupiah(option.priceIdr)}/gambar</span>
-            <span className="mt-1 block text-xs leading-5 text-gray-600">{option.description}</span>
+            {inputMode === INPUT_MODE_READY ? 'Pindah ke AI Redraw Premium' : 'Pindah ke Siap Trace Vector'}
           </button>
-        ))}
+        )}
       </div>
 
       <label
