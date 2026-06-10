@@ -41,12 +41,16 @@ export default function ResultPreview({
   subheading = '',
   onDelete,
   isDeleting = false,
-  showDelete = true
+  showDelete = true,
+  historyView = false
 }) {
   if (!job || job.status !== 'done') return null;
   const files = job.files || {};
   const settings = job.settings || {};
   const isVectorReadyMode = settings.inputMode === INPUT_MODE_READY;
+  const showFullColorDownloads = !(historyView && isVectorReadyMode);
+  const showStickerCutlinePreview = historyView && isVectorReadyMode && settings.productionType === 'sticker';
+  const showSeparationPreviewTitle = historyView && isVectorReadyMode && settings.productionType === 'sablon';
 
   return (
     <section className="border border-line bg-white p-4 shadow-sm sm:p-5">
@@ -79,21 +83,40 @@ export default function ResultPreview({
       )}
 
       {isVectorReadyMode && (
-        <div className="border border-line bg-panel px-3 py-2 text-sm text-gray-700">
-          Mode Vector Siap Proses menampilkan file hasil akhir saja agar halaman tetap ringkas.
-        </div>
+        <>
+          <div className="border border-line bg-panel px-3 py-2 text-sm text-gray-700">
+            Mode Vector Siap Proses menampilkan hasil produksi utama agar halaman tetap ringkas.
+          </div>
+          {showStickerCutlinePreview && (
+            <div className="mt-4 grid gap-4">
+              <PreviewCard
+                title="Preview cutting sticker"
+                icon={Scissors}
+                src={files.stickerCutlineSvg}
+                alt="Preview cutting sticker"
+                notice={`Ukuran cetak: area sticker ${settings.actualWidthCm} cm. Kertas ${settings.paperSize} ${settings.paperOrientation === 'landscape' ? 'Landscape' : 'Portrait'}.`}
+              />
+            </div>
+          )}
+        </>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <DownloadButton href={files.fullPng} icon={FileImage}>
-          Download PNG
-        </DownloadButton>
-        <DownloadButton href={files.fullSvg} icon={FileText}>
-          Download SVG full color
-        </DownloadButton>
-        <DownloadButton href={files.fullPdf} icon={FileText}>
-          Download PDF full color
-        </DownloadButton>
+        {showFullColorDownloads && (
+          <DownloadButton href={files.fullPng} icon={FileImage}>
+            Download PNG
+          </DownloadButton>
+        )}
+        {showFullColorDownloads && (
+          <DownloadButton href={files.fullSvg} icon={FileText}>
+            Download SVG full color
+          </DownloadButton>
+        )}
+        {showFullColorDownloads && (
+          <DownloadButton href={files.fullPdf} icon={FileText}>
+            Download PDF full color
+          </DownloadButton>
+        )}
         <DownloadButton href={files.stickerCutlineSvg} icon={Scissors}>
           Download SVG sticker cutline
         </DownloadButton>
@@ -123,7 +146,7 @@ export default function ResultPreview({
         <div className="mt-6">
           <div className="mb-3 flex items-center gap-2">
             <Palette className="h-5 w-5 text-spruce" aria-hidden="true" />
-            <h3 className="text-sm font-semibold text-ink">Daftar film sablon</h3>
+            <h3 className="text-sm font-semibold text-ink">{showSeparationPreviewTitle ? 'Preview separasi warna' : 'Daftar film sablon'}</h3>
           </div>
           <div className="grid gap-3 lg:grid-cols-2">
             {files.separations.map((film) => (

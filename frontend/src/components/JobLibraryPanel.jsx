@@ -290,6 +290,7 @@ export default function JobLibraryPanel({
             sourcePreviewUrl={selectedItem.sourcePreviewUrl}
             sourcePreviewLabel={selectedItem.sourceFileName ? `Preview awal: ${selectedItem.sourceFileName}` : 'Preview gambar awal'}
             heading={selectedItem.isExample ? 'Detail contoh pekerjaan' : 'Detail riwayat job'}
+            historyView={true}
             subheading={`${productionLabels[selectedItem.productionType] || selectedItem.productionType} · ${inputModeLabels[selectedItem.inputMode] || selectedItem.inputMode}`}
             showDelete={selectedItem.canDelete}
             onDelete={selectedItem.canDelete ? () => onDeleteJob(selectedItem) : undefined}
