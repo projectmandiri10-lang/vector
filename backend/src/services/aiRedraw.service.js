@@ -357,6 +357,16 @@ function exposeAiError(error) {
   return error;
 }
 
+function annotateAiError(error, aiStage) {
+  error.aiStage = aiStage;
+  return exposeAiError(error);
+}
+
+function annotateOpenRouterError(error, aiStage, openRouterPath) {
+  if (openRouterPath) error.openRouterPath = openRouterPath;
+  return annotateAiError(error, aiStage);
+}
+
 function openRouterBaseUrl() {
   return (process.env.OPENROUTER_BASE_URL || 'https://openrouter.ai/api/v1').replace(/\/+$/, '');
 }
@@ -367,7 +377,7 @@ function openRouterApiKey() {
     const error = new Error('OPENROUTER_API_KEY belum dikonfigurasi.');
     error.status = 500;
     error.upstream = 'openrouter';
-    throw exposeAiError(error);
+    throw annotateAiError(error, 'openrouter_api_key');
   }
   return apiKey;
 }
@@ -405,13 +415,13 @@ async function openRouterJsonFetch(path, body) {
         error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
         error.upstream = 'openrouter';
         error.responseText = text.slice(0, 500);
-        throw exposeAiError(error);
+        throw annotateOpenRouterError(error, 'openrouter_json_fetch_non_json_error', path);
       }
       const error = new Error('Respons OpenRouter tidak valid JSON.');
       error.status = 502;
       error.upstream = 'openrouter';
       error.responseText = text.slice(0, 500);
-      throw exposeAiError(error);
+      throw annotateOpenRouterError(error, 'openrouter_json_fetch_invalid_json', path);
     }
   }
   if (!response.ok) {
@@ -422,7 +432,8 @@ async function openRouterJsonFetch(path, body) {
     const error = new Error(message);
     error.status = response.status >= 400 && response.status < 500 ? response.status : 502;
     error.upstream = 'openrouter';
-    throw exposeAiError(error);
+    error.responseText = text.slice(0, 500);
+    throw annotateOpenRouterError(error, 'openrouter_json_fetch_http_error', path);
   }
   return data;
 }
@@ -847,7 +858,7 @@ async function downloadOpenRouterImageResult(imageUrl) {
         const error = new Error(`URL hasil OpenRouter image model tidak mengembalikan file gambar (${contentType}).`);
         error.status = 502;
         error.upstream = 'openrouter';
-        throw exposeAiError(error);
+        throw annotateAiError(error, 'openrouter_image_download_bad_content_type');
       }
 
       return Buffer.from(await imageResponse.arrayBuffer());
@@ -861,11 +872,11 @@ async function downloadOpenRouterImageResult(imageUrl) {
     lastError.responseText = responseText.slice(0, 500);
 
     if (!isRetryableStatus || attempt === retryDelaysMs.length - 1) {
-      throw exposeAiError(lastError);
+      throw annotateAiError(lastError, 'openrouter_image_download_http_error');
     }
   }
 
-  throw exposeAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter image model.'), { status: 502, upstream: 'openrouter' }));
+  throw annotateAiError(lastError || Object.assign(new Error('Gagal mengunduh hasil OpenRouter image model.'), { status: 502, upstream: 'openrouter' }), 'openrouter_image_download_unknown');
 }
 
 async function bufferFromOpenRouterImageReference(imageReference) {
@@ -884,7 +895,7 @@ async function bufferFromOpenRouterImageReference(imageReference) {
   const error = new Error('OpenRouter image model mengembalikan referensi gambar yang tidak dikenali.');
   error.status = 502;
   error.upstream = 'openrouter';
-  throw exposeAiError(error);
+  throw annotateAiError(error, 'openrouter_image_reference_unknown');
 }
 
 function shouldFallbackOpenRouterImage(error) {
@@ -913,7 +924,7 @@ async function generateOpenRouterImageOnce(technicalPrompt, aiConfig, preprocess
     );
     error.status = 502;
     error.upstream = 'openrouter';
-    throw exposeAiError(error);
+    throw annotateAiError(error, 'openrouter_image_no_image_reference');
   }
 
   const imageBuffer = await bufferFromOpenRouterImageReference(imageReference);

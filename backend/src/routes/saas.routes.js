@@ -15,6 +15,32 @@ const readyTraceMimeTypes = new Set(['image/svg+xml']);
 const readyTraceExt = new Set(['.svg']);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 10);
 
+function requestIdFromHeaders(headers = {}) {
+  return headers['x-request-id'] || headers['x-railway-request-id'] || headers['cf-ray'] || '';
+}
+
+function summarizeError(error) {
+  if (!error) return null;
+  return {
+    message: error.message || 'Unknown error',
+    status: error.status || error.statusCode || 500,
+    upstream: error.upstream || '',
+    aiStage: error.aiStage || '',
+    openRouterPath: error.openRouterPath || '',
+    responseText: typeof error.responseText === 'string' ? error.responseText.slice(0, 500) : '',
+    stack: typeof error.stack === 'string' ? error.stack.split('\n').slice(0, 6).join('\n') : ''
+  };
+}
+
+function logSaasError(tag, payload) {
+  console.error(
+    `[saas:${tag}] ${JSON.stringify({
+      timestamp: new Date().toISOString(),
+      ...payload
+    })}`
+  );
+}
+
 function createUploadMiddleware({ mimeTypes, extensions, invalidMessage }) {
   return multer({
     storage: multer.memoryStorage(),
@@ -358,6 +384,7 @@ async function imageRetouchHandler(req, res, next) {
     if (!req.file?.buffer) throw new Error('File gambar wajib diisi.');
 
     const settings = JSON.parse(req.body?.settings || '{}');
+    const requestId = requestIdFromHeaders(req.headers);
     let ledger = null;
     if (!profile.is_unlimited) {
       ledger = await insertLedger({
@@ -399,23 +426,65 @@ async function imageRetouchHandler(req, res, next) {
       res.setHeader('X-AI-Redraw-Metadata', encodedMetadata);
       res.send(result.imageBuffer);
     } catch (error) {
+      let refundError = null;
       if (ledger?.id) {
-        await insertLedger({
-          userId: user.id,
-          amountIdr: pricing.ai_redraw,
-          kind: 'credit',
-          reason: 'ai_redraw_refund',
-          referenceId: ledger.id,
-          metadata: {
-            inputMode: settings.inputMode,
-            productionType: settings.productionType,
-            refundedLedgerId: ledger.id
-          }
-        });
+        try {
+          await insertLedger({
+            userId: user.id,
+            amountIdr: pricing.ai_redraw,
+            kind: 'credit',
+            reason: 'ai_redraw_refund',
+            referenceId: ledger.id,
+            metadata: {
+              inputMode: settings.inputMode,
+              productionType: settings.productionType,
+              refundedLedgerId: ledger.id
+            }
+          });
+        } catch (insertError) {
+          refundError = insertError;
+          logSaasError('image_retouch_refund_failed', {
+            requestId,
+            userId: user.id,
+            ledgerId: ledger.id,
+            fileName: req.file?.originalname || '',
+            fileSize: req.file?.size || 0,
+            inputMode: settings.inputMode || '',
+            productionType: settings.productionType || '',
+            aiModel: settings.aiRedrawModel?.generationModel || '',
+            error: summarizeError(insertError)
+          });
+        }
       }
+      error.refundError = refundError ? summarizeError(refundError) : null;
+      logSaasError('image_retouch_failed', {
+        requestId,
+        userId: user.id,
+        isUnlimited: profile.is_unlimited === true,
+        ledgerId: ledger?.id || '',
+        fileName: req.file?.originalname || '',
+        fileMimeType: req.file?.mimetype || '',
+        fileSize: req.file?.size || 0,
+        inputMode: settings.inputMode || '',
+        productionType: settings.productionType || '',
+        aiModel: settings.aiRedrawModel?.generationModel || '',
+        error: summarizeError(error),
+        refundError: error.refundError
+      });
+      error.loggedImageRetouchFailure = true;
       throw error;
     }
   } catch (error) {
+    const status = error.status || error.statusCode || 500;
+    if (!error.loggedImageRetouchFailure && (status >= 500 || error.upstream)) {
+      logSaasError('image_retouch_request_failed', {
+        requestId: requestIdFromHeaders(req.headers),
+        fileName: req.file?.originalname || '',
+        fileMimeType: req.file?.mimetype || '',
+        fileSize: req.file?.size || 0,
+        error: summarizeError(error)
+      });
+    }
     next(error);
   }
 }
