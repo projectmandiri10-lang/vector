@@ -2,11 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { AI_REDRAW_PRICE_IDR, READY_TRACE_PRICE_IDR, SEPARATION_FILM_PRICE_IDR, calculateJobPrice } from './pricing.js';
 
-test('ready trace costs Rp2.500', () => {
+test('ready trace costs Rp2.000', () => {
   assert.equal(calculateJobPrice({ inputMode: 'ready_trace' }), READY_TRACE_PRICE_IDR);
 });
 
-test('image retouch costs Rp5.000 before separations', () => {
+test('image retouch costs Rp3.000 before separations', () => {
   assert.equal(calculateJobPrice({ inputMode: 'ai_redraw' }), AI_REDRAW_PRICE_IDR);
 });
 

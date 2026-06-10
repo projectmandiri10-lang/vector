@@ -11,7 +11,7 @@ import {
 import { HYBRID_REDRAW_PRESETS, normalizeHybridRedrawConfig } from '../../shared/hybridRedrawConfig.js';
 
 const DEFAULT_PRICING = {
-  ready_trace: 2500,
+  ready_trace: 2000,
   ai_redraw: AI_REDRAW_PRICE_IDR,
   separation_film: 0
 };

@@ -517,7 +517,7 @@ export default function App() {
         aiRedrawMetadata = retouchResult.aiRedrawMetadata || null;
         backendVectorResult = retouchResult.localResult || null;
       } else {
-        setJob(statusJob('processing_image', 'Menjalankan jalur vector-only backend untuk pisah warna dan contour sticker.', 30));
+        setJob(statusJob('processing_image', 'Menjalankan jalur Vector Siap Proses untuk pisah warna dan contour sticker.', 30));
         const readyTraceResult = await requestReadyTrace(file, settings, session.access_token);
         processingFile = readyTraceResult.file || file;
         backendVectorResult = readyTraceResult.localResult || null;
@@ -726,7 +726,10 @@ export default function App() {
               file={file}
               previewUrl={previewUrl}
               inputMode={settings.inputMode}
-              onInputModeChange={(inputMode) =>
+              onInputModeChange={(inputMode) => {
+                setFile(null);
+                setJobError('');
+                setSuggestedInputMode('');
                 setSettings((current) => ({
                   ...current,
                   inputMode,
@@ -735,8 +738,8 @@ export default function App() {
                     inputMode === INPUT_MODE_READY && current.productionType === 'sablon' ? true : current.separateColors,
                   stickerCutlineEnabled:
                     inputMode === INPUT_MODE_READY && current.productionType === 'sticker' ? true : current.stickerCutlineEnabled
-                }))
-              }
+                }));
+              }}
               onFileChange={setFile}
               disabled={isBusy}
             />

@@ -1,4 +1,5 @@
 import { AlertTriangle, CheckCircle2, Loader2, Wand2 } from 'lucide-react';
+import { IMAGE_RETOUCH_PRICE_IDR, formatRupiah } from '../lib/pricing.js';
 
 const labels = {
   uploaded: 'Gambar diterima',
@@ -40,7 +41,7 @@ export default function JobStatus({ job, error, suggestedInputMode, onUseSuggest
               className="mt-3 inline-flex min-h-10 items-center gap-2 border border-spruce bg-spruce px-3 py-2 text-sm font-bold text-white hover:bg-primary/90"
             >
               <Wand2 className="h-4 w-4" aria-hidden="true" />
-              Gunakan AI Redraw Premium Rp5.000
+              {`Gunakan AI Redraw Premium ${formatRupiah(IMAGE_RETOUCH_PRICE_IDR)}`}
             </button>
           )}
           <div className="mt-3 h-2 overflow-hidden bg-panel">

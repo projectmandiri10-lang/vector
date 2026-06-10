@@ -1,39 +1,74 @@
 import { ImagePlus, UploadCloud, X } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { INPUT_MODE_READY, INPUT_MODE_RETOUCH } from '../lib/modes.js';
 import { formatRupiah, IMAGE_RETOUCH_PRICE_IDR, READY_PROCESS_PRICE_IDR } from '../lib/pricing.js';
 
-const acceptedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+const rasterMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const rasterExtensions = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const readyTraceMimeTypes = new Set(['image/svg+xml']);
+const readyTraceExtensions = new Set(['.svg']);
 
 const modeOptions = [
   {
     value: INPUT_MODE_RETOUCH,
     title: 'Gambar perlu digambar ulang',
     description: 'Untuk foto buram, scan, atau logo yang perlu dirapikan sebelum diproses.',
-    priceIdr: IMAGE_RETOUCH_PRICE_IDR
+    priceIdr: IMAGE_RETOUCH_PRICE_IDR,
+    helper: 'Upload JPG, PNG, atau WebP. Cocok untuk foto logo yang masih perlu dibersihkan.',
+    accept: 'image/png,image/jpeg,image/webp',
+    badge: 'Raster + AI'
   },
   {
     value: INPUT_MODE_READY,
-    title: 'Siap Trace Vector',
-    description: 'Tanpa AI. Jalur vector-only untuk pisah warna, outline sticker, dan trace siap produksi.',
-    priceIdr: READY_PROCESS_PRICE_IDR
+    title: 'Vector Siap Proses',
+    description: 'Tanpa AI. Khusus file vector murni untuk pisah warna dan contour sticker.',
+    priceIdr: READY_PROCESS_PRICE_IDR,
+    helper: 'Upload SVG vector murni. EPS/AI akan mengikuti jalur ini setelah parser dedicated diaktifkan.',
+    accept: '.svg,image/svg+xml',
+    badge: 'Vector only'
   }
 ];
 
 export default function UploadBox({ file, previewUrl, inputMode, onInputModeChange, onFileChange, disabled }) {
   const [previewFailed, setPreviewFailed] = useState(false);
+  const [uploadError, setUploadError] = useState('');
   const hasPreview = Boolean(file && previewUrl);
-  const activeOption = modeOptions.find((option) => option.value === inputMode) || modeOptions[0];
-  const secondaryOption = modeOptions.find((option) => option.value !== activeOption.value) || null;
+  const activeOption = useMemo(() => modeOptions.find((option) => option.value === inputMode) || modeOptions[0], [inputMode]);
+
+  useEffect(() => {
+    setUploadError('');
+  }, [inputMode]);
+
+  function getExtension(name = '') {
+    const lastDot = name.lastIndexOf('.');
+    return lastDot >= 0 ? name.slice(lastDot).toLowerCase() : '';
+  }
+
+  function validateFile(nextFile) {
+    const extension = getExtension(nextFile.name);
+    if (inputMode === INPUT_MODE_READY) {
+      if (readyTraceExtensions.has(extension) && (!nextFile.type || readyTraceMimeTypes.has(nextFile.type))) return '';
+      return 'Vector Siap Proses hanya menerima file vector SVG. EPS/AI belum aktif di server.';
+    }
+    if (rasterExtensions.has(extension) && (!nextFile.type || rasterMimeTypes.has(nextFile.type))) return '';
+    return 'Mode gambar ulang hanya menerima JPG, PNG, atau WebP.';
+  }
 
   function handleChange(event) {
     const nextFile = event.target.files?.[0];
     if (!nextFile) return;
+    const validationMessage = validateFile(nextFile);
+    if (validationMessage) {
+      setUploadError(validationMessage);
+      event.target.value = '';
+      return;
+    }
+    setUploadError('');
     setPreviewFailed(false);
     onFileChange(nextFile);
   }
 
-  const isValidType = file ? acceptedTypes.includes(file.type) : true;
+  const isValidType = !uploadError;
   const isValidSize = file ? file.size <= 10 * 1024 * 1024 : true;
 
   return (
@@ -43,26 +78,59 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
         <h2 className="text-base font-semibold text-ink">Upload gambar</h2>
       </div>
 
+      <div className="mb-4 grid gap-3 sm:grid-cols-2">
+        {modeOptions.map((option) => {
+          const isActive = option.value === inputMode;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onInputModeChange(option.value)}
+              className={`border p-3 text-left transition ${
+                isActive ? 'border-spruce bg-primary/5 shadow-sm' : 'border-line bg-white hover:border-spruce/50'
+              } disabled:opacity-60`}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h3 className="text-sm font-black text-ink">{option.title}</h3>
+                  <p className="mt-2 text-xs leading-5 text-gray-700">{option.description}</p>
+                  <p className="mt-2 text-[11px] font-medium text-gray-500">{option.helper}</p>
+                </div>
+                <div className="shrink-0 text-right">
+                  <p className="text-base font-black text-spruce">{formatRupiah(option.priceIdr)}/gambar</p>
+                  <p className="text-[11px] text-gray-600">{option.badge}</p>
+                </div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="mb-3 border border-spruce bg-primary/5 p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="text-xs font-semibold uppercase tracking-wide text-spruce">Mode aktif</p>
             <h3 className="mt-1 text-sm font-black text-ink">{activeOption.title}</h3>
-            <p className="mt-1 text-xs leading-5 text-gray-700">{activeOption.description}</p>
+            <p className="mt-1 text-xs leading-5 text-gray-700">{activeOption.helper}</p>
           </div>
           <div className="shrink-0 text-right">
             <p className="text-base font-black text-spruce">{formatRupiah(activeOption.priceIdr)}/gambar</p>
-            <p className="text-xs text-gray-600">{inputMode === INPUT_MODE_READY ? 'Vector-only' : 'AI redraw'}</p>
+            <p className="text-xs text-gray-600">{activeOption.badge}</p>
           </div>
         </div>
-        {secondaryOption && (
+        {file && (
           <button
             type="button"
             disabled={disabled}
-            onClick={() => onInputModeChange(secondaryOption.value)}
+            onClick={() => {
+              setUploadError('');
+              setPreviewFailed(false);
+              onFileChange(null);
+            }}
             className="mt-3 inline-flex min-h-9 items-center justify-center border border-line bg-white px-3 py-2 text-xs font-semibold text-ink hover:border-spruce disabled:opacity-60"
           >
-            {inputMode === INPUT_MODE_READY ? 'Pindah ke AI Redraw Premium' : 'Pindah ke Siap Trace Vector'}
+            Kosongkan file
           </button>
         )}
       </div>
@@ -96,11 +164,13 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
               ) : (
                 <>
                   <UploadCloud className="mx-auto mb-3 h-9 w-9 text-spruce" aria-hidden="true" />
-                  <span className="block text-sm font-semibold text-ink">Pilih gambar JPG, PNG, atau WebP</span>
+                  <span className="block text-sm font-semibold text-ink">
+                    {inputMode === INPUT_MODE_READY ? 'Pilih file SVG vector murni' : 'Pilih gambar JPG, PNG, atau WebP'}
+                  </span>
                   <span className="mt-1 block text-xs text-gray-600">
                     {inputMode === INPUT_MODE_READY
-                      ? 'Maksimal 10 MB. File diproses tanpa AI ke jalur vector-only untuk separasi warna dan contour sticker.'
-                      : 'Maksimal 10 MB. Gambar akan dirapikan sebelum diproses.'}
+                      ? 'Maksimal 10 MB. Jalur ini khusus SVG murni untuk separasi warna dan contour sticker.'
+                      : 'Maksimal 10 MB. Gambar akan dirapikan sebelum diproses AI.'}
                   </span>
                 </>
               )}
@@ -127,6 +197,7 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
               event.preventDefault();
               event.stopPropagation();
               setPreviewFailed(false);
+              setUploadError('');
               onFileChange(null);
             }}
             title="Hapus gambar"
@@ -135,12 +206,16 @@ export default function UploadBox({ file, previewUrl, inputMode, onInputModeChan
           </button>
         )}
 
-        <input className="sr-only" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleChange} disabled={disabled} />
+        <input className="sr-only" type="file" accept={activeOption.accept} onChange={handleChange} disabled={disabled} />
       </label>
 
-      {!isValidType && <p className="mt-3 text-sm text-tomato">File hanya boleh JPG, PNG, atau WebP.</p>}
+      {!isValidType && <p className="mt-3 text-sm text-tomato">{uploadError}</p>}
       {!isValidSize && <p className="mt-3 text-sm text-tomato">Ukuran file maksimal 10 MB.</p>}
-      <p className="mt-3 text-xs text-gray-600">Untuk foto rumit, hasil pecah warna mungkin perlu dicek kembali.</p>
+      <p className="mt-3 text-xs text-gray-600">
+        {inputMode === INPUT_MODE_READY
+          ? 'Vector Siap Proses dipakai untuk file vector murni yang akan dipisah warna dan dibuat contour sticker.'
+          : 'Untuk foto rumit, hasil redraw dan pecah warna mungkin perlu dicek kembali.'}
+      </p>
     </section>
   );
 }

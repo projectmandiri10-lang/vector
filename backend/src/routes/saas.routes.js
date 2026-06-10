@@ -1,32 +1,49 @@
 import express from 'express';
 import multer from 'multer';
 import path from 'node:path';
+import sharp from 'sharp';
 import { Readable } from 'node:stream';
 import workerApi from '../../../cloudflare-worker/src/index.js';
 import { normalizeHybridRedrawConfig } from '../../../shared/hybridRedrawConfig.js';
 import { hybridRedrawBuffer } from '../services/aiRedraw.service.js';
-import { createLogoRestoreArtifacts, createTraceArtifactsFromImage, logoRestoreBuffer } from '../services/logoRestore.service.js';
-import { assessImageQuality, readyTraceBlockedMessage } from '../services/imageQuality.service.js';
+import { createLogoRestoreArtifacts } from '../services/logoRestore.service.js';
 
 const router = express.Router();
-const allowedMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
-const allowedExt = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const rasterMimeTypes = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const rasterExt = new Set(['.jpg', '.jpeg', '.png', '.webp']);
+const readyTraceMimeTypes = new Set(['image/svg+xml']);
+const readyTraceExt = new Set(['.svg']);
 const maxUploadMb = Number(process.env.MAX_UPLOAD_MB || 10);
 
-const upload = multer({
-  storage: multer.memoryStorage(),
-  limits: { fileSize: maxUploadMb * 1024 * 1024 },
-  fileFilter: (_req, file, cb) => {
-    const ext = path.extname(file.originalname || '').toLowerCase();
-    if (!allowedMimeTypes.has(file.mimetype) || !allowedExt.has(ext)) {
-      cb(new Error('File harus berupa JPG, PNG, atau WebP.'));
-      return;
+function createUploadMiddleware({ mimeTypes, extensions, invalidMessage }) {
+  return multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: maxUploadMb * 1024 * 1024 },
+    fileFilter: (_req, file, cb) => {
+      const ext = path.extname(file.originalname || '').toLowerCase();
+      const mimeMatches = mimeTypes.has(file.mimetype) || !file.mimetype || file.mimetype === 'application/octet-stream';
+      if (!mimeMatches || !extensions.has(ext)) {
+        cb(new Error(invalidMessage));
+        return;
+      }
+      cb(null, true);
     }
-    cb(null, true);
-  }
+  });
+}
+
+const rasterUpload = createUploadMiddleware({
+  mimeTypes: rasterMimeTypes,
+  extensions: rasterExt,
+  invalidMessage: 'File harus berupa JPG, PNG, atau WebP.'
 });
 
-function handleUpload(req, res, next) {
+const readyTraceUpload = createUploadMiddleware({
+  mimeTypes: readyTraceMimeTypes,
+  extensions: readyTraceExt,
+  invalidMessage: 'Vector Siap Proses hanya menerima file vector SVG. EPS/AI belum aktif di server.'
+});
+
+function handleSingleUpload(upload, req, res, next) {
   upload.single('image')(req, res, (error) => {
     if (!error) {
       next();
@@ -38,6 +55,14 @@ function handleUpload(req, res, next) {
     }
     res.status(400).json({ error: error.message || 'Upload gambar tidak valid.' });
   });
+}
+
+function handleRasterUpload(req, res, next) {
+  handleSingleUpload(rasterUpload, req, res, next);
+}
+
+function handleReadyTraceUpload(req, res, next) {
+  handleSingleUpload(readyTraceUpload, req, res, next);
 }
 
 function bearerToken(req) {
@@ -117,7 +142,7 @@ async function creditBalance(userId) {
 }
 
 async function getPricing() {
-  const defaults = { ready_trace: 2500, ai_redraw: 5000, separation_film: 0 };
+  const defaults = { ready_trace: 2000, ai_redraw: 3000, separation_film: 0 };
   try {
     const rows = await supabaseFetch('/rest/v1/pricing_rules?select=key,amount_idr,active,description&order=key.asc', {});
     return rows.reduce(
@@ -130,6 +155,36 @@ async function getPricing() {
   } catch (_error) {
     return defaults;
   }
+}
+
+async function assessVectorUploadQuality(buffer) {
+  const metadata = await sharp(buffer, { failOn: 'error' }).metadata();
+  const sourceWidth = metadata.width || 0;
+  const sourceHeight = metadata.height || 0;
+  const longestSide = Math.max(sourceWidth, sourceHeight);
+  const shortestSide = Math.min(sourceWidth, sourceHeight);
+  return {
+    qualityStatus: 'pass',
+    sourceWidth,
+    sourceHeight,
+    longestSide,
+    shortestSide,
+    minLongestSide: 0,
+    idealLongestSide: 0,
+    foregroundCoverage: 1,
+    foregroundBoundsCoverage: 1,
+    foregroundWidth: sourceWidth,
+    foregroundHeight: sourceHeight,
+    blurScore: null,
+    contrast: null,
+    noiseScore: null,
+    backgroundColor: '#000000',
+    reasons: [],
+    warnings: [],
+    recommendedMode: 'ready_trace',
+    inputKind: 'vector',
+    vectorFormat: 'svg'
+  };
 }
 
 async function getAppSetting(key) {
@@ -381,36 +436,18 @@ async function readyTraceHandler(req, res, next) {
     };
     let imageBuffer = req.file.buffer;
     let metadata = {
-      provider: 'ready_trace_edge_refinement',
+      provider: 'ready_trace_vector_upload',
       generationModel: 'none',
       generationQuality: 'deterministic',
-      note: 'Ready Trace backend: vector-only, edge refinement before trace, lalu pisah warna dan contour sticker.'
+      note: 'Vector Siap Proses menerima SVG vector murni untuk pisah warna dan contour sticker.'
     };
-    const qualityAssessment = await assessImageQuality(req.file.buffer, { forMode: 'ready_trace' });
+    const qualityAssessment = await assessVectorUploadQuality(req.file.buffer);
     metadata.qualityAssessment = qualityAssessment;
-    if (qualityAssessment.qualityStatus === 'blocked') {
-      res.status(422).json({
-        error: readyTraceBlockedMessage(qualityAssessment),
-        qualityAssessment,
-        suggestedInputMode: 'ai_redraw'
-      });
-      return;
-    }
-
-    if (process.env.LOGO_RESTORE_ENABLED !== '0') {
-      const logoRestore = await logoRestoreBuffer(req.file.buffer, settings, { qualityAssessment });
-      if (logoRestore.canRestore) {
-        imageBuffer = logoRestore.imageBuffer;
-        metadata = {
-          ...metadata,
-          ...logoRestore.metadata,
-          readyTraceProvider: 'ready_trace_edge_refinement',
-          note: 'Ready Trace backend used deterministic Logo Restore before edge refinement and vector-only trace output.'
-        };
-      } else if (logoRestore.metadata?.reason) {
-        metadata.logoRestoreSkippedReason = logoRestore.metadata.reason;
-      }
-    }
+    metadata.vectorInput = {
+      filename: req.file.originalname || 'upload.svg',
+      mimeType: req.file.mimetype || 'image/svg+xml',
+      directVectorUpload: true
+    };
 
     const artifactResult = await createLogoRestoreArtifacts({
       imageBuffer,
@@ -493,9 +530,9 @@ router.get('/api/me/balance', workerHandler);
 router.post('/api/jobs/quote', workerHandler);
 router.post('/api/jobs/commit', workerHandler);
 router.get('/api/example-jobs', workerHandler);
-router.post('/api/image-retouch', handleUpload, imageRetouchHandler);
-router.post('/api/ai-redraw', handleUpload, imageRetouchHandler);
-router.post('/api/ready-trace', handleUpload, readyTraceHandler);
+router.post('/api/image-retouch', handleRasterUpload, imageRetouchHandler);
+router.post('/api/ai-redraw', handleRasterUpload, imageRetouchHandler);
+router.post('/api/ready-trace', handleReadyTraceUpload, readyTraceHandler);
 router.post('/api/jobs/:jobId/artifacts', workerHandler);
 router.delete('/api/jobs/:jobId', authenticatedWorkerHandler);
 router.all('/api/admin/users', workerHandler);

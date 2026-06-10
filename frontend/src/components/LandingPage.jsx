@@ -64,6 +64,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { submitContactMessage } from '../lib/api.js';
+import { IMAGE_RETOUCH_PRICE_IDR, READY_PROCESS_PRICE_IDR, formatRupiah } from '../lib/pricing.js';
 
 const heroStats = [
   { icon: Star, value: '500+', label: 'Logo Diproses', accent: 'text-chart-3' },
@@ -83,7 +84,7 @@ const howItWorks = [
     number: '02',
     icon: Wand2,
     title: 'Pilih Mode',
-    description: 'AI Redesign Premium (Rp 5.000) atau Siap Trace Vector (Rp 2.500).',
+    description: `AI Redesign Premium (${formatRupiah(IMAGE_RETOUCH_PRICE_IDR)}) atau Vector Siap Proses (${formatRupiah(READY_PROCESS_PRICE_IDR)}).`,
     detail: 'Pilih output: Sablon atau Sticker'
   },
   {
@@ -98,16 +99,16 @@ const howItWorks = [
 const pricingCards = [
   {
     title: 'AI Redesign',
-    price: 5000,
+    price: IMAGE_RETOUCH_PRICE_IDR,
     description: 'Untuk gambar yang belum rapih, perlu analisis AI dan redesign ulang',
     icon: Sparkles,
     popular: true,
     features: ['AI Image-to-Image', 'Safety Check', 'Sablon + Sticker mode', 'High Quality Output', 'Hasil dalam 1-3 menit']
   },
   {
-    title: 'Siap Trace Vector',
-    price: 2500,
-    description: 'Untuk gambar cukup jelas yang diproses tanpa AI sebagai jalur vector-only',
+    title: 'Vector Siap Proses',
+    price: READY_PROCESS_PRICE_IDR,
+    description: 'Untuk file SVG vector murni yang diproses tanpa AI sebagai jalur separasi warna dan contour sticker',
     icon: Zap,
     popular: false,
     features: ['Direct Processing', 'Sablon + Sticker mode', 'High Quality Output', 'Fast Processing (30-60s)', 'Hemat budget']
@@ -120,7 +121,7 @@ const creditPackages = [
     credits: 2,
     price: 5000,
     pricePerCredit: 5000,
-    callout: 'Cukup untuk 1 AI Redesign atau 2 Siap Trace Vector.',
+    callout: 'Cukup untuk 1 AI Redesign atau 2 Vector Siap Proses.',
     aiRedesign: 1,
     readyToTrace: 2
   },
@@ -148,8 +149,7 @@ const testimonials = [
     name: 'Budi Santoso',
     role: 'Pemilik Konveksi',
     initials: 'BS',
-    quote:
-      'Hasil redesign logonya sangat bersih dan siap sablon. Dulu saya harus bayar desainer lumayan mahal, sekarang cukup Rp 5.000 per gambar.',
+    quote: `Hasil redesign logonya sangat bersih dan siap sablon. Dulu saya harus bayar desainer lumayan mahal, sekarang cukup ${formatRupiah(IMAGE_RETOUCH_PRICE_IDR)} per gambar.`,
     rating: 5
   },
   {
@@ -157,7 +157,7 @@ const testimonials = [
     role: 'Seller Kaos Online',
     initials: 'SR',
     quote:
-      'Mode Ready to Trace sangat cocok untuk logo yang sudah cukup rapi. Prosesnya cepat dan hasilnya memuaskan.',
+      'Mode Vector Siap Proses sangat cocok untuk file vector yang tinggal dipisah warna dan dibuat contour sticker. Prosesnya cepat dan hasilnya memuaskan.',
     rating: 5
   },
   {
@@ -179,12 +179,12 @@ const faqItems = [
   {
     question: 'Berapa harga per gambar?',
     answer:
-      'Kami menawarkan dua mode harga: AI Redesign Premium seharga Rp 5.000 per gambar dan Siap Trace Vector seharga Rp 2.500 per gambar. Anda dapat membeli credit dalam paket melalui Shopee.'
+      `Kami menawarkan dua mode harga: AI Redesign Premium seharga ${formatRupiah(IMAGE_RETOUCH_PRICE_IDR)} per gambar dan Vector Siap Proses seharga ${formatRupiah(READY_PROCESS_PRICE_IDR)} per gambar. Anda dapat membeli credit dalam paket melalui Shopee.`
   },
   {
-    question: 'Apa perbedaan AI Redesign dan Ready to Trace?',
+    question: 'Apa perbedaan AI Redesign dan Vector Siap Proses?',
     answer:
-      'AI Redesign Premium menggunakan image-to-image untuk menggambar ulang desain sulit. Siap Trace Vector memproses gambar tanpa AI dengan jalur vector-only, cocok untuk logo yang sudah cukup jelas dan perlu pisah warna atau contour sticker.'
+      'AI Redesign Premium menggunakan image-to-image untuk menggambar ulang desain sulit. Vector Siap Proses memproses file SVG tanpa AI sebagai jalur vector-only, cocok untuk separasi warna dan contour sticker.'
   },
   {
     question: 'Format output apa saja?',
@@ -204,7 +204,7 @@ const faqItems = [
   {
     question: 'Berapa lama proses gambar?',
     answer:
-      'Mode Siap Trace Vector biasanya selesai dalam 30-60 detik. Mode AI Redesign membutuhkan waktu sekitar 1-3 menit.'
+      'Mode Vector Siap Proses biasanya selesai dalam 30-60 detik. Mode AI Redesign membutuhkan waktu sekitar 1-3 menit.'
   },
   {
     question: 'Apakah gambar saya aman?',
@@ -347,7 +347,7 @@ const termsSections = [
     list: [
       'Platform: situs web dan layanan AI Logo Redesign',
       'Pengguna: individu yang mendaftar dan menggunakan layanan',
-      'Layanan: seluruh fitur AI Redesign dan Ready to Trace',
+      'Layanan: seluruh fitur AI Redesign dan Vector Siap Proses',
       'Credit: unit pembayaran untuk mengakses layanan',
       'Gambar: file yang diunggah untuk diproses',
       'Payment gateway: Midtrans atau penyedia pembayaran lain yang kami aktifkan untuk memproses transaksi'
@@ -357,13 +357,13 @@ const termsSections = [
     icon: Server,
     title: '3. Layanan',
     list: [
-      'AI Redesign Premium: Rp 5.000 per gambar',
-      'Ready to Trace: Rp 2.500 per gambar',
+      `AI Redesign Premium: ${formatRupiah(IMAGE_RETOUCH_PRICE_IDR)} per gambar`,
+      `Vector Siap Proses: ${formatRupiah(READY_PROCESS_PRICE_IDR)} per gambar`,
       'Download film separasi sablon tidak dikenakan biaya tambahan per warna',
       'Output sablon dan sticker',
       'Penyimpanan hasil pada galeri pribadi pengguna'
     ],
-    afterList: ['Waktu pemrosesan bervariasi, Ready to Trace sekitar 30-60 detik dan AI Redesign sekitar 1-3 menit.']
+    afterList: ['Waktu pemrosesan bervariasi, Vector Siap Proses sekitar 30-60 detik dan AI Redesign sekitar 1-3 menit.']
   },
   {
     icon: Scale,
@@ -493,7 +493,7 @@ const aboutTimeline = [
   { date: 'Jan 2024', title: 'Konsep dan Riset', description: 'Memulai riset kebutuhan pasar dan mengembangkan konsep platform.', icon: Lightbulb },
   { date: 'Mar 2024', title: 'Pengembangan MVP', description: 'Membangun versi awal platform dengan fitur AI Redesign dasar.', icon: Rocket },
   { date: 'Jun 2024', title: 'Beta Testing', description: 'Meluncurkan versi beta ke pengguna awal dan mengumpulkan feedback.', icon: Users },
-  { date: 'Sep 2024', title: 'Peluncuran Publik', description: 'Resmi meluncurkan platform dengan fitur AI Redesign dan Ready to Trace.', icon: Star },
+  { date: 'Sep 2024', title: 'Peluncuran Publik', description: 'Resmi meluncurkan platform dengan fitur AI Redesign dan Vector Siap Proses.', icon: Star },
   { date: 'Des 2024', title: '10.000 Gambar Diproses', description: 'Lebih dari 10.000 gambar berhasil diproses di platform.', icon: Trophy }
 ];
 
@@ -742,7 +742,7 @@ function PublicFooter({ onNavigate }) {
             <h3 className="text-sm font-semibold text-foreground">Layanan</h3>
             <ul className="space-y-2 text-sm text-mutedForeground">
               <li><button type="button" onClick={() => scrollToId('pricing')} className="hover:text-primary">AI Redesign</button></li>
-              <li><button type="button" onClick={() => scrollToId('pricing')} className="hover:text-primary">Ready to Trace</button></li>
+              <li><button type="button" onClick={() => scrollToId('pricing')} className="hover:text-primary">Vector Siap Proses</button></li>
               <li><button type="button" onClick={() => scrollToId('pricing')} className="hover:text-primary">Harga</button></li>
             </ul>
           </div>
@@ -838,7 +838,7 @@ function PublicFooter({ onNavigate }) {
 function HeroSection({ onStart }) {
   const floatingBadges = [
     { label: 'AI Powered', icon: Sparkles, tone: 'text-primary border-primary/20', position: 'right-[8%] top-[12%] sm:right-[12%] sm:top-[15%]', delay: '0s' },
-    { label: 'Rp 5.000', icon: Zap, tone: 'text-chart-3 border-chart-3/20', position: 'left-[5%] top-[25%] sm:left-[8%] sm:top-[30%]', delay: '1.3s' },
+    { label: formatRupiah(IMAGE_RETOUCH_PRICE_IDR), icon: Zap, tone: 'text-chart-3 border-chart-3/20', position: 'left-[5%] top-[25%] sm:left-[8%] sm:top-[30%]', delay: '1.3s' },
     { label: '5 Credit Gratis', icon: Star, tone: 'text-chart-2 border-chart-2/20', position: 'right-[15%] bottom-[18%] sm:right-[18%] sm:bottom-[20%]', delay: '2.6s' }
   ];
 
@@ -933,7 +933,7 @@ function HeroSection({ onStart }) {
               </div>
             </div>
             <div className="mt-5 flex items-center justify-between text-xs text-mutedForeground">
-              <span className="rounded-full border border-chart-3/20 bg-white/5 px-3 py-1 text-chart-3">Rp 5.000</span>
+              <span className="rounded-full border border-chart-3/20 bg-white/5 px-3 py-1 text-chart-3">{formatRupiah(IMAGE_RETOUCH_PRICE_IDR)}</span>
               <span className="rounded-full border border-primary/20 bg-white/5 px-3 py-1 text-primary">5 Credit Gratis</span>
             </div>
           </div>
@@ -1065,7 +1065,7 @@ function PricingSection() {
               <div className="mt-1 text-sm text-mutedForeground">{formatMiniRupiah(pkg.pricePerCredit)}/credit</div>
               <div className="mt-4 space-y-2 text-sm text-mutedForeground">
                 <p>{pkg.aiRedesign}x AI Redesign</p>
-                <p>{pkg.readyToTrace}x Ready to Trace</p>
+                <p>{pkg.readyToTrace}x Vector Siap Proses</p>
               </div>
               {pkg.callout && <p className="mt-3 text-xs text-mutedForeground">{pkg.callout}</p>}
               <button
